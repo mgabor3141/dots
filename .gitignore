@@ -10,6 +10,8 @@
 .config/discord
 .config/fish/*
 .config/spotify
+.config/gh
+.config/unity3d
 
 # Other dots
 !.bash*

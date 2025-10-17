@@ -47,7 +47,7 @@ binds {
     // ─── Applications ───
     MOD+RETURN                          hotkey-overlay-title="Open Terminal: alacritty" { spawn-sh "alacritty"; }
     MOD+SPACE                           hotkey-overlay-title="Open App Launcher: wofi" { spawn-sh "wofi"; }
-    MOD+B                               hotkey-overlay-title="Open Browser: Zen" { spawn-sh "zen"; }
+    MOD+B                               hotkey-overlay-title="Open Browser: Zen" { spawn-sh "zen-browser"; }
     MOD+ALT+L                           hotkey-overlay-title="Lock Screen: swaylock" { spawn-sh "swaylock"; }
 
     // Please choose your own file manager
@@ -147,6 +147,7 @@ binds {
     MOD+EQUAL                           { set-column-width "+10%"; }
     MOD+SHIFT+MINUS                     { set-window-height "-10%"; }
     MOD+SHIFT+EQUAL                     { set-window-height "+10%"; }
+    MOD+R                               { switch-preset-column-width; }
 
     // ─── Modes ───
     MOD+T                               { toggle-window-floating; }
@@ -194,6 +195,8 @@ binds {
             proportion 0.5
             proportion 0.66667
         }
+
+        default-column-width {}
 
         focus-ring {
             width 2
@@ -266,6 +269,11 @@ binds {
 
     window-rule {
         match app-id="zen" title=r#"^Extension:"#
+        open-floating true
+    }
+
+    window-rule {
+        match app-id="steam" title="Friends List"
         open-floating true
     }
 
