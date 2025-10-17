@@ -1,0 +1,23 @@
+# Ignore everything, except...
+*
+
+# .config and children
+!.config
+!.config/**
+
+.config/spotify/Users
+.config/micro
+.config/discord
+.config/fish/*
+.config/spotify
+
+# Other dots
+!.bash*
+!.git*
+!.profile
+!.zshrc
+
+# Misc
+Crash Reports
+
+*.log
