@@ -29,7 +29,7 @@ input {
 output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538" {
     mode "3840x2160@143.999" // Set resolution and refresh rate
     scale 1.5
-    variable-refresh-rate // on-demand=true
+    variable-refresh-rate on-demand=true
     focus-at-startup
 }
 
