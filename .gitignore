@@ -12,6 +12,8 @@
 .config/spotify
 .config/gh
 .config/unity3d
+.config/octopi
+.config/org.coolercontrol.CoolerControl/CoolerControl.conf
 
 # Other dots
 !.bash*
@@ -21,5 +23,5 @@
 
 # Misc
 Crash Reports
-
 *.log
+.bash_history
