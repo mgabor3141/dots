@@ -1,12 +1,12 @@
 #!/bin/bash
-options="Shutdown\nReboot\nLogout\nSuspend\nCancel"
-chosen=$(echo -e "$options" | wofi --dmenu --prompt "Power Menu" --width 300 --height 195)
+options="1 Sleep\n2 Shutdown\n3 Restart\n4 Logout\n5 Cancel"
+chosen=$(echo -e "$options" | wofi --no-custom-entry --hide-scroll --insensitive --dmenu --prompt "Power" --width 300 --lines=5 --sort-order="alphabetical")
 
 case $chosen in
   "Shutdown") systemctl poweroff ;;
-  "Reboot")   systemctl reboot ;;
+  "Restart")   systemctl reboot ;;
   "Logout")   niri msg action quit --skip-confirmation ;;
-  "Suspend")  systemctl suspend ;;
+  "Sleep")  systemctl suspend ;;
   "Hibernate") systemctl hibernate ;;
   "Lock")     swaylock ;;
   "Exit")     exit 0 ;;

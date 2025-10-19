@@ -46,7 +46,7 @@ binds {
 
     // ─── Applications ───
     MOD+RETURN                          hotkey-overlay-title="Open Terminal: alacritty" { spawn-sh "alacritty"; }
-    MOD+SPACE                           hotkey-overlay-title="Open App Launcher: wofi" { spawn-sh "wofi -show drun -replace"; }
+    MOD+SPACE                           hotkey-overlay-title="Open App Launcher: anyrun" { spawn-sh "pkill anyrun || anyrun"; }
     MOD+B                               hotkey-overlay-title="Open Browser: Zen" { spawn-sh "zen-browser"; }
     MOD+ALT+L                           hotkey-overlay-title="Lock Screen: swaylock" { spawn-sh "swaylock"; }
 

@@ -39,7 +39,7 @@
     "format": ""
   },
 
-    // Tools
+  // Tools
   "custom/tools": {
     "format": "",
     "tooltip-format": "Tools"
@@ -47,28 +47,28 @@
 
   // Updates Count
   "custom/updates": {
-      "format": "{} {icon}",
-      "return-type": "json",
-      "format-icons": {
-          "has-updates": "󱍷",
-          "updated": "󰂪"
-      },
-      "exec-if": "which waybar-module-pacman-updates",
-      "exec": "waybar-module-pacman-updates --interval-seconds 5 --network-interval-seconds 300"
+    "format": "{} {icon}",
+    "return-type": "json",
+    "format-icons": {
+      "has-updates": "󱍷",
+      "updated": "󰂪"
+    },
+    "exec-if": "which waybar-module-pacman-updates",
+    "exec": "waybar-module-pacman-updates --interval-seconds 5 --network-interval-seconds 300"
   },
 
   // wofi Application Launcher
   "custom/appmenu": {
     "format": "   ",
-    "on-click": "sleep 0.2;wofi -show drun -replace",
-    "tooltip-format": "Left: Open the application launcher\nRight: Show all keybindings"
+    "on-click": "pkill anyrun || anyrun",
+    "tooltip-format": "Open the application launcher"
   },
 
   // wofi Application Launcher
   "custom/appmenuicon": {
     "format": "",
-    "on-click": "sleep 0.2;wofi -show drun -replace",
-    "tooltip-format": "Left: Open the application launcher\nRight: Show all keybindings"
+    "on-click": "pkill anyrun || anyrun",
+    "tooltip-format": "Open the application launcher"
   },
 
   // Power Menu
@@ -131,8 +131,7 @@
     "format-muted": " {format_source}",
     "format-source": "{volume}% ",
     "format-source-muted": "",
-    "format-icons": {
-    },
+    "format-icons": {},
     "on-click": "pavucontrol"
   },
 
