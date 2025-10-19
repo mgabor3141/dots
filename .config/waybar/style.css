@@ -1,5 +1,7 @@
 * {
-    font-family: "Fira Sans Semibold", "Font Awesome 6 Free", FontAwesome, Roboto, Helvetica, Arial, sans-serif;
+    font-family:
+        "Fira Sans Semibold", "Font Awesome 6 Free", FontAwesome, Roboto,
+        Helvetica, Arial, sans-serif;
 }
 
 window#waybar {
@@ -12,14 +14,13 @@ window#waybar {
 
 /* Left-most: Arch icon */
 #custom-appmenu {
-  font-size: 4;
-  background-image: url('/usr/share/icons/cachyos.svg');
-  background-color: #1e222a;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-  padding: 0px 12px;
-    
+    font-size: 4;
+    background-image: url("/usr/share/icons/cachyos.svg");
+    background-color: #1e222a;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    padding: 0px 12px;
 }
 
 /* Right-most: Clock */
@@ -46,26 +47,30 @@ window#waybar {
     background: #1e222a;
     font-weight: bold;
     border-radius: 0px;
-    font-size: 8px;
+    /*font-size: 8px;*/
     color: #e0e0e0;
 }
 
 /* Individual workspace buttons */
 #niri-workspaces button {
     border-radius: 0px;
-    font-size: 8px;
+    /*font-size: 8px;*/
+}
+
+#workspaces button {
+    border-width: 0px;
+    font-weight: bold;
+    font-size: 14px;
+    border-radius: 0px;
 }
 
 #workspaces button.active {
-    border-radius: 0px;
     color: #0f1117;
     background: #00ac89;
 }
 
-#workspaces button:hover {
-    border-radius: 0px;
+#workspaces button:not(.active):hover {
     background: #0d3531;
-    border-width: 0px;
 }
 
 /* Power/exit button */
@@ -80,10 +85,10 @@ window#waybar {
 
 /* Tooltips */
 tooltip {
-    border-radius: 12px;
+    border-radius: 8px;
     background-color: #0f1117;
     color: #c0c0c0;
-    padding: 4px 8px;
+    padding: 8px 12px;
 }
 
 /* Taskbar */
