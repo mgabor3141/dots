@@ -17,12 +17,13 @@
     ],
 
     "modules-center": [
+        "custom/niri-overview",
         "niri/workspaces"
     ],
 
     "modules-right": [
         "tray",
-        "pulseaudio",
+//        "pulseaudio",
         "clock",
         "custom/exit"
     ]

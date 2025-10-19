@@ -57,18 +57,25 @@
     "exec": "waybar-module-pacman-updates --interval-seconds 5 --network-interval-seconds 300"
   },
 
-  // wofi Application Launcher
+  // anyrun Application Launcher
   "custom/appmenu": {
     "format": "   ",
     "on-click": "pkill anyrun || anyrun",
     "tooltip-format": "Open the application launcher"
   },
 
-  // wofi Application Launcher
+  // anyrun Application Launcher
   "custom/appmenuicon": {
     "format": "",
     "on-click": "pkill anyrun || anyrun",
     "tooltip-format": "Open the application launcher"
+  },
+
+  // niri overview
+  "custom/niri-overview": {
+    "format": "  ⛶  ",
+    "on-click": "niri msg action toggle-overview",
+    "tooltip-format": "Workspace overview"
   },
 
   // Power Menu
