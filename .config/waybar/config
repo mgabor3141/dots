@@ -23,7 +23,7 @@
 
     "modules-right": [
         "tray",
-//        "pulseaudio",
+        "pulseaudio",
         "clock",
         "custom/exit"
     ]
