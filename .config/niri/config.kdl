@@ -7,9 +7,10 @@
 input {
     keyboard {
         xkb {
-            layout "us" // Use the German keyboard layout
+            // layout "us"
+            file "~/.config/xkb/keymap.xkb"
         }
-        numlock // Enable numlock on startup
+        // numlock // Enable numlock on startup
     }
 
     touchpad {
@@ -56,14 +57,16 @@ binds {
     // ─── Audio Controls ───
     // Example volume keys mappings for PipeWire & WirePlumber.
     // The allow-when-locked=true property makes them work even when the session is locked.
-    XF86AudioRaiseVolume                allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1+"; }
-    XF86AudioLowerVolume                allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1-"; }
-    XF86AudioMute                       allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"; }
-    XF86AudioMicMute                    allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"; }
+    // XF86AudioRaiseVolume                allow-when-locked=true { spawn-sh "pactl set-volume @DEFAULT_AUDIO_SINK@ 0.1+"; }
+    // XF86AudioLowerVolume                allow-when-locked=true { spawn-sh "pactl set-volume @DEFAULT_AUDIO_SINK@ 0.1-"; }
+    XF86AudioMute                       allow-when-locked=true { spawn-sh "pactl set-sink-mute @DEFAULT_SINK@ toggle"; }
+    XF86AudioMicMute                    allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
     XF86AudioNext                       allow-when-locked=true { spawn-sh "playerctl next"; }
     XF86AudioPause                      allow-when-locked=true { spawn-sh "playerctl play-pause"; }
     XF86AudioPlay                       allow-when-locked=true { spawn-sh "playerctl play-pause"; }
     XF86AudioPrev                       allow-when-locked=true { spawn-sh "playerctl previous"; }
+
+    F13                                 allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
 
     // ─── Window Movement and Focus ───
     MOD+Q                               { close-window; }
