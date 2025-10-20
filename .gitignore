@@ -16,6 +16,10 @@
 .config/org.coolercontrol.CoolerControl/CoolerControl.conf
 .config/chromium
 .config/jellyfin.org
+.config/pulse
+.config/heroic
+
+QtProject.conf
 
 # Other dots
 !.bash*
