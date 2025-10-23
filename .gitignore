@@ -18,6 +18,7 @@
 .config/jellyfin.org
 .config/pulse
 .config/heroic
+.config/dconf
 
 QtProject.conf
 
