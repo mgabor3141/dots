@@ -3,4 +3,6 @@ hide_scroll=true
 no_actions=true
 term=alacritty
 mode=drun
+prompt=Launch
+insensitive=true
 --show
