@@ -60,14 +60,14 @@
   // anyrun Application Launcher
   "custom/appmenu": {
     "format": "   ",
-    "on-click": "pkill anyrun || anyrun",
+    "on-click": "wofi -replace",
     "tooltip-format": "Open the application launcher"
   },
 
   // anyrun Application Launcher
   "custom/appmenuicon": {
     "format": "",
-    "on-click": "pkill anyrun || anyrun",
+    "on-click": "wofi -replace",
     "tooltip-format": "Open the application launcher"
   },
 
