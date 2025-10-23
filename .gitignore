@@ -19,6 +19,7 @@
 .config/pulse
 .config/heroic
 .config/dconf
+.config/sunshine
 
 QtProject.conf
 
