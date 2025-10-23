@@ -106,7 +106,7 @@
   "clock": {
     "format": "{:%H:%M %a}",
     "on-click": "ags -t calendar",
-    "tooltip": false
+    "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
   },
 
   "niri/language": {
@@ -137,7 +137,7 @@
     "format-bluetooth-muted": " {icon} {format_source}",
     "format-muted": " {format_source}",
     "format-source": "",
-    "format-source-muted": "",
+    "format-source-muted": "                                    ",
     "format-icons": {},
     "on-click": "pavucontrol"
   },

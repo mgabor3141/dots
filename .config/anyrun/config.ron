@@ -45,10 +45,10 @@ Config(
   plugins: [
     "libniri_focus.so",
     "libapplications.so",
-    "libshell.so",
+    // "libshell.so",
     "librink.so",
-    "libtranslate.so",
-    "libsymbols.so"
+    // "libtranslate.so",
+    // "libsymbols.so"
   ],
 
   keybinds: [
