@@ -1,35 +1,19 @@
 #!/usr/bin/env bash
-# bing-wallpaper-hourly.sh
+# bing-wallpaper.sh
 # Arch Linux prerequisites: pacman -S --needed curl jq swww util-linux
 # Run once at login (e.g., via Niri). It updates immediately, then every hour.
 
-set -euo pipefail
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
 
-API_URL="https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=de-DE"
+API_URL="https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bing-wallpaper"
 INTERVAL_SECONDS="${BING_WALLPAPER_INTERVAL_SECONDS:-3600}"  # change via env if you want
 LOCK_DIR="${XDG_RUNTIME_DIR:-/tmp}/bing-wallpaper.lockdir"   # protects overlapping runs
 
 mkdir -p "$CACHE_DIR"
 
-start_swww_daemon() {
-  if ! pgrep -x swww-daemon >/dev/null 2>&1; then
-    # --format xrgb is broadly compatible; tweak if you prefer
-    swww-daemon --format xrgb >/dev/null 2>&1 &
-    sleep 0.5
-  fi
-}
-
 update_once() {
-  # lock just this run to avoid overlap if previous run is still busy
-  # (flock not needed; mkdir lock works everywhere)
-  # if mkdir "$LOCK_DIR" 2>/dev/null; then
-  #   trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
-  # else
-  #   # Another run is in progress; skip
-  #   return 0
-  # fi
-
   # 1) Fetch JSON (fail fast on HTTP errors)
   json="$(curl -fsSL "$API_URL")"
 
@@ -63,19 +47,44 @@ update_once() {
     find "$CACHE_DIR" -type f ! -name "$(basename "$outfile")" -delete
   fi
 
-  # 6) Ensure daemon and set wallpaper with a smooth transition
-  start_swww_daemon
-  swww img "$outfile" \
+  # Render a caption onto the image (non-destructive: writes a sibling file)
+  if command -v magick >/dev/null 2>&1; then
+    annotated="${outfile%.*}-annotated.jpg"
+
+    # Get image dimensions
+    read -r W H < <(magick identify -ping -format '%w %h' "$outfile") || true
+    box_w=$(( W * 60 / 100 ))  # Caption box ~60% of width
+
+    # Caption text
+    cap_title="${title:-Bing Wallpaper}"
+    cap_body="${copyright:-}"
+    cap_text="$cap_title\n$cap_body"
+
+    # Draw a semi-transparent black box with white text at bottom-left
+    magick "$outfile" \
+      \( -size ${box_w}x -background '#00000080' -fill white -gravity northwest \
+         -pointsize 48 -interline-spacing 4 caption:"$cap_text" \) \
+      -gravity southwest -geometry +80+80 -compose over -composite \
+      "$annotated"
+
+    wall_to_use="$annotated"
+
+    # Cleanup older annotated files
+    find "$(dirname "$outfile")" -type f -name '*-annotated.jpg' ! -name "$(basename "$annotated")" -delete
+  else
+    wall_to_use="$outfile"
+  fi
+
+  swww img "${wall_to_use:-$outfile}" \
     --transition-type fade \
-    --transition-step 255
+    --transition-step 255 \
+    --transition-fps 24
 
   printf "Set wallpaper: %s\n" "$outfile"
   [[ -n "$copyright" ]] && printf "Source: %s\n" "$copyright"
 }
 
 main() {
-  start_swww_daemon
-
   # Run immediately once
   update_once
 
@@ -86,4 +95,4 @@ main() {
   done
 }
 
-main "$@" &
+main "$@"
