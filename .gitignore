@@ -21,6 +21,10 @@
 .config/dconf
 .config/sunshine
 
+!.local
+!.local/bin
+!.local/bin/bing-wallpaper.sh
+
 QtProject.conf
 
 # Other dots
