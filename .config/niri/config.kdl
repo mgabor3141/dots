@@ -30,12 +30,13 @@ input {
 output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538" {
     mode "3840x2160@143.999" // Set resolution and refresh rate
     scale 1.5
-    variable-refresh-rate on-demand=true
+    variable-refresh-rate // on-demand=true
     focus-at-startup
 }
 
 output "Dell Inc. DELL S2721D JRNFP43" {
     mode "2560x1440@74.971"
+    variable-refresh-rate
     scale 1.2
 }
 
@@ -52,7 +53,7 @@ binds {
     MOD+ALT+L                           hotkey-overlay-title="Lock Screen: swaylock" { spawn-sh "swaylock"; }
 
     // Please choose your own file manager
-    MOD+E                             hotkey-overlay-title="File Manager: Nautilus" { spawn-sh "nautilus"; }
+    MOD+E                             hotkey-overlay-title="File Manager: Dolphin" { spawn-sh "dolphin"; }
 
     // ─── Audio Controls ───
     // Example volume keys mappings for PipeWire & WirePlumber.
