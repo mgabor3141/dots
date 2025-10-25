@@ -53,7 +53,7 @@ binds {
     MOD+ALT+L                           hotkey-overlay-title="Lock Screen: swaylock" { spawn-sh "swaylock"; }
 
     // Please choose your own file manager
-    MOD+E                             hotkey-overlay-title="File Manager: Dolphin" { spawn-sh "dolphin"; }
+    MOD+E                               hotkey-overlay-title="File Manager: Dolphin" { spawn-sh "dolphin"; }
 
     // ─── Audio Controls ───
     // Example volume keys mappings for PipeWire & WirePlumber.
@@ -179,11 +179,9 @@ binds {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Miscellaneous#spawn-sh-at-startup
 
     spawn-sh-at-startup "/usr/lib/polkit-kde-authentication-agent-1 &" // Polkit
-    spawn-sh-at-startup "swww-daemon" // Wallpaper daemon
+    spawn-at-startup "swww-daemon" // Regular wallpaper, overview is swaybg
     // spawn-sh-at-startup "swww img /usr/share/wallpapers/cachyos-wallpapers/Skyscraper.png" // Set wallpaper
-    spawn-sh-at-startup "bing-wallpaper.sh"
-    spawn-sh-at-startup "waybar"
-    spawn-sh-at-startup "ianny"
+    spawn-at-startup "bing-wallpaper.sh"
     spawn-at-startup    "swayidle" "-w" \
         "timeout" "300" "niri msg action power-off-monitors" \
         "timeout" "600" "systemctl suspend"
@@ -197,7 +195,7 @@ binds {
     layout {
         // always-center-single-column
 
-        gaps 8 // Gap between windows
+        gaps 16 // Gap between windows
         center-focused-column "never" // Don’t auto-center focused column
 
         preset-column-widths {
@@ -221,7 +219,12 @@ binds {
             color "#0007"
         }
 
-        struts {}
+        struts {
+            left 8
+            right 8
+            top 8
+            bottom 8
+        }
     }
 
 // ────────────── Animation Settings ──────────────
@@ -264,6 +267,7 @@ binds {
 
     window-rule {
         match app-id=r#"discord$"#
+        match app-id="vesktop"
         match app-id="Spotify"
         open-on-output "Dell Inc. DELL S2721D JRNFP43"
     }
@@ -296,6 +300,12 @@ binds {
         match namespace="^notifications$"
 
         block-out-from "screencast"
+    }
+
+    // Put swaybg as the overview backdrop.
+    layer-rule {
+        match namespace="^wallpaper$"
+        place-within-backdrop true
     }
 
     // Indicate screencasted windows with red colors.
