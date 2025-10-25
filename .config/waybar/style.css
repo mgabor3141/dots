@@ -1,3 +1,12 @@
+@define-color background #0f1117;
+@define-color item-background #1e222a;
+@define-color text #e0e0e0;
+@define-color text-muted #c0c0c0;
+@define-color highlight #00ac89;
+@define-color highlight-muted #0d3531;
+
+@import "../../.cache/bing-wallpaper/colors.css";
+
 * {
     font-family:
         "Fira Sans Semibold", "Font Awesome 6 Free", FontAwesome, Roboto,
@@ -5,18 +14,18 @@
 }
 
 window#waybar {
-    background-color: #0f1117;
+    background-color: @background;
     font-size: 14px;
-    border-radius: 0px;
-    margin: 0px;
+    border-radius: 0;
+    margin: 0;
     padding: 0;
 }
 
 /* Left-most: Arch icon */
 #custom-appmenu {
-    font-size: 4;
+    font-size: 4px;
     background-image: url("/usr/share/icons/cachyos.svg");
-    background-color: #1e222a;
+    background-color: @item-background;
     background-position: center;
     background-repeat: no-repeat;
     background-size: contain;
@@ -26,8 +35,8 @@ window#waybar {
 /* Right-most: Clock */
 #clock {
     font-size: 14px;
-    background-color: #1e222a;
-    color: #c0c0c0;
+    background-color: @item-background;
+    color: @text-muted;
     border-radius: 0px;
     padding: 0px 8px;
 }
@@ -36,19 +45,19 @@ window#waybar {
 #window {
     font-size: 14px;
     font-weight: 800;
-    color: #e0e0e0;
+    color: @text;
     border-radius: 0px;
     padding: 4px 12px;
-    background-color: #1e222a;
+    background-color: @item-background;
 }
 
 /* Workspace container */
 #niri-workspaces {
-    background: #1e222a;
+    background: @item-background;
     font-weight: bold;
     border-radius: 0px;
     /*font-size: 8px;*/
-    color: #e0e0e0;
+    color: @text;
 }
 
 /* Individual workspace buttons */
@@ -65,35 +74,35 @@ window#waybar {
 }
 
 #workspaces button.active {
-    color: #0f1117;
-    background: #00ac89;
+    color: @background;
+    background: @highlight;
 }
 
 #workspaces button:not(.active):hover {
-    background: #0d3531;
+    background: @highlight-muted;
 }
 
 /* Power/exit button */
 #custom-exit {
-    background-color: #00ac89;
+    background-color: @highlight;
     font-size: 14px;
     font-weight: 800;
-    color: #0f1117;
-    padding: 0px 6px;
-    margin: 2px 2px 2px 0;
+    color: @background;
+    padding: 0 8px 0 6px;
+    /*margin: 2px 2px 2px 0;*/
 }
 
 /* Tooltips */
 tooltip {
     border-radius: 8px;
-    background-color: #0f1117;
-    color: #c0c0c0;
+    background-color: @background;
+    color: @text-muted;
     padding: 8px 12px;
 }
 
 /* Taskbar */
 #taskbar {
-    background-color: #1e222a;
+    background-color: @item-background;
     margin: 0px;
     border-radius: 0px;
     font-weight: normal;
@@ -108,10 +117,10 @@ tooltip {
 #tray,
 #custom-updates,
 #custom-notification {
-    background-color: #1e222a;
+    background-color: @item-background;
     font-size: 14px;
     font-weight: 800;
-    color: #c0c0c0;
+    color: @text-muted;
     border-radius: 0px;
     padding: 4px 10px;
 }
@@ -125,7 +134,7 @@ tooltip {
 
 @keyframes blink {
     to {
-        background-color: #0f1117;
+        background-color: @background;
         color: #ffffff;
     }
 }

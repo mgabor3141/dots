@@ -5,13 +5,14 @@
     "margin-left": 0,
     "margin-right": 0,
     "spacing": 0,
+    "reload_style_on_change": true,
 
     "include": [
         "~/.config/waybar/modules.json"
     ],
 
     "modules-left": [
-        "custom/appmenu",
+        // "custom/appmenu",
         "wlr/taskbar",
         "niri/window"
     ],
