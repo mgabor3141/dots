@@ -82,7 +82,7 @@
   "custom/exit": {
     "format": " 󰐥 ",
     "on-click": "~/.config/waybar/scripts/power-menu.sh",
-    "tooltip-format": "Power Menu"
+    "tooltip-format": "Power"
   },
 
   // Keyboard State
