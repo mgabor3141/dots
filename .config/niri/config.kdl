@@ -227,6 +227,8 @@ binds {
         }
     }
 
+    include "../../.cache/bing-wallpaper/colors-niri.kdl"
+
 // ────────────── Animation Settings ──────────────
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Animations
     animations {
