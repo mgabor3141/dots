@@ -6,10 +6,10 @@
 trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
-# MKT="en-US"
+MKT="en-US"
 # MKT="de-DE"
 # MKT="it-IT"
-MKT="ja-JP"
+# MKT="ja-JP"
 # MKT="es-ES"
 
 API_URL="https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=${MKT:-en-US}"
@@ -166,23 +166,30 @@ update_once() {
     -compose multiply -composite \
     "$blurred"
 
+  # Pick highlight color
+  VENV="$HOME/.venvs/accentpicker"
+  PICKER="$SCRIPT_DIR/accent_picker.py"
+  swatch="${outfile%.*}-swatch.png"
+  highlight="$("$VENV/bin/python" "$PICKER" --swatch-out "$swatch" "$outfile" | head -n1 | tr -d $'\r')"
+
   killall -q swaybg || true
   swaybg --image "${blurred}" &
 
   printf "Set wallpaper: %s\n" "$outfile"
   [[ -n "$copyright" ]] && printf "Source: %s\n" "$copyright"
 
-  # Pick highlight color
-  VENV="$HOME/.venvs/accentpicker"
-  PICKER="$SCRIPT_DIR/accent_picker.py"
-  swatch="${outfile%.*}-swatch.png"
-  # highlight="$("$VENV/bin/python" "$PICKER" --swatch-out "$swatch" "$outfile" | head -n1 | tr -d $'\r')"
-  highlight="#4A9EFF"
-
   echo "Highlight color: $highlight"
 
   cat > "$CACHE_DIR/colors.css" <<EOF
 @define-color highlight ${highlight};
+EOF
+
+  cat > "$CACHE_DIR/colors-niri.kdl" <<EOF
+layout {
+    focus-ring {
+        active-color "$highlight"
+    }
+}
 EOF
 
   # Set main wallpaper via swww with smooth transition

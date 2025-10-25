@@ -28,6 +28,7 @@
 .config/vesktop
 .config/baloofileinformationrc
 .config/QtProject.conf
+.config/btop
 
 !.local
 !.local/bin
