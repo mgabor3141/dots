@@ -6,11 +6,18 @@
 trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
-API_URL="https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US"
+# MKT="en-US"
+# MKT="de-DE"
+# MKT="it-IT"
+MKT="ja-JP"
+# MKT="es-ES"
+
+API_URL="https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=${MKT:-en-US}"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bing-wallpaper"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-3600}"   # hourly
-TICK_SECONDS="${TICK_SECONDS:-10}"             # max delay after wake
+TICK_SECONDS="${TICK_SECONDS:-10}"             # max delay after system resume
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$CACHE_DIR"
 
 update_once() {
@@ -30,7 +37,7 @@ update_once() {
 
   # 4) Filename (unique per day; title sanitized)
   safe_title="${title//[^[:alnum:]-_ ]/}"
-  name="${enddate}-${safe_title:-bing}-UHD.jpg"
+  name="${enddate}-${safe_title:-bing}.jpg"
   outfile="${CACHE_DIR}/${name}"
 
   # 5) Download if today's file not present; then clean old files
@@ -43,8 +50,9 @@ update_once() {
     fi
 
     mv "$tmp" "$outfile"
+
     # Keep only the latest file
-    find "$CACHE_DIR" -type f ! -name "$(basename "$outfile")" -delete
+    find "$CACHE_DIR" -type f -mtime +2 -delete
   fi
 
   # === Pretty caption overlay (IMv7) ============================================
@@ -147,15 +155,42 @@ update_once() {
     wall_to_use="$outfile"
   fi
 
-  # Set via swww with smooth transition
+  # ============================================================================ #
+
+  # Set blurred image as niri overview backdrop
+  blurred="${outfile%.*}-blurred.jpg"
+  magick "$outfile" \
+    -blur 0x8 \
+    \( -size "$(magick identify -format '%wx%h' "$outfile")" radial-gradient:none-black \
+       -evaluate multiply 0.5 \) \
+    -compose multiply -composite \
+    "$blurred"
+
+  killall -q swaybg || true
+  swaybg --image "${blurred}" &
+
+  printf "Set wallpaper: %s\n" "$outfile"
+  [[ -n "$copyright" ]] && printf "Source: %s\n" "$copyright"
+
+  # Pick highlight color
+  VENV="$HOME/.venvs/accentpicker"
+  PICKER="$SCRIPT_DIR/accent_picker.py"
+  swatch="${outfile%.*}-swatch.png"
+  # highlight="$("$VENV/bin/python" "$PICKER" --swatch-out "$swatch" "$outfile" | head -n1 | tr -d $'\r')"
+  highlight="#4A9EFF"
+
+  echo "Highlight color: $highlight"
+
+  cat > "$CACHE_DIR/colors.css" <<EOF
+@define-color highlight ${highlight};
+EOF
+
+  # Set main wallpaper via swww with smooth transition
+  swww clear-cache
   swww img "${wall_to_use:-$outfile}" \
     --transition-type fade \
     --transition-duration 10 \
     --transition-fps 60
-  # ============================================================================ #
-
-  printf "Set wallpaper: %s\n" "$outfile"
-  [[ -n "$copyright" ]] && printf "Source: %s\n" "$copyright"
 }
 
 main() {
