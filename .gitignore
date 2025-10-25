@@ -20,12 +20,18 @@
 .config/heroic
 .config/dconf
 .config/sunshine
+.config/menus
+.config/font*
+.config/rustdesk
+.config/session
+.config/autostart
+.config/vesktop
+.config/baloofileinformationrc
+.config/QtProject.conf
 
 !.local
 !.local/bin
-!.local/bin/bing-wallpaper.sh
-
-QtProject.conf
+!.local/bin/*
 
 # Other dots
 !.bash*
