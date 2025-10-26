@@ -18,8 +18,27 @@ input {
         natural-scroll // Enable natural (macOS-style) scrolling
     }
 
-    focus-follows-mouse // Automatically focus windows under the mouse pointer
+    focus-follows-mouse // max-scroll-amount="85%" // Automatically focus windows under the mouse pointer
     workspace-auto-back-and-forth // Enable workspace back & forth switching
+}
+
+gestures {
+    dnd-edge-view-scroll {
+        trigger-width 150
+        delay-ms 100
+        max-speed 1500
+    }
+
+    dnd-edge-workspace-switch {
+        trigger-height 100
+        delay-ms 100
+        max-speed 1500
+    }
+
+    hot-corners {
+        bottom-left
+        bottom-right
+    }
 }
 
 // ────────────── Output Configuration ──────────────
@@ -199,15 +218,15 @@ binds {
         center-focused-column "never" // Don’t auto-center focused column
 
         preset-column-widths {
-            proportion 0.33333
+            proportion 0.34
             proportion 0.5
-            proportion 0.66667
+            proportion 0.67
         }
 
         default-column-width {}
 
         focus-ring {
-            width 2
+            width 4
             active-color "#00ac89"
             inactive-color "#505050"
         }
@@ -219,12 +238,7 @@ binds {
             color "#0007"
         }
 
-        struts {
-            left 8
-            right 8
-            top 8
-            bottom 8
-        }
+        struts {}
     }
 
     include "../../.cache/bing-wallpaper/colors-niri.kdl"
