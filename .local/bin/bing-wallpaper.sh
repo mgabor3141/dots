@@ -6,13 +6,17 @@
 trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
-MKT="en-US"
+# MKT="en-US"
 # MKT="de-DE"
 # MKT="it-IT"
 # MKT="ja-JP"
 # MKT="es-ES"
 
-API_URL="https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=${MKT:-en-US}"
+# Script arguments
+MKT="${1:-en-US}"
+DAYS_AGO="${2:-0}"
+
+API_URL="http://localhost:8080/api/colors?locale=${MKT}&daysAgo=${DAYS_AGO}"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bing-wallpaper"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-3600}"   # hourly
 TICK_SECONDS="${TICK_SECONDS:-10}"             # max delay after system resume
@@ -25,19 +29,17 @@ update_once() {
   json="$(curl -fsSL "$API_URL")"
 
   # 2) Parse with jq
-  urlbase="$(jq -r '.images[0].urlbase' <<<"$json")"
-  enddate="$(jq -r '.images[0].enddate' <<<"$json")"              # e.g., 20251024
-  title="$(jq -r '.images[0].title // empty' <<<"$json")"
-  copyright="$(jq -r '.images[0].copyright // empty' <<<"$json")"
-  fallback_rel="$(jq -r '.images[0].url' <<<"$json")"
-
-  # 3) Build URLs (prefer UHD)
-  uhd_url="https://www.bing.com${urlbase}_UHD.jpg"
-  fallback_url="https://www.bing.com${fallback_rel}"
+  uhd_url="$(jq -r '.images.UHD' <<<"$json")"
+  date="$(jq -r '.date' <<<"$json")"
+  title="$(jq -r '.title' <<<"$json")"
+  gradient_angle="$(jq -r '.colors.gradient_angle' <<<"$json")"
+  gradient_from="$(jq -r '.colors.gradient_from' <<<"$json")"
+  gradient_to="$(jq -r '.colors.gradient_to' <<<"$json")"
+  copyright="$(jq -r '.copyright' <<<"$json")"
 
   # 4) Filename (unique per day; title sanitized)
   safe_title="${title//[^[:alnum:]-_ ]/}"
-  name="${enddate}-${safe_title:-bing}.jpg"
+  name="${date}-${safe_title:-bing}.jpg"
   outfile="${CACHE_DIR}/${name}"
 
   # 5) Download if today's file not present; then clean old files
@@ -166,29 +168,42 @@ update_once() {
     -compose multiply -composite \
     "$blurred"
 
-  # Pick highlight color
-  VENV="$HOME/.venvs/accentpicker"
-  PICKER="$SCRIPT_DIR/accent_picker.py"
-  swatch="${outfile%.*}-swatch.png"
-  highlight="$("$VENV/bin/python" "$PICKER" --swatch-out "$swatch" "$outfile" | head -n1 | tr -d $'\r')"
-
   killall -q swaybg || true
   swaybg --image "${blurred}" &
 
   printf "Set wallpaper: %s\n" "$outfile"
   [[ -n "$copyright" ]] && printf "Source: %s\n" "$copyright"
 
-  echo "Highlight color: $highlight"
+  echo "Highlight color: $gradient_from"
 
+  # Set waybar colors
   cat > "$CACHE_DIR/colors.css" <<EOF
-@define-color highlight ${highlight};
+@define-color highlight ${gradient_from};
 EOF
 
+  # Set niri colors
   cat > "$CACHE_DIR/colors-niri.kdl" <<EOF
 layout {
     focus-ring {
-        active-color "$highlight"
+        active-gradient from="$gradient_from" to="$gradient_to" angle=$gradient_angle in="oklab"
     }
+
+    insert-hint {
+        gradient from="${gradient_from}80" to="${gradient_to}80" angle=$gradient_angle in="oklab"
+    }
+}
+EOF
+
+  # Set zen colors
+  cat > "$CACHE_DIR/userChrome.css" <<EOF
+html#main-window {
+    --zen-primary-color: $gradient_from !important;
+    --zen-main-browser-background-toolbar:
+        linear-gradient(135deg, ${gradient_from}99 0%, transparent 100%),
+        linear-gradient(-45deg, ${gradient_to}99 0%, transparent 80%) !important;
+    --zen-main-browser-background:
+        linear-gradient(135deg, ${gradient_from}99 0%, transparent 100%),
+        linear-gradient(-45deg, ${gradient_to}99 0%, transparent 80%) !important;
 }
 EOF
 
