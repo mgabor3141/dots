@@ -29,6 +29,7 @@
 .config/baloofileinformationrc
 .config/QtProject.conf
 .config/btop
+.config/go
 
 !.local
 !.local/bin
