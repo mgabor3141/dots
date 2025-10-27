@@ -16,7 +16,7 @@ set -Eeuo pipefail
 MKT="${1:-en-US}"
 DAYS_AGO="${2:-0}"
 
-API_URL="http://localhost:8080/api/colors?locale=${MKT}&daysAgo=${DAYS_AGO}"
+API_URL="https://dailyhues.mgabor.hu/api/colors?locale=${MKT}&daysAgo=${DAYS_AGO}"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bing-wallpaper"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-3600}"   # hourly
 TICK_SECONDS="${TICK_SECONDS:-10}"             # max delay after system resume

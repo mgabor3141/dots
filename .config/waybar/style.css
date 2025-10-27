@@ -76,6 +76,8 @@ window#waybar {
 #workspaces button.active {
     color: @background;
     background: @highlight;
+    transition-property: background-color;
+    transition-duration: 0.5s;
 }
 
 #workspaces button:not(.active):hover {
@@ -85,6 +87,8 @@ window#waybar {
 /* Power/exit button */
 #custom-exit {
     background-color: @highlight;
+    transition-property: background-color;
+    transition-duration: 0.5s;
     font-size: 14px;
     font-weight: 800;
     color: @background;
@@ -98,6 +102,10 @@ tooltip {
     background-color: @background;
     color: @text-muted;
     padding: 8px 12px;
+}
+
+tooltip label {
+    color: @highlight;
 }
 
 /* Taskbar */
