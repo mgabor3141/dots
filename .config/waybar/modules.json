@@ -57,14 +57,14 @@
     "exec": "waybar-module-pacman-updates --interval-seconds 5 --network-interval-seconds 300"
   },
 
-  // anyrun Application Launcher
+  // wofi Application Launcher
   "custom/appmenu": {
     "format": "   ",
     "on-click": "wofi -replace",
     "tooltip-format": "Open the application launcher"
   },
 
-  // anyrun Application Launcher
+  // wofi Application Launcher
   "custom/appmenuicon": {
     "format": "",
     "on-click": "wofi -replace",
@@ -104,9 +104,19 @@
 
   // Clock
   "clock": {
-    "format": "{:%H:%M %a}",
-    "on-click": "ags -t calendar",
-    "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    "format": "{:%A %b %d - %I:%M %p}",
+    "tooltip-format": "<tt><small>{calendar}</small></tt>",
+    "calendar": {
+      "iso8601": true,
+      "mode": "month",
+      "format": {
+        "months": "<span color='gray'><b>{}</b></span>",
+        "days": "<span color='white'>{}</span>",
+        // Warning: cursed string interpolation shenanigans!
+        "weekdays": "</span><span><b>{}</b></span><span color='white'>",
+        "today": "</span><span><b>{}</b></span><span color='white'>"
+      }
+    }
   },
 
   "niri/language": {

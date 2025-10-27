@@ -218,9 +218,9 @@ binds {
         center-focused-column "never" // Don’t auto-center focused column
 
         preset-column-widths {
-            proportion 0.34
+            proportion 0.33333
             proportion 0.5
-            proportion 0.67
+            proportion 0.66667
         }
 
         default-column-width {}
@@ -286,19 +286,26 @@ binds {
         match app-id="vesktop"
         match app-id="Spotify"
         open-on-output "Dell Inc. DELL S2721D JRNFP43"
+        default-column-width {
+            proportion 0.5
+        }
     }
 
     window-rule {
         match app-id=r#"(firefox|zen)$"# title="^Picture-in-Picture$" // Always float Firefox PiP windows
-        match app-id="zen" title=r#"^Extension:"#
         match app-id="steam" title="Friends List"
         open-floating true
     }
 
+    window-rule {
+        match app-id="zen"
+        draw-border-with-background false
+    }
+
     // Example: block out windows from screen capture.
-    /-window-rule {
-        match app-id=r#"^org\.keepassxc\.KeePassXC$"#
-        match app-id=r#"^org\.gnome\.World\.Secrets$"#
+    window-rule {
+        match app-id="zen" title=r#"^Extension:"#
+        match app-id="dev.zed.Zed" title=r#"\.env$"#
 
         block-out-from "screen-capture"
 
@@ -322,6 +329,31 @@ binds {
     layer-rule {
         match namespace="^wallpaper$"
         place-within-backdrop true
+    }
+
+    layer-rule {
+        match namespace="waybar"
+        match at-startup=true
+
+        // Properties that apply continuously.
+        opacity 0.99999
+        block-out-from "screencast"
+        // block-out-from "screen-capture"
+
+        shadow {
+            on
+            // off
+            softness 40
+            spread 5
+            offset x=0 y=5
+            draw-behind-window true
+            color "#00000064"
+            // inactive-color "#00000064"
+        }
+
+        geometry-corner-radius 12
+        place-within-backdrop true
+        // baba-is-float true
     }
 
     // Indicate screencasted windows with red colors.
@@ -361,4 +393,8 @@ binds {
 
     hotkey-overlay {
         skip-at-startup
+    }
+
+    debug {
+        // preview-render "screencast"
     }
