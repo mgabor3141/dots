@@ -116,13 +116,9 @@ binds {
 
     MOD+SHIFT+LEFT                      { focus-monitor-left; }
     MOD+SHIFT+RIGHT                     { focus-monitor-right; }
-    MOD+SHIFT+UP                        { focus-monitor-up; }
-    MOD+SHIFT+DOWN                      { focus-monitor-down; }
 
     MOD+SHIFT+CTRL+LEFT                 { move-column-to-monitor-left; }
     MOD+SHIFT+CTRL+RIGHT                { move-column-to-monitor-right; }
-    MOD+SHIFT+CTRL+UP                   { move-column-to-monitor-up; }
-    MOD+SHIFT+CTRL+DOWN                 { move-column-to-monitor-down; }
 
     // ─── Workspace Switching ───
     MOD+WHEELSCROLLDOWN                 cooldown-ms=150 { focus-workspace-down; }
@@ -150,6 +146,9 @@ binds {
     MOD+8                               { focus-workspace 8; }
     MOD+9                               { focus-workspace 9; }
 
+    MOD+SHIFT+UP                        { focus-workspace-up; }
+    MOD+SHIFT+DOWN                      { focus-workspace-down; }
+
     MOD+CTRL+1                          { move-column-to-workspace 1; }
     MOD+CTRL+2                          { move-column-to-workspace 2; }
     MOD+CTRL+3                          { move-column-to-workspace 3; }
@@ -159,6 +158,9 @@ binds {
     MOD+CTRL+7                          { move-column-to-workspace 7; }
     MOD+CTRL+8                          { move-column-to-workspace 8; }
     MOD+CTRL+9                          { move-column-to-workspace 9; }
+
+    MOD+CTRL+SHIFT+UP                   { move-column-to-workspace-up; }
+    MOD+CTRL+SHIFT+DOWN                 { move-column-to-workspace-down; }
 
     MOD+TAB                             { focus-workspace-previous; }
 
@@ -198,9 +200,9 @@ binds {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Miscellaneous#spawn-sh-at-startup
 
     spawn-sh-at-startup "/usr/lib/polkit-kde-authentication-agent-1 &" // Polkit
-    spawn-at-startup "swww-daemon" // Regular wallpaper, overview is swaybg
-    // spawn-sh-at-startup "swww img /usr/share/wallpapers/cachyos-wallpapers/Skyscraper.png" // Set wallpaper
-    spawn-at-startup "bing-wallpaper.sh"
+    spawn-at-startup    "swww-daemon" "--layer" "bottom"           // Wallpaper
+    spawn-at-startup    "swww-daemon" "--namespace" "backdrop"     // Overview backdrop
+    spawn-at-startup    "bing-wallpaper.sh"
     spawn-at-startup    "swayidle" "-w" \
         "timeout" "300" "niri msg action power-off-monitors" \
         "timeout" "600" "systemctl suspend"
@@ -325,9 +327,9 @@ binds {
         block-out-from "screencast"
     }
 
-    // Put swaybg as the overview backdrop.
+    // Put swww-daemon with "backdrop" namespace as the overview backdrop.
     layer-rule {
-        match namespace="^wallpaper$"
+        match namespace="^swww-daemonbackdrop$"
         place-within-backdrop true
     }
 

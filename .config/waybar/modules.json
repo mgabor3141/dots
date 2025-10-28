@@ -106,6 +106,7 @@
   "clock": {
     "format": "{:%A %b %d - %I:%M %p}",
     "tooltip-format": "<tt><small>{calendar}</small></tt>",
+    "locale": "en_US.utf8",
     "calendar": {
       "iso8601": true,
       "mode": "month",
