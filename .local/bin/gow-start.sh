@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#
+# gow-start.sh by mgabor — launches and supervises the Games-on-Whales “wolf” container.
+#
+# This script:
+#   • Ensures it runs as root (re-execs with sudo if needed)
+#       - This is needed so that we can manipulate the wolf.socket
+#   • Starts the wolf container
+#   • Waits for the wolf UNIX socket (/var/run/wolf/wolf.sock) to appear and opens its ownership to non-root
+#   • Starts the SSE watcher script (gow/sse.sh) to manage a system sleep inhibitor
+#   • Ensures correct cleanup
+#
+# Usage: run from your normal user account; the script will elevate as needed.
+#
+# Dependencies: bash ≥4, sudo, docker, inotifywait
+
 set -Eeuo pipefail
 
 if [ "$EUID" -ne 0 ]; then

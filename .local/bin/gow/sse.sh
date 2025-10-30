@@ -1,4 +1,22 @@
 #!/usr/bin/env bash
+#
+# sse.sh by mgabor — subscribes to a Server-Sent Events (SSE) stream and holds a
+# systemd-inhibit lock while events are arriving.
+#
+# Behavior:
+#   • Connects to the SSE endpoint defined by $SSE_URL (using curl)
+#   • Counts incoming “data:” lines as activity
+#   • Starts a systemd sleep inhibitor when activity is seen
+#   • Releases the inhibitor after a configurable idle period ($IDLE_SECS, default 10 min)
+#   • Reconnects automatically with exponential backoff if the stream drops
+#   • Ensures correct cleanup
+#
+# Typical use: invoked automatically by gow-start.sh once the wolf container
+# socket is available, so the system stays awake while events flow from the
+# container and can sleep when idle.
+#
+# Dependencies: bash ≥4, curl, systemd-inhibit, inotifywait
+
 set -Eeuo pipefail
 
 # ==== CONFIG ====
