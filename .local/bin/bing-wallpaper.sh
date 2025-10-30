@@ -212,6 +212,9 @@ html#main-window {
          linear-gradient(in lab 270deg, rgb(23 23 26 / 25%) 0%, transparent 25%),
          linear-gradient(in lab ${gradient_angle}deg, ${gradient_from}80 20%, ${gradient_to}80 100%),
          linear-gradient(black) !important;
+    --zen-main-browser-background-toolbar: var(--zen-main-browser-background) !important;
+    --zen-main-browser-background-old: var(--zen-main-browser-background) !important;
+    --zen-main-browser-background-toolbar-old: var(--zen-main-browser-background) !important;
 }
 EOF
 
