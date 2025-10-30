@@ -8,4 +8,7 @@ export PROTON_NO_WM_DECORATION=1
 
 export MANGOHUD=1
 
+export QT_AUTO_SCREEN_SCALE_FACTOR=1
+export QT_ENABLE_HIGHDPI_SCALING=1
+
 setleds -D +num

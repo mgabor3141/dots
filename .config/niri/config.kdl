@@ -48,7 +48,7 @@ gestures {
 
 output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538" {
     mode "3840x2160@143.999" // Set resolution and refresh rate
-    scale 1.5
+    scale 1.75
     variable-refresh-rate // on-demand=true
     focus-at-startup
 }
@@ -56,7 +56,7 @@ output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538" {
 output "Dell Inc. DELL S2721D JRNFP43" {
     mode "2560x1440@74.971"
     variable-refresh-rate
-    scale 1.2
+    scale 1.25
 }
 
 // ────────────── Keybindings ──────────────
@@ -200,8 +200,8 @@ binds {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Miscellaneous#spawn-sh-at-startup
 
     spawn-sh-at-startup "/usr/lib/polkit-kde-authentication-agent-1 &" // Polkit
-    spawn-at-startup    "swww-daemon" "--layer" "bottom"           // Wallpaper
-    spawn-at-startup    "swww-daemon" "--namespace" "backdrop"     // Overview backdrop
+    spawn-sh-at-startup "swww-daemon --layer bottom && swww restore" // Wallpaper
+    spawn-sh-at-startup "swww-daemon --namespace backdrop && swww restore --namespace backdrop" // Overview backdrop
     spawn-at-startup    "bing-wallpaper.sh"
     spawn-at-startup    "swayidle" "-w" \
         "timeout" "300" "niri msg action power-off-monitors" \
@@ -308,6 +308,9 @@ binds {
     window-rule {
         match app-id="zen" title=r#"^Extension:"#
         match app-id="dev.zed.Zed" title=r#"\.env$"#
+        match app-id="org.kde.dolphin"
+        match app-id="discord"
+        match app-id="vesktop"
 
         block-out-from "screen-capture"
 
