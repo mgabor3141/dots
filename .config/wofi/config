@@ -1,7 +1,7 @@
 allow_images=true
 hide_scroll=true
 no_actions=true
-term=alacritty
+term=kitty
 mode=drun
 prompt=Launch
 insensitive=true

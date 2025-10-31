@@ -1,5 +1,7 @@
 export BROWSER=zen-browser
-export TERM=alacritty
+export TERM=kitty
+export VISUAL=zeditor
+export EDITOR=nano
 
 export QT_STYLE_OVERRIDE=kvantum
 
@@ -10,5 +12,3 @@ export MANGOHUD=1
 
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
 export QT_ENABLE_HIGHDPI_SCALING=1
-
-setleds -D +num
