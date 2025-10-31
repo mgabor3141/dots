@@ -66,7 +66,7 @@ binds {
     MOD+SHIFT+ESCAPE                     { show-hotkey-overlay; }
 
     // ─── Applications ───
-    MOD+RETURN                          hotkey-overlay-title="Open Terminal: alacritty" { spawn-sh "alacritty"; }
+    MOD+RETURN                          hotkey-overlay-title="Open Terminal: kitty" { spawn-sh "kitty"; }
     MOD+SPACE                           hotkey-overlay-title="Open App Launcher: wofi" { spawn-sh "wofi --conf ~/.config/wofi/config --style ~/.config/wofi/style.css -replace"; }
     MOD+B                               hotkey-overlay-title="Open Browser: Zen" { spawn-sh "zen-browser"; }
     MOD+ALT+L                           hotkey-overlay-title="Lock Screen: swaylock" { spawn-sh "swaylock"; }
@@ -288,6 +288,7 @@ binds {
         match app-id="vesktop"
         match app-id="Spotify"
         open-on-output "Dell Inc. DELL S2721D JRNFP43"
+        open-focused false
         default-column-width {
             proportion 0.5
         }
@@ -328,6 +329,13 @@ binds {
         match namespace="^notifications$"
 
         block-out-from "screencast"
+    }
+
+    // Make inactive windows semitransparent.
+    /- window-rule {
+        match is-active=false
+
+        opacity 0.98
     }
 
     // Put swww-daemon with "backdrop" namespace as the overview backdrop.
