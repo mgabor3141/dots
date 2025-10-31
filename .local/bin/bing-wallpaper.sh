@@ -218,6 +218,13 @@ html#main-window {
 }
 EOF
 
+# Set kitty colors
+cat > "$CACHE_DIR/colors-kitty.conf" <<EOF
+color79 ${gradient_from}
+color80 ${gradient_to}
+EOF
+pkill kitty --signal SIGUSR1 || true
+
   # Wait for swww-daemons
   deadline=$(( $(date +%s) + 20 ))
   until swww query >/dev/null 2>&1 && swww query --namespace backdrop >/dev/null 2>&1; do
