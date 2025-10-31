@@ -1,0 +1,7 @@
+<application>
+  <component name="AIOnboardingPromoWindowAdvisor">
+    <option name="attempts" value="9999" />
+    <option name="shouldShowNextTime" value="NO" />
+    <option name="wasShown" value="true" />
+  </component>
+</application>

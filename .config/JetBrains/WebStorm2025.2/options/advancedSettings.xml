@@ -1,0 +1,9 @@
+<application>
+  <component name="AdvancedSettings">
+    <option name="settings">
+      <map>
+        <entry key="editor.skip.copy.and.cut.for.empty.selection" value="true" />
+      </map>
+    </option>
+  </component>
+</application>

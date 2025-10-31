@@ -1,0 +1,4 @@
+# custom WebStorm VM options (expand/override 'bin/webstorm64.vmoptions')
+
+
+-Dawt.toolkit.name=WLToolkit
