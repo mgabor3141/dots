@@ -1,4 +1,6 @@
 {
     "window.commandCenter": true,
-    "workbench.colorTheme": "Cursor Dark Midnight"
+    "workbench.colorTheme": "Cursor Dark Midnight",
+    "explorer.confirmDragAndDrop": false,
+    "git.enableSmartCommit": true
 }
