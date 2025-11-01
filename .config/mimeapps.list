@@ -1,5 +1,5 @@
 [Added Associations]
-application/pdf=zen-browser.desktop;
+application/pdf=evince-previewer.desktop;zen-browser.desktop;
 application/x-extension-htm=zen.desktop;
 application/x-extension-html=zen.desktop;
 application/x-extension-shtml=zen.desktop;
@@ -13,7 +13,7 @@ x-scheme-handler/http=zen.desktop;
 x-scheme-handler/https=zen.desktop;
 
 [Default Applications]
-application/pdf=zen-browser.desktop;
+application/pdf=evince-previewer.desktop;
 application/x-extension-htm=zen.desktop
 application/x-extension-html=zen.desktop
 application/x-extension-shtml=zen.desktop
