@@ -1,0 +1,17 @@
+{
+  "window.commandCenter": true,
+  "git.enableSmartCommit": true,
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "files.autoSave": "onFocusChange",
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "modificationsIfAvailable",
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "editor.formatOnPaste": true,
+  "editor.formatOnType": true,
+  "git.blame.editorDecoration.enabled": true,
+  "explorer.confirmDragAndDrop": false,
+  "explorer.confirmDelete": false
+}

@@ -1,0 +1,24 @@
+[core]
+	autocrlf = "input"
+[user]
+	name = mgabor3141
+	email =
+{{ if eq .chezmoi.os "linux" }}
+[credential "https://github.com"]
+	helper =
+	helper = !/usr/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !/usr/bin/gh auth git-credential
+{{ end }}
+[push]
+	autoSetupRemote = true
+[pull]
+	rebase = true
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+[init]
+	defaultBranch = main
