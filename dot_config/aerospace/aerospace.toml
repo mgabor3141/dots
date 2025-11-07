@@ -1,0 +1,111 @@
+accordion-padding = 30
+after-login-command = []
+after-startup-command = []
+default-root-container-layout = "tiles"
+default-root-container-orientation = "auto"
+enable-normalization-flatten-containers = true
+enable-normalization-opposite-orientation-for-nested-containers = true
+exec-on-workspace-change = ["/bin/bash", "-c", "~/.config/aerospace/pip-move.sh"]
+on-focus-changed = []
+on-focused-monitor-changed = ["move-mouse monitor-lazy-center"]
+start-at-login = true
+
+[exec.env-vars]
+PATH = "/etc/profiles/per-user/mg/bin:${PATH}"
+
+[gaps.inner]
+horizontal = 4
+vertical = 4
+
+[gaps.outer]
+bottom = 0
+left = 0
+right = 0
+top = 0
+
+[key-mapping]
+preset = "qwerty"
+
+[mode.main.binding]
+alt-0 = "workspace 0"
+alt-1 = "workspace 1"
+alt-2 = "workspace 2"
+alt-3 = "workspace 3"
+alt-4 = "workspace 4"
+alt-5 = "workspace 5"
+alt-6 = "workspace 6"
+alt-7 = "workspace 7"
+alt-8 = "workspace 8"
+alt-9 = "workspace 9"
+alt-cmd-0 = "move-node-to-workspace 0 --focus-follows-window"
+alt-cmd-1 = "move-node-to-workspace 1 --focus-follows-window"
+alt-cmd-2 = "move-node-to-workspace 2 --focus-follows-window"
+alt-cmd-3 = "move-node-to-workspace 3 --focus-follows-window"
+alt-cmd-4 = "move-node-to-workspace 4 --focus-follows-window"
+alt-cmd-5 = "move-node-to-workspace 5 --focus-follows-window"
+alt-cmd-6 = "move-node-to-workspace 6 --focus-follows-window"
+alt-cmd-7 = "move-node-to-workspace 7 --focus-follows-window"
+alt-cmd-8 = "move-node-to-workspace 8 --focus-follows-window"
+alt-cmd-9 = "move-node-to-workspace 9 --focus-follows-window"
+
+[[on-window-detected]]
+run = "layout floating"
+
+[on-window-detected.if]
+app-id = "com.apple.finder"
+
+[[on-window-detected]]
+run = "layout floating"
+
+[on-window-detected.if]
+window-title-regex-substring = "^(Picture[- ]in[- ]Picture|Meet - [a-z-]*)$"
+
+[[on-window-detected]]
+check-further-callbacks = true
+run = "layout floating"
+
+[on-window-detected.if]
+app-id = "app.zen-browser.zen"
+window-title-regex-substring = "Extension: "
+
+[[on-window-detected]]
+run = "move-node-to-workspace 1 --focus-follows-window"
+
+[on-window-detected.if]
+app-id = "app.zen-browser.zen"
+
+[[on-window-detected]]
+run = "move-node-to-workspace 2 --focus-follows-window"
+
+[on-window-detected.if]
+app-id = "dev.zed.Zed"
+
+[[on-window-detected]]
+run = "move-node-to-workspace 2 --focus-follows-window"
+
+[on-window-detected.if]
+app-id = "com.microsoft.VSCode"
+
+[[on-window-detected]]
+run = "move-node-to-workspace 2 --focus-follows-window"
+
+[on-window-detected.if]
+app-id = "com.jetbrains.WebStorm"
+
+[[on-window-detected]]
+run = "move-node-to-workspace 2 --focus-follows-window"
+
+[on-window-detected.if]
+app-id = "com.todesktop.230313mzl4w4u92"
+
+[[on-window-detected]]
+run = "move-node-to-workspace 3 --focus-follows-window"
+
+[on-window-detected.if]
+app-id = "com.hnc.Discord"
+
+[[on-window-detected]]
+run = "move-node-to-workspace 3 --focus-follows-window"
+
+[on-window-detected.if]
+app-id = "com.facebook.archon"

@@ -1,0 +1,37 @@
+README.md
+
+{{- if ne .chezmoi.os "linux" }}
+# Folders
+.config/gtk-3.0
+.config/gtk-4.0
+.config/io.github.zefr0x.ianny
+.config/Kvantum
+.config/mako
+.config/MangoHud
+.config/niri
+.config/pipewire
+.config/systemd
+.config/qt5ct
+.config/swaylock
+.config/waybar
+.config/wlogout
+.config/wofi
+.config/xkb
+
+# Files
+.config/filetypesrc
+.config/kiorc
+.config/konsolerc
+.config/konsolesshconfig
+.config/mimeapps.list
+.config/pavucontrol.ini
+.config/user-dirs.dirs
+.config/user-dirs.locale
+{{- end }}
+
+{{- if ne .chezmoi.os "darwin" }}
+.config/aerospace
+.config/karabiner
+
+nix-darwin
+{{- end }}
