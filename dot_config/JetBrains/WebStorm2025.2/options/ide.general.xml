@@ -1,5 +1,6 @@
 <application>
   <component name="GeneralSettings">
+    <option name="confirmExit" value="false" />
     <option name="inactiveTimeout" value="2" />
   </component>
   <component name="Registry">
