@@ -27,7 +27,7 @@ top = 0
 preset = "qwerty"
 
 [mode.main.binding]
-alt-0 = "workspace 0"
+# alt-0 = "workspace 0"
 alt-1 = "workspace 1"
 alt-2 = "workspace 2"
 alt-3 = "workspace 3"
@@ -37,7 +37,7 @@ alt-6 = "workspace 6"
 alt-7 = "workspace 7"
 alt-8 = "workspace 8"
 alt-9 = "workspace 9"
-alt-cmd-0 = "move-node-to-workspace 0 --focus-follows-window"
+# alt-cmd-0 = "move-node-to-workspace 0 --focus-follows-window"
 alt-cmd-1 = "move-node-to-workspace 1 --focus-follows-window"
 alt-cmd-2 = "move-node-to-workspace 2 --focus-follows-window"
 alt-cmd-3 = "move-node-to-workspace 3 --focus-follows-window"
@@ -103,6 +103,12 @@ run = "move-node-to-workspace 3 --focus-follows-window"
 
 [on-window-detected.if]
 app-id = "com.hnc.Discord"
+
+[[on-window-detected]]
+run = "move-node-to-workspace 3 --focus-follows-window"
+
+[on-window-detected.if]
+app-id = "com.tinyspeck.slackmacgap"
 
 [[on-window-detected]]
 run = "move-node-to-workspace 3 --focus-follows-window"

@@ -35,5 +35,11 @@
     "bindings": {
       "ctrl-h": "buffer_search::DeployReplace"
     }
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "cmd-`": "terminal_panel::Toggle"
+    }
   }
 ]
