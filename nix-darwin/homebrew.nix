@@ -11,6 +11,7 @@
     brews = [
       "chezmoi"
       "fish"
+      "eza"
       "fastfetch"
 
       "yt-dlp"
