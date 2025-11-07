@@ -8,6 +8,10 @@
       cleanup = "zap";
     };
 
+    taps = [
+      "nikitabobko/tap"
+    ];
+
     brews = [
       "chezmoi"
       "fish"
