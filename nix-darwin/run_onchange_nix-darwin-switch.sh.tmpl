@@ -6,4 +6,7 @@
 # home.nix hash: {{ include "nix-darwin/home.nix" | sha256sum }}
 # homebrew.nix hash: {{ include "nix-darwin/homebrew.nix" | sha256sum }}
 
-sudo nix run nix-darwin/nix-darwin-25.05#darwin-rebuild switch --flake .
+sudo nix \
+    --extra-experimental-features nix-command \
+    --extra-experimental-features flakes \
+    run nix-darwin/nix-darwin-25.05#darwin-rebuild -- switch --flake .
