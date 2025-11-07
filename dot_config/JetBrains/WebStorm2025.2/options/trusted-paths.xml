@@ -3,6 +3,7 @@
     <option name="TRUSTED_PROJECT_PATHS">
       <map>
         <entry key="$USER_HOME$" value="true" />
+        <entry key="$USER_HOME$/.local/share/chezmoi" value="true" />
       </map>
     </option>
   </component>
