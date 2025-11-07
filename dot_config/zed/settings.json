@@ -36,7 +36,6 @@
     "font_size": 13,
     "font_family": "Fira Code",
     "font_weight": 450.0,
-    "dock": "right",
     "keep_selection_on_copy": false,
     "cursor_shape": "bar",
     "font_features": {
