@@ -11,6 +11,7 @@
     brews = [
       "chezmoi"
       "fish"
+      "fastfetch"
 
       "yt-dlp"
       "borgbackup-fuse"
@@ -44,6 +45,7 @@
       "blackhole-2ch"
       "karabiner-elements"
       "nikitabobko/tap/aerospace"
+      "kitty"
 
       "macfuse"
       "vorta"

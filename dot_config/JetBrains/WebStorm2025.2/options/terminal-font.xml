@@ -1,9 +1,7 @@
 <application>
   <component name="TerminalFontOptions">
     <option name="VERSION" value="1" />
-    <option name="FONT_SIZE" value="16" />
-    <option name="FONT_SIZE_2D" value="16.3" />
+    <option name="FONT_SIZE_2D" value="13.039999" />
     <option name="FONT_FAMILY" value="Fira Code" />
-    <option name="FONT_SCALE" value="1.25" />
   </component>
 </application>
