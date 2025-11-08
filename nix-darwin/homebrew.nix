@@ -22,6 +22,8 @@
       "eza"
       "yt-dlp"
       "borgbackup-fuse"
+      "imagemagick"
+      "flock"
 
       # "esptool"
 

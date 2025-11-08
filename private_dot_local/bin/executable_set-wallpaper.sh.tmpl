@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# Script arguments
+CACHE_DIR="${1}"
+IMAGE="${2}"
+IMAGE_BLURRED="${3}"
+GRADIENT_ANGLE="${4}"
+GRADIENT_FROM="${5}"
+GRADIENT_TO="${6}"
+
+# Set kitty colors
+cat > "$CACHE_DIR/colors-kitty.conf" <<EOF
+color79 ${GRADIENT_FROM}
+color80 ${GRADIENT_TO}
+EOF
+pkill kitty --signal SIGUSR1 || true
+
+# Set zen colors
+cat > "$CACHE_DIR/userChrome.css" <<EOF
+html#main-window {
+    --zen-primary-color: ${GRADIENT_FROM} !important;
+    --zen-main-browser-background:
+         linear-gradient(in lab 270deg, rgb(23 23 26 / 25%) 0%, transparent 25%),
+         linear-gradient(in lab ${GRADIENT_ANGLE}deg, ${GRADIENT_FROM}80 20%, ${GRADIENT_TO}80 100%),
+         linear-gradient(black) !important;
+    --zen-main-browser-background-toolbar: var(--zen-main-browser-background) !important;
+    --zen-main-browser-background-old: var(--zen-main-browser-background) !important;
+    --zen-main-browser-background-toolbar-old: var(--zen-main-browser-background) !important;
+}
+EOF
+
+{{ if eq .chezmoi.os "darwin" -}}
+{{-   include "private_dot_local/bin/.set-wallpaper-darwin.sh" -}}
+{{ else if eq .chezmoi.os "linux" -}}
+{{-   include "private_dot_local/bin/.set-wallpaper-linux.sh" -}}
+{{ end -}}
