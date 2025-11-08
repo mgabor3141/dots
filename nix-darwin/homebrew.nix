@@ -1,7 +1,11 @@
 { config, pkgs, ... }:
 {
-  homebrew.enable = true;
+  environment.systemPath = [
+    "/opt/homebrew/bin/"
+  ];
+
   homebrew = {
+    enable = true;
     onActivation = {
       autoUpdate = true;
       upgrade = true;
@@ -14,10 +18,8 @@
 
     brews = [
       "chezmoi"
-      "fish"
-      "eza"
       "fastfetch"
-
+      "eza"
       "yt-dlp"
       "borgbackup-fuse"
 
@@ -44,9 +46,10 @@
       "python@3.13"
     ];
 
+    # greedyCasks = true;
     casks = [
       "stats"
-      "unnaturalscrollwheels"
+      "linearmouse"
       "blackhole-2ch"
       "karabiner-elements"
       "nikitabobko/tap/aerospace"
