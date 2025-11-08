@@ -14,6 +14,7 @@
       "{{ .chezmoi.hostname }}" = darwin.lib.darwinSystem {
         system = "aarch64-darwin";
         modules = [
+          ./darwin-config.nix
           ./homebrew.nix
           home-manager.darwinModules.home-manager
           {
