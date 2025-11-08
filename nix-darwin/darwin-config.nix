@@ -40,8 +40,8 @@
     controlcenter.Sound = false;
     dock.autohide = true;
     dock.autohide-delay = 0.001;
-    dock.autohide-time-modifier = 3.0;
-    dock.expose-animation-duration = 3.0;
+    dock.autohide-time-modifier = 0.1;
+    dock.expose-animation-duration = 0.2;
     dock.orientation = "left";
     dock.show-recents = false;
     dock.tilesize = 32;
