@@ -34,4 +34,6 @@ README.md
 .config/karabiner
 
 nix-darwin
+
+private_Library/private_Application Support/private_zen/private_Profiles/private_uu6m9ufs.Default (release)/chrome/symlink_userChrome.css
 {{- end }}

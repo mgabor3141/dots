@@ -1,17 +1,30 @@
 #!/usr/bin/env bash
 # bing-wallpaper.sh by mgabor
 # Dependencies:
-#   curl jq imagemagick swww util-linux
+#   curl jq imagemagick
+#
+# On macos it needs flock as well
+#
 # Run once at login (via systemd, cron, autostart, or your desktop environment config)
 # Make sure you start the two swww-daemons too
 
 trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
-for cmd in curl jq swww magick date; do
+for cmd in curl jq magick date flock; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "Missing dependency: $cmd" >&2; exit 1; }
 done
 
+# One reusable date command fragment (GNU vs BSD)
+if date -ud "1970-01-01" +%s >/dev/null 2>&1; then
+  # GNU date (Linux)
+  DATE_CMD=(date -u -d)
+else
+  # BSD date (macOS)
+  DATE_CMD=(date -u -j -f "%Y%m%d %H:%M")
+fi
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bing-wallpaper"
 mkdir -p "$CACHE_DIR"
 
@@ -29,7 +42,7 @@ TICK_SECONDS="${TICK_SECONDS:-30}"
 API_URL="https://dailyhues.mgabor.hu/api/colors?locale=${MKT}&daysAgo=${DAYS_AGO}"
 
 ONE_DAY=$((24 * 60 * 60))
-declare -g next_wallpaper=0
+next_wallpaper=0
 
 update_once() {
   # 1) Fetch JSON
@@ -68,7 +81,7 @@ update_once() {
 
   # === Pretty caption overlay (IMv7) ============================================
   # Config: scale & fonts (change to taste or export in env)
-  CAPTION_SCALE="${BING_WALLPAPER_CAPTION_SCALE:-0.8}"   # 0.7 small … 1.0 default … 1.3 big
+  CAPTION_SCALE="${BING_WALLPAPER_CAPTION_SCALE:-1.0}"   # 0.7 small … 1.0 default … 1.3 big
   CAPTION_FONT_MAIN="${BING_WALLPAPER_FONT_MAIN:-DejaVu-Serif}"
   CAPTION_FONT_BOLD="${BING_WALLPAPER_FONT_BOLD:-DejaVu-Sans}"
 
@@ -132,7 +145,7 @@ update_once() {
       R=$(printf '%.0f\n' "$(awk -v P="$PAD" 'BEGIN{v=P*0.5; if(v<16)v=16; if(v>48)v=48; print v}')")
 
       # 4) Position: bottom-left with a comfortable margin (use PAD as margin unit)
-      MARGIN_L=$(printf '%.0f\n'  "$(awk -v P="$PAD" 'BEGIN{print (P*2)}')")
+      MARGIN_L=$(printf '%.0f\n'  "$(awk -v P="$PAD" 'BEGIN{print (P*12)}')")
       MARGIN_B=$(printf '%.0f\n'  "$(awk -v P="$PAD" 'BEGIN{print (P*4)}')")
 
       # Convert bottom-left placement to top-left coordinates for drawing
@@ -186,75 +199,17 @@ update_once() {
     "${copyright:-[No description]}" \
     "Applying colors: $gradient_from -> $gradient_to ($gradient_angle)"
 
-  # Set waybar colors
-  cat > "$CACHE_DIR/colors.css" <<EOF
-@define-color highlight ${gradient_from};
-EOF
-
-  # Set niri colors
-  cat > "$CACHE_DIR/colors-niri.kdl" <<EOF
-layout {
-    focus-ring {
-        active-gradient from="$gradient_from" to="$gradient_to" angle=$gradient_angle in="oklab"
-    }
-
-    insert-hint {
-        gradient from="${gradient_from}80" to="${gradient_to}80" angle=$gradient_angle in="oklab"
-    }
-}
-EOF
-
-  # Set zen colors
-  cat > "$CACHE_DIR/userChrome.css" <<EOF
-html#main-window {
-    --zen-primary-color: ${gradient_from} !important;
-    --zen-main-browser-background:
-         linear-gradient(in lab 270deg, rgb(23 23 26 / 25%) 0%, transparent 25%),
-         linear-gradient(in lab ${gradient_angle}deg, ${gradient_from}80 20%, ${gradient_to}80 100%),
-         linear-gradient(black) !important;
-    --zen-main-browser-background-toolbar: var(--zen-main-browser-background) !important;
-    --zen-main-browser-background-old: var(--zen-main-browser-background) !important;
-    --zen-main-browser-background-toolbar-old: var(--zen-main-browser-background) !important;
-}
-EOF
-
-# Set kitty colors
-cat > "$CACHE_DIR/colors-kitty.conf" <<EOF
-color79 ${gradient_from}
-color80 ${gradient_to}
-EOF
-pkill kitty --signal SIGUSR1 || true
-
-  # Wait for swww-daemons
-  deadline=$(( $(date +%s) + 20 ))
-  until swww query >/dev/null 2>&1 && swww query --namespace backdrop >/dev/null 2>&1; do
-    (( $(date +%s) > deadline )) && {
-      echo "Timed out waiting for swww. Ensure both daemons are running, e.g.:
-      swww-daemon &
-      swww-daemon --namespace backdrop &" >&2
-      exit 1
-    }
-    sleep 0.1
-  done
-
-  # Set main wallpaper via swww with smooth transition
-  swww clear-cache
-  swww img "$annotated" \
-    --transition-type fade \
-    --transition-duration 10 \
-    --transition-fps 60
-  swww img "$blurred" \
-    --namespace backdrop \
-    --transition-type fade \
-    --transition-duration 10 \
-    --transition-fps 60
+  "$SCRIPT_DIR/set-wallpaper.sh" "$CACHE_DIR" "$annotated" "$blurred" "$gradient_angle" "$gradient_from" "$gradient_to"
 
   next_wallpaper=$((
-      $(date -ud "${fullstartdate:0:8} ${fullstartdate:8:2}:${fullstartdate:10:2}" +%s)
+      $("${DATE_CMD[@]}" "${fullstartdate:0:8} ${fullstartdate:8:2}:${fullstartdate:10:2}" +%s)
       + (DAYS_AGO + 1) * ONE_DAY
     ))
 
-  echo "New wallpaper at: $(date -d "@$next_wallpaper")"
+  readable=$(date -ud "@$next_wallpaper" +%Y-%m-%dT%H:%MZ 2>/dev/null \
+          || date -u -r "$next_wallpaper" +%Y-%m-%dT%H:%MZ)
+
+  echo "New wallpaper at: $readable local time"
 
   return 0
 }

@@ -75,4 +75,36 @@
 
   programs.fish.enable = true;
   programs.direnv.enable = true;
+
+  environment.userLaunchAgents."hu.mgabor.bing-wallpaper.plist" = {
+    text = ''
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+        <key>Label</key>
+        <string>hu.mgabor.bing-wallpaper</string>
+
+        <key>ProgramArguments</key>
+        <array>
+          <string>/Users/mg/.local/bin/bing-wallpaper.sh</string>
+        </array>
+
+        <key>RunAtLoad</key>
+        <true/>
+        <key>KeepAlive</key>
+        <true/>
+
+        <key>StandardOutPath</key><string>/tmp/hu.mgabor.bing-wallpaper</string>
+        <key>StandardErrorPath</key><string>/tmp/hu.mgabor.bing-wallpaper</string>
+
+        <key>EnvironmentVariables</key>
+        <dict>
+          <key>PATH</key>
+          <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        </dict>
+      </dict>
+      </plist>
+    '';
+  };
 }
