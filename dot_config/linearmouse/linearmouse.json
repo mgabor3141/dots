@@ -1,81 +1,79 @@
 {
-  "$schema" : "https:\/\/schema.linearmouse.app\/0.10.2",
-  "schemes" : [
+  "$schema": "https:\/\/schema.linearmouse.app\/0.10.2",
+  "schemes": [
     {
-      "buttons" : {
-        "mappings" : [
+      "if": {
+        "device": {
+          "category": "mouse"
+        }
+      },
+      "buttons": {
+        "mappings": [
           {
-            "action" : {
-              "run" : "\/opt\/homebrew\/bin\/aerospace focus up --boundaries-action fail || \/opt\/homebrew\/bin\/aerospace list-workspaces --monitor focused --empty no | \/opt\/homebrew\/bin\/aerospace workspace prev"
+            "action": {
+              "run": "\/opt\/homebrew\/bin\/aerospace focus up --boundaries-action fail || \/opt\/homebrew\/bin\/aerospace list-workspaces --monitor focused --empty no | \/opt\/homebrew\/bin\/aerospace workspace prev"
             },
-            "option" : true,
-            "scroll" : "up",
-            "shift" : false
+            "option": true,
+            "scroll": "up",
+            "shift": false
           },
           {
-            "action" : {
-              "run" : "\/opt\/homebrew\/bin\/aerospace focus up --boundaries-action fail || \/opt\/homebrew\/bin\/aerospace list-workspaces --monitor focused --empty no | \/opt\/homebrew\/bin\/aerospace workspace next"
+            "action": {
+              "run": "\/opt\/homebrew\/bin\/aerospace focus up --boundaries-action fail || \/opt\/homebrew\/bin\/aerospace list-workspaces --monitor focused --empty no | \/opt\/homebrew\/bin\/aerospace workspace next"
             },
-            "option" : true,
-            "scroll" : "down",
-            "shift" : false
+            "option": true,
+            "scroll": "down",
+            "shift": false
           },
           {
-            "action" : {
-              "run" : "\/opt\/homebrew\/bin\/aerospace focus left"
+            "action": {
+              "run": "\/opt\/homebrew\/bin\/aerospace focus left"
             },
-            "option" : true,
-            "scroll" : "up",
-            "shift" : true
+            "option": true,
+            "scroll": "up",
+            "shift": true
           },
           {
-            "action" : {
-              "run" : "\/opt\/homebrew\/bin\/aerospace focus right"
+            "action": {
+              "run": "\/opt\/homebrew\/bin\/aerospace focus right"
             },
-            "option" : true,
-            "scroll" : "down",
-            "shift" : true
+            "option": true,
+            "scroll": "down",
+            "shift": true
           }
         ]
       },
-      "if" : {
-        "device" : {
-          "category" : "mouse"
-        }
+      "pointer": {
+        "acceleration": 0.5,
+        "disableAcceleration": true,
+        "redirectsToScroll": false,
+        "speed": "unset"
       },
-      "pointer" : {
-        "acceleration" : 0.5,
-        "disableAcceleration" : true,
-        "redirectsToScroll" : false,
-        "speed" : "unset"
-      },
-      "scrolling" : {
-        "acceleration" : {
-          "vertical" : 1
+      "scrolling": {
+        "acceleration": {
+          "vertical": 1
         },
-        "distance" : {
-          "vertical" : 3
+        "distance": {
+          "vertical": 3
         },
-        "reverse" : {
-          "vertical" : true
+        "reverse": {
+          "vertical": true
         },
-        "speed" : {
-          "vertical" : 0
+        "speed": {
+          "vertical": 0
         }
       }
     },
     {
-      "if" : {
-        "device" : {
-          "category" : "mouse",
-          "productID" : "0xc08b",
-          "productName" : "G502 HERO Gaming Mouse",
-          "serialNumber" : "106E31473833",
-          "vendorID" : "0x46d"
+      "if": {
+        "device": {
+          "category": "mouse",
+          "productID": "0xc08b",
+          "vendorID": "0x46d"
         }
       },
-      "pointer" : {
-        "acceleration" : 0.55
+      "pointer": {
+        "acceleration": 0.55
       }
     }
   ]
