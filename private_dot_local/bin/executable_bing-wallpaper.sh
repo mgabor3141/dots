@@ -145,7 +145,7 @@ update_once() {
       R=$(printf '%.0f\n' "$(awk -v P="$PAD" 'BEGIN{v=P*0.5; if(v<16)v=16; if(v>48)v=48; print v}')")
 
       # 4) Position: bottom-left with a comfortable margin (use PAD as margin unit)
-      MARGIN_L=$(printf '%.0f\n'  "$(awk -v P="$PAD" 'BEGIN{print (P*12)}')")
+      MARGIN_L=$(printf '%.0f\n'  "$(awk -v P="$PAD" 'BEGIN{print (P*8)}')")
       MARGIN_B=$(printf '%.0f\n'  "$(awk -v P="$PAD" 'BEGIN{print (P*4)}')")
 
       # Convert bottom-left placement to top-left coordinates for drawing

@@ -2,7 +2,7 @@
 {
   nix = {
     enable = true;
-    gc.automatic = true;
+    # gc.automatic = true;
     optimise.automatic = true;
   };
 
@@ -92,6 +92,20 @@
 
         <key>RunAtLoad</key>
         <true/>
+
+        <!-- Launch on each unlock event -->
+        <key>LaunchEvents</key>
+        <dict>
+          <key>com.apple.notifyd.matching</key>
+          <dict>
+            <key>com.apple.screenIsUnlocked</key>
+            <dict>
+              <key>Notification</key>
+              <string>com.apple.screenIsUnlocked</string>
+            </dict>
+          </dict>
+        </dict>
+
         <key>KeepAlive</key>
         <true/>
 
