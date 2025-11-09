@@ -5,10 +5,18 @@ default-root-container-layout = "accordion"
 default-root-container-orientation = "horizontal"
 enable-normalization-flatten-containers = true
 enable-normalization-opposite-orientation-for-nested-containers = true
-exec-on-workspace-change = ["/bin/bash", "-c", "~/.config/aerospace/pip-move.sh"]
-on-focus-changed = []
 on-focused-monitor-changed = ["move-mouse monitor-lazy-center"]
 start-at-login = true
+
+on-focus-changed = [
+  "exec-and-forget osascript -e 'tell application id \"tracesOf.Uebersicht\" to refresh widget id \"simple-bar-index-jsx\"'",
+]
+
+exec-on-workspace-change = [
+  '/bin/bash',
+  '-c',
+  '/usr/bin/osascript -e "tell application id \"tracesOf.Uebersicht\" to refresh widget id \"simple-bar-index-jsx\""; ~/.config/aerospace/pip-move.sh',
+]
 
 [exec.env-vars]
 PATH = "/etc/profiles/per-user/mg/bin:${PATH}"
@@ -115,13 +123,3 @@ run = "move-node-to-workspace 3 --focus-follows-window"
 
 [on-window-detected.if]
 app-id = "com.facebook.archon"
-
-on-focus-changed = [
-  "exec-and-forget osascript -e 'tell application id \"tracesOf.Uebersicht\" to refresh widget id \"simple-bar-index-jsx\"'",
-]
-
-exec-on-workspace-change = [
-  '/bin/bash',
-  '-c',
-  '/usr/bin/osascript -e "tell application id \"tracesOf.Uebersicht\" to refresh widget id \"simple-bar-index-jsx\""',
-]
