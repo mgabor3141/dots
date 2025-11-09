@@ -14,6 +14,7 @@
 
     taps = [
       "nikitabobko/tap"
+      "FelixKratz/formulae"
     ];
 
     brews = [
@@ -24,6 +25,12 @@
       "borgbackup-fuse"
       "imagemagick"
       "flock"
+
+      {
+        name = "FelixKratz/formulae/sketchybar";
+        start_service = true;
+        restart_service = "changed";
+      }
 
       # "esptool"
 
@@ -66,6 +73,8 @@
       "cursor"
 
       "jellyfin-media-player"
+
+      "font-hack-nerd-font"
     ];
   };
 }
