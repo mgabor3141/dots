@@ -115,3 +115,13 @@ run = "move-node-to-workspace 3 --focus-follows-window"
 
 [on-window-detected.if]
 app-id = "com.facebook.archon"
+
+on-focus-changed = [
+  "exec-and-forget osascript -e 'tell application id \"tracesOf.Uebersicht\" to refresh widget id \"simple-bar-index-jsx\"'",
+]
+
+exec-on-workspace-change = [
+  '/bin/bash',
+  '-c',
+  '/usr/bin/osascript -e "tell application id \"tracesOf.Uebersicht\" to refresh widget id \"simple-bar-index-jsx\""',
+]
