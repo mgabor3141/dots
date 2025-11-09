@@ -7,10 +7,10 @@
 # homebrew.nix hash: {{ include "nix-darwin/homebrew.nix" | sha256sum }}
 # darwin-config.nix hash: {{ include "nix-darwin/darwin-config.nix" | sha256sum }}
 
-brew -v || /bin/bash -c \
+brew -v >/dev/null 2>&1 || /bin/bash -c \
     "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-nix --version || (echo "Nix not installed!"; exit 1)
+nix --version >/dev/null 2>&1 || (echo "Nix not installed!"; exit 1)
 
 sudo nix \
     --extra-experimental-features "nix-command flakes" \

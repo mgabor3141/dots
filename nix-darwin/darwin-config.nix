@@ -20,6 +20,7 @@
     NSGlobalDomain.AppleTemperatureUnit = "Celsius";
     NSGlobalDomain.AppleMetricUnits = 1;
     NSGlobalDomain.ApplePressAndHoldEnabled = true;
+    NSGlobalDomain._HIHideMenuBar = true;
     NSGlobalDomain.NSAutomaticPeriodSubstitutionEnabled = false;
     NSGlobalDomain.NSDocumentSaveNewDocumentsToCloud = false;
     NSGlobalDomain.NSNavPanelExpandedStateForSaveMode = true;
@@ -63,7 +64,7 @@
     # loginwindow.SHOWFULLNAME = false;
     menuExtraClock.IsAnalog = true;
     screencapture.target = "clipboard";
-    spaces.spans-displays = true;
+    spaces.spans-displays = false;
     trackpad.Clicking = true;
     trackpad.TrackpadRightClick = true;
   };
