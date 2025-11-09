@@ -42,7 +42,7 @@
     dock.autohide = true;
     dock.autohide-delay = 0.001;
     dock.autohide-time-modifier = 0.1;
-    dock.expose-animation-duration = 0.2;
+    dock.expose-animation-duration = 0.3;
     dock.orientation = "left";
     dock.show-recents = false;
     dock.tilesize = 32;
@@ -64,7 +64,7 @@
     # loginwindow.SHOWFULLNAME = false;
     menuExtraClock.IsAnalog = true;
     screencapture.target = "clipboard";
-    spaces.spans-displays = false;
+    spaces.spans-displays = true;
     trackpad.Clicking = true;
     trackpad.TrackpadRightClick = true;
   };

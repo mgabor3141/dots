@@ -80,7 +80,7 @@
     "customAeroSpaceDisplayIndexes": {}
   },
   "widgets": {
-    "processWidget": true,
+    "processWidget": false,
     "githubWidget": false,
     "weatherWidget": false,
     "netstatsWidget": false,
