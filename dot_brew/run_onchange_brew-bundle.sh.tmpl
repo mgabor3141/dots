@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# This script will run if any of the following files have changed
+# Brewfile hash: {{ include "dot_brew/Brewfile.tmpl" | sha256sum }}
+
+brew -v >/dev/null 2>&1 || /bin/bash -c \
+    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+brew bundle install --cleanup --zap --file ~/.brew/Brewfile

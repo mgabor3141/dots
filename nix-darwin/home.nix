@@ -17,7 +17,6 @@
   home.packages = [
     pkgs.nil
     pkgs.nixd
-    pkgs.ffmpeg
     pkgs.devenv
   ];
 }

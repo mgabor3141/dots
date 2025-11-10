@@ -4,14 +4,10 @@
 # flake.lock hash: {{ include "nix-darwin/flake.lock" | sha256sum }}
 # flake.nix.tmpl hash: {{ include "nix-darwin/flake.nix.tmpl" | sha256sum }}
 # home.nix hash: {{ include "nix-darwin/home.nix" | sha256sum }}
-# homebrew.nix hash: {{ include "nix-darwin/homebrew.nix" | sha256sum }}
 # darwin-config.nix hash: {{ include "nix-darwin/darwin-config.nix" | sha256sum }}
 
-brew -v >/dev/null 2>&1 || /bin/bash -c \
-    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-nix --version >/dev/null 2>&1 || (echo "Nix not installed!"; exit 1)
-
-sudo nix \
-    --extra-experimental-features "nix-command flakes" \
-    run nix-darwin/nix-darwin-25.05#darwin-rebuild -- switch --flake .
+(nix --version >/dev/null 2>&1 || curl -fsSL https://install.determinate.systems/nix | sh -s -- install) \
+    && sudo nix \
+        --extra-experimental-features "nix-command flakes" \
+        run nix-darwin/nix-darwin-25.05#darwin-rebuild -- switch --flake . \
+    || echo "Nix not installed!"

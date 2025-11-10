@@ -1,0 +1,58 @@
+# Taps
+tap "nikitabobko/tap"
+
+# Brews
+brew "chezmoi"
+brew "fastfetch"
+brew "fish"
+brew "gh"
+brew "eza"
+# brew "yt-dlp"
+# brew "borgbackup-fuse"
+brew "imagemagick"
+brew "flock"
+
+# brew "esptool"
+
+# brew "volta"
+# brew "deno"
+
+# brew "colima"
+# brew "helm"
+# brew "k3d"
+# brew "k9s"
+# brew "kind"
+# brew "kubernetes-cli"
+# brew "kustomize"
+# brew "minikube"
+# brew "terraform"
+
+# brew Dependencies (to make uninstall work correctly)
+#brew "libb2"
+##brew "xxhash"
+#brew "python@3.13"
+
+# Casks
+cask "nikitabobko/tap/aerospace"
+cask "cursor"
+cask "font-fira-code"
+cask "linearmouse"
+cask "zed"
+
+cask "kitty"
+cask "ubersicht"
+
+# cask "macfuse"
+# cask "vorta"
+# cask "localsend"
+
+cask "chromium"
+cask "cursor"
+
+# Fails on managed system
+{{- if not .managed }}
+cask "stats"
+cask "karabiner-elements"
+cask "iina"
+cask "jellyfin-media-player"
+{{- end }}
