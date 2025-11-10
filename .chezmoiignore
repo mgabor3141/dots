@@ -30,10 +30,15 @@ README.md
 {{- end }}
 
 {{- if ne .chezmoi.os "darwin" }}
+Library
+
 .config/aerospace
 .config/karabiner
 
+.brew
 nix-darwin
+{{- end }}
 
-private_Library/private_Application Support/private_zen/private_Profiles/private_uu6m9ufs.Default (release)/chrome/symlink_userChrome.css
+{{- if .managed }}
+nix-darwin
 {{- end }}
