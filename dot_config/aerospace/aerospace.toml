@@ -29,7 +29,10 @@ vertical = 4
 bottom = 0
 left = 0
 right = 0
-top = 0
+top = [
+    { monitor."built-in" = 0 },
+    30,
+]
 
 [key-mapping]
 preset = "qwerty"
