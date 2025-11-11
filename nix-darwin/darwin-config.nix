@@ -69,9 +69,6 @@
     trackpad.TrackpadRightClick = true;
   };
 
-  system.keyboard.enableKeyMapping = true;
-  system.keyboard.nonUS.remapTilde = true;
-
   system.startup.chime = false;
 
   environment.userLaunchAgents."hu.mgabor.bing-wallpaper.plist" = {
