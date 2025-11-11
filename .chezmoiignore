@@ -41,4 +41,6 @@ nix-darwin
 
 {{- if .managed }}
 nix-darwin
+{{- else }}
+.config/fish/conf.d/fnm.fish
 {{- end }}

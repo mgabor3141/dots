@@ -45,6 +45,12 @@ cask "ubersicht"
 cask "chromium"
 cask "cursor"
 
+# Tools for managed system in place of nix/devenv
+{{- if .managed }}
+brew "fnm",
+    postinstall: "ls ~/.local/bin/nvm >/dev/null 2>&1 || ln -s `which fnm` $HOME/.local/bin/nvm"
+{{- end }}
+
 # Fails on managed system
 {{- if not .managed }}
 cask "stats"
