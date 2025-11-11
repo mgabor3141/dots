@@ -74,9 +74,6 @@
 
   system.startup.chime = false;
 
-  programs.fish.enable = true;
-  programs.direnv.enable = true;
-
   environment.userLaunchAgents."hu.mgabor.bing-wallpaper.plist" = {
     text = ''
       <?xml version="1.0" encoding="UTF-8"?>
