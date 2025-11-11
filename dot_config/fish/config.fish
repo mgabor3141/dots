@@ -4,8 +4,8 @@ source ~/.config/fish/conf.d/done.fish
 ## Set values
 ## Run fastfetch as welcome message
 function fish_greeting
-    clear
     printf '\e[3J'
+    clear
     echo ""
     fastfetch
 end

@@ -22,16 +22,31 @@ exec-on-workspace-change = [
 PATH = "/etc/profiles/per-user/mg/bin:${PATH}"
 
 [gaps.inner]
-horizontal = 4
-vertical = 4
+horizontal = [
+    { monitor."built-in" = 4 },
+    8,
+]
+vertical = [
+    { monitor."built-in" = 4 },
+    8,
+]
 
 [gaps.outer]
-bottom = 0
-left = 0
-right = 0
+bottom = [
+    { monitor."built-in" = 0 },
+    8,
+]
+left = [
+    { monitor."built-in" = 0 },
+    8,
+]
+right = [
+    { monitor."built-in" = 0 },
+    8,
+]
 top = [
     { monitor."built-in" = 0 },
-    30,
+    40,
 ]
 
 [key-mapping]

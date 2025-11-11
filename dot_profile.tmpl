@@ -22,3 +22,7 @@ export VISUAL=zed
 export PATH="/opt/homebrew/bin:$PATH"
 export XDG_CONFIG_HOME="$HOME/.config"
 {{- end }}
+
+{{- if .managed }}
+source fnm env
+{{- end }}
