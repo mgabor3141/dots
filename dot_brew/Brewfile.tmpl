@@ -12,6 +12,8 @@ brew "direnv"
 # brew "borgbackup-fuse"
 brew "imagemagick"
 brew "flock"
+brew "dust"
+brew "btop"
 
 # brew "esptool"
 
@@ -37,6 +39,7 @@ cask "zed"
 
 cask "kitty"
 cask "ubersicht"
+cask "aldente"
 
 # cask "macfuse"
 # cask "vorta"
@@ -49,6 +52,8 @@ cask "cursor"
 {{- if .managed }}
 brew "fnm",
     postinstall: "ls ~/.local/bin/nvm >/dev/null 2>&1 || ln -s `which fnm` $HOME/.local/bin/nvm"
+
+cask "gcloud-cli"
 {{- end }}
 
 # Fails on managed system
