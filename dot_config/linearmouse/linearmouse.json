@@ -40,6 +40,43 @@
             "option": true,
             "scroll": "down",
             "shift": true
+          },
+
+          {
+            "action": {
+              "run": "\/opt\/homebrew\/bin\/aerospace move-node-to-workspace --focus-follows-window prev"
+            },
+            "command": true,
+            "option": true,
+            "scroll": "up",
+            "shift": false
+          },
+          {
+            "action": {
+              "run": "\/opt\/homebrew\/bin\/aerospace move-node-to-workspace --focus-follows-window next"
+            },
+            "command": true,
+            "option": true,
+            "scroll": "down",
+            "shift": false
+          },
+          {
+            "action": {
+              "run": "\/opt\/homebrew\/bin\/aerospace move left --boundaries-action stop"
+            },
+            "command": true,
+            "option": true,
+            "scroll": "up",
+            "shift": true
+          },
+          {
+            "action": {
+              "run": "\/opt\/homebrew\/bin\/aerospace move right --boundaries-action stop"
+            },
+            "command": true,
+            "option": true,
+            "scroll": "down",
+            "shift": true
           }
         ]
       },
