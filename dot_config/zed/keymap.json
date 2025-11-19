@@ -41,5 +41,17 @@
     "bindings": {
       "cmd-`": "terminal_panel::Toggle"
     }
+  },
+  {
+    "context": "(Terminal && selection)",
+    "bindings": {
+      "secondary-c": "terminal::Copy"
+    }
+  },
+  {
+    "context": "(Terminal && !selection)",
+    "bindings": {
+      "secondary-c": ["terminal::SendKeystroke", "ctrl-c"]
+    }
   }
 ]
