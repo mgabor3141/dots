@@ -18,6 +18,7 @@ input {
         natural-scroll // Enable natural (macOS-style) scrolling
     }
 
+    disable-power-key-handling
     focus-follows-mouse // max-scroll-amount="85%" // Automatically focus windows under the mouse pointer
     workspace-auto-back-and-forth // Enable workspace back & forth switching
 }
@@ -205,7 +206,9 @@ binds {
     spawn-at-startup    "bing-wallpaper.sh"
     spawn-at-startup    "swayidle" "-w" \
         "timeout" "300" "niri msg action power-off-monitors" \
-        "timeout" "600" "systemctl suspend"
+        "idlehint" "310"
+        // Signal IdleHint to systemd, it can take over from there and account for cloudgaming
+        // See: /etc/systemd/logind.conf
 
     prefer-no-csd // Disable program decorations
     screenshot-path null // Disable screenshot saving
@@ -284,9 +287,9 @@ binds {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Window-Rules
 
     window-rule {
-        match app-id=r#"discord$"#
-        match app-id="vesktop"
-        match app-id="Spotify"
+        match app-id=r#"discord$"# at-startup=true
+        match app-id="vesktop" at-startup=true
+        match app-id="Spotify" at-startup=true
         open-on-output "Dell Inc. DELL S2721D JRNFP43"
         open-focused false
         default-column-width {
