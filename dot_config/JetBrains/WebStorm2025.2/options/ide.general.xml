@@ -1,5 +1,6 @@
 <application>
   <component name="GeneralSettings">
+    <option name="confirmOpenNewProject2" value="-1" />
     <option name="confirmExit" value="false" />
     <option name="inactiveTimeout" value="2" />
   </component>
