@@ -7,7 +7,8 @@
 // from the command palette.
 [
   {
-    "context": "Workspace",
+    // `|| Editor` ensures that this takes precedence
+    "context": "Workspace || Editor",
     "bindings": {
       "secondary-e": "tab_switcher::Toggle"
     }
