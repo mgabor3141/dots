@@ -7,6 +7,8 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "redact_private_values": true,
+  "use_system_prompts": false,
   "buffer_line_height": "comfortable",
   "buffer_font_weight": 450.0,
   "buffer_font_family": "Fira Code",
@@ -25,7 +27,7 @@
     "show": "auto"
   },
   "drag_and_drop_selection": {
-    "delay": 200
+    "delay": 0
   },
   "autosave": {
     "after_delay": {
