@@ -9,37 +9,31 @@
   {
     "context": "Workspace",
     "bindings": {
-      // "shift shift": "file_finder::Toggle"
-    }
-  },
-  {
-    "context": "Editor && vim_mode == insert",
-    "bindings": {
-      // "j k": "vim::NormalBefore"
+      "shift shift": "file_finder::Toggle"
     }
   },
   {
     "context": "BufferSearchBar",
     "bindings": {
-      "ctrl-h": "search::ToggleReplace"
+      "secondary-h": "search::ToggleReplace"
     }
   },
   {
     "context": "Pane",
     "bindings": {
-      "ctrl-h": "search::ToggleReplace"
+      "secondary-h": "search::ToggleReplace"
     }
   },
   {
     "context": "(Editor && mode == full)",
     "bindings": {
-      "ctrl-h": "buffer_search::DeployReplace"
+      "secondary-h": "buffer_search::DeployReplace"
     }
   },
   {
     "context": "Workspace",
     "bindings": {
-      "cmd-`": "terminal_panel::Toggle"
+      "secondary-`": "terminal_panel::Toggle"
     }
   },
   {
