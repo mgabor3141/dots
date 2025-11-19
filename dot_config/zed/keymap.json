@@ -38,6 +38,12 @@
     }
   },
   {
+    "context": "Terminal",
+    "bindings": {
+      "secondary-shift-delete": "terminal::Clear"
+    }
+  },
+  {
     "context": "(Terminal && selection)",
     "bindings": {
       "secondary-c": "terminal::Copy"
