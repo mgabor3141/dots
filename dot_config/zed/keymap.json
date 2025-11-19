@@ -10,7 +10,7 @@
     // `|| Editor` ensures that this takes precedence
     "context": "Workspace || Editor",
     "bindings": {
-      "secondary-e": "tab_switcher::Toggle"
+      "secondary-e": ["file_finder::Toggle", { "separate_history": true }]
     }
   },
   {

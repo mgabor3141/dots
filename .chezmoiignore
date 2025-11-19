@@ -34,8 +34,10 @@ Library
 
 .config/aerospace
 .config/karabiner
+.config/linearmouse
 
 .brew
+.simplebarrc
 nix-darwin
 {{- end }}
 

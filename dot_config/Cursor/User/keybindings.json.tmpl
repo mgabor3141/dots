@@ -1,0 +1,20 @@
+// {{- $ctrl := "ctrl" }}
+// {{- if eq .chezmoi.os "darwin" }}
+// {{-   $ctrl := "cmd" }}
+// {{- end }}
+[
+    {
+        "key": "{{ $ctrl }}+i",
+        "command": "composerMode.agent"
+    },
+    {
+        "key": "{{ $ctrl }}+shift+k",
+        "command": "-editor.action.inlineDiffs.focusEditor",
+        "when": "editorHasPromptBar && editorPromptBarFocused"
+    },
+    {
+        "key": "{{ $ctrl }}+shift+k",
+        "command": "-aipopup.action.modal.generate",
+        "when": "editorFocus && !composerBarIsVisible"
+    }
+]

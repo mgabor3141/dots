@@ -2,18 +2,18 @@
 
 # Set waybar colors
 cat > "$CACHE_DIR/colors.css" <<EOF
-@define-color highlight ${gradient_from};
+@define-color highlight $GRADIENT_FROM;
 EOF
 
 # Set niri colors
 cat > "$CACHE_DIR/colors-niri.kdl" <<EOF
 layout {
   focus-ring {
-      active-gradient from="$gradient_from" to="$gradient_to" angle=$gradient_angle in="oklab"
+      active-gradient from="$GRADIENT_FROM" to="$GRADIENT_TO" angle=$GRADIENT_ANGLE in="oklab"
   }
 
   insert-hint {
-      gradient from="${gradient_from}80" to="${gradient_to}80" angle=$gradient_angle in="oklab"
+      gradient from="${GRADIENT_FROM}80" to="${GRADIENT_TO}80" angle=$GRADIENT_ANGLE in="oklab"
   }
 }
 EOF
@@ -32,11 +32,11 @@ done
 
 # Set main wallpaper via swww with smooth transition
 swww clear-cache
-swww img "$annotated" \
+swww img "$IMAGE" \
   --transition-type fade \
   --transition-duration 10 \
   --transition-fps 60
-swww img "$blurred" \
+swww img "$IMAGE_BLURRED" \
   --namespace backdrop \
   --transition-type fade \
   --transition-duration 10 \

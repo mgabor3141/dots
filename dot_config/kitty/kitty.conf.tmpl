@@ -1,3 +1,4 @@
+# chezmoi:template:left-delimiter="#{{"
 # vim:fileencoding=utf-8:foldmethod=marker
 
 #: Fonts {{{
@@ -1592,7 +1593,7 @@ selection_background none
 #: remaining 240 colors as color16 to color255.
 
 color0 #3B4252
-color8 #4C566A
+color8 #98969e
 
 #: black
 
@@ -1630,6 +1631,26 @@ color7  #E5E9F0
 color15 #ECEFF4
 
 #: white
+
+[colors.normal]
+black = "0x3B4252"
+red = "0xBF616A"
+green = "0xA3BE8C"
+yellow = "0xEBCB8B"
+blue = "0x81A1C1"
+magenta = "0xB48EAD"
+cyan = "0x88C0D0"
+white = "0xE5E9F0"
+
+[colors.bright]
+black = "0x4C566A"
+red = "0xBF616A"
+green = "0xA3BE8C"
+yellow = "0xEBCB8B"
+blue = "0x81A1C1"
+magenta = "0xB48EAD"
+cyan = "0x8FBCBB"
+white = "0xECEFF4"
 
 # mark1_foreground black
 
@@ -2203,7 +2224,9 @@ macos_show_window_title_in none
 #: available here <https://sw.kovidgoyal.net/kitty/actions/>.
 
 kitty_mod ctrl+shift
+#{{- if eq .chezmoi.os "darwin" }}
 kitty_mod super+shift
+#{{- end }}
 
 #: Special modifier key alias for default shortcuts. You can change
 #: the value of this option to alter all default shortcuts that use

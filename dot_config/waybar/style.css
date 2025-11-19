@@ -124,13 +124,18 @@ tooltip label {
 #battery,
 #tray,
 #custom-updates,
-#custom-notification {
+#custom-notification,
+#idle_inhibitor {
     background-color: @item-background;
     font-size: 14px;
     font-weight: 800;
     color: @text-muted;
     border-radius: 0px;
     padding: 4px 10px;
+}
+
+#idle_inhibitor.activated {
+    color: @highlight;
 }
 
 /* Battery critical warning */

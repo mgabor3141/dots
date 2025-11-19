@@ -24,6 +24,7 @@
 
     "modules-right": [
         "tray",
+        "idle_inhibitor",
         "pulseaudio",
         "clock",
         "custom/exit"
