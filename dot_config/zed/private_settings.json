@@ -54,10 +54,6 @@
   "agent": {
     "always_allow_tool_actions": true,
     "default_profile": "write",
-    "default_model": {
-      "provider": "zed.dev",
-      "model": "claude-sonnet-4-5-thinking"
-    },
     "model_parameters": []
   },
   "buffer_font_size": 14.0,
@@ -85,7 +81,7 @@
     "show_type_hints": true,
     "show_parameter_hints": true,
     "show_other_hints": true,
-    "show_background": false,
+    "show_background": true,
     "edit_debounce_ms": 700,
     "scroll_debounce_ms": 50,
     "toggle_on_modifiers_press": {
@@ -111,5 +107,15 @@
     "enable_preview_from_file_finder": true,
     // Whether a preview tab gets replaced when code navigation is used to navigate away from the tab.
     "enable_preview_from_code_navigation": true
+  },
+  "auto_install_extensions": {
+    "html": true,
+    "toml": true,
+    "dockerfile": true,
+    "git-firefly": true,
+    "fish": true,
+    "make": true,
+    "docker-compose": true,
+    "csv": true
   }
 }
