@@ -1,6 +1,3 @@
-# Taps
-tap "nikitabobko/tap"
-
 # Brews
 brew "chezmoi"
 brew "fastfetch"
@@ -37,14 +34,12 @@ brew "docker-completion"
 # brew "terraform"
 
 # Casks
-cask "nikitabobko/tap/aerospace"
 cask "cursor"
 cask "font-fira-code"
 cask "linearmouse"
 cask "zed"
 
 cask "kitty"
-cask "ubersicht"
 cask "aldente"
 
 # cask "macfuse"
@@ -53,6 +48,12 @@ cask "aldente"
 
 cask "chromium"
 cask "cursor"
+
+tap "FelixKratz/formulae"
+brew "FelixKratz/formulae/sketchybar"
+
+tap "nikitabobko/tap"
+cask "nikitabobko/tap/aerospace"
 
 # Tools for managed system in place of nix/devenv
 {{- if .managed }}
