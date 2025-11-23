@@ -2,9 +2,9 @@
 
 bar=(
   position=top
-  height=46
+  height=48
   margin=0
-  y_offset=-6
+  y_offset=-9
   corner_radius="$CORNER_RADIUS"
   border_color="0x00ffffff"
   border_width=0
