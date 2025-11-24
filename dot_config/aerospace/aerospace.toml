@@ -42,7 +42,7 @@ right = [
 ]
 top = [
     { monitor."built-in" = 0 },
-    40,
+    38,
 ]
 
 [key-mapping]
