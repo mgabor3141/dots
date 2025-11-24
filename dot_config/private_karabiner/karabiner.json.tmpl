@@ -1,3 +1,4 @@
+// chezmoi:template:left-delimiter="\"{{" right-delimiter="}}\""
 {
   "profiles": [
     {
@@ -9,7 +10,7 @@
               {
                 "from": {
                   "key_code": "home",
-                  "modifiers": { "optional": ["any"] }
+                  "modifiers": { "optional": ["shift"] }
                 },
                 "to": [
                   {
@@ -22,12 +23,38 @@
               {
                 "from": {
                   "key_code": "end",
-                  "modifiers": { "optional": ["any"] }
+                  "modifiers": { "optional": ["shift"] }
                 },
                 "to": [
                   {
                     "key_code": "right_arrow",
                     "modifiers": ["command"]
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "from": {
+                  "key_code": "home",
+                  "modifiers": { "mandatory": ["command", "shift"] }
+                },
+                "to": [
+                  {
+                    "key_code": "up_arrow",
+                    "modifiers": ["command", "shift"]
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "from": {
+                  "key_code": "end",
+                  "modifiers": { "mandatory": ["command", "shift"] }
+                },
+                "to": [
+                  {
+                    "key_code": "down_arrow",
+                    "modifiers": ["command", "shift"]
                   }
                 ],
                 "type": "basic"
@@ -74,7 +101,7 @@
           },
           {
             "description": "UK to US stuff",
-            "enabled": {{ .managed }},
+            "enabled": "{{ .managed }}",
             "manipulators": [
               {
                 "conditions": [
