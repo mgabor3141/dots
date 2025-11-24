@@ -1,0 +1,18 @@
+// Project tasks configuration. See https://zed.dev/docs/tasks for documentation.
+[
+  {
+    "label": "diff",
+    "command": "chezmoi diff",
+    "show_command": false
+  },
+  {
+    "label": "apply",
+    "command": "chezmoi apply",
+    "show_command": false
+  },
+  {
+    "label": "update",
+    "command": "chezmoi update",
+    "show_command": false
+  }
+]
