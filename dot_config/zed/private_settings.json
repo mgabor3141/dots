@@ -110,14 +110,13 @@
     "toggle_on_modifiers_press": {
       "control": false,
       "alt": true,
-      "shift": false,
+      "shift": true,
       "platform": false,
       "function": false
     }
   },
   "tabs": {
     // Show git status colors in the editor tabs.
-    
   },
   "preview_tabs": {
     // Whether preview tabs should be enabled.
@@ -139,5 +138,31 @@
     "make": true,
     "docker-compose": true,
     "csv": true
+  },
+  "languages": {
+    "JavaScript": {
+      "code_actions_on_format": {
+        "source.fixAll.eslint": true
+      }
+    },
+    "TypeScript": {
+      "code_actions_on_format": {
+        "source.fixAll.eslint": true
+      }
+    },
+    "JSX": {
+      "code_actions_on_format": {
+        "source.fixAll.eslint": true
+      }
+    }
+  },
+  "lsp": {
+    "eslint": {
+      "settings": {
+        "codeActionOnSave": {
+          "rules": ["import/order"]
+        }
+      }
+    }
   }
 }
