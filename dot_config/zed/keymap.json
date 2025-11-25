@@ -7,6 +7,13 @@
 // from the command palette.
 [
   {
+    "context": "Editor",
+    "bindings": {
+      "secondary-space": "editor::ShowCompletions",
+      "secondary-shift-space": "editor::ShowWordCompletions"
+    }
+  },
+  {
     // `|| Editor` ensures that this takes precedence
     "context": "Workspace || Editor",
     "bindings": {
