@@ -51,7 +51,7 @@ fi
 # When icons is empty, set it to " "
 if [ -z "$icons" ]; then
   if [ "$1" = "$FOCUSED_WORKSPACE" ]; then
-    sketchybar --animate sin 4 \
+    sketchybar \
       --set "$NAME" \
       y_offset=2 y_offset=0 \
       background.drawing=on
@@ -68,7 +68,7 @@ if [ -z "$icons" ]; then
   fi
 else
   if [ "$1" = "$FOCUSED_WORKSPACE" ]; then
-    sketchybar --animate sin 4 \
+    sketchybar \
       --set "$NAME" \
       y_offset=2 y_offset=0 \
       background.drawing=on
