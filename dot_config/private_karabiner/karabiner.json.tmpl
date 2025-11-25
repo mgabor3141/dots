@@ -1,4 +1,4 @@
-// chezmoi:template:left-delimiter="\"{{" right-delimiter="}}\""
+// chezmoi:template:left-delimiter="[]/*" right-delimiter="*/"
 {
   "profiles": [
     {
@@ -202,7 +202,7 @@
           },
           {
             "description": "UK to US stuff",
-            "enabled": "{{ .managed }}",
+            "enabled": []/* .managed */,
             "manipulators": [
               {
                 "conditions": [
