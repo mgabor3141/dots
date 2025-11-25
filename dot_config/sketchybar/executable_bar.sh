@@ -10,8 +10,8 @@ bar=(
   color="$BAR_COLOR"
 
   height=30
-  notch_height=48
-  notch_y_offset=-9
+  notch_display_height=48
+  notch_offset=-9
 )
 
 sketchybar --bar "${bar[@]}"
