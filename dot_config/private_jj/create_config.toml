@@ -3,3 +3,28 @@
 [user]
 name = "mgabor3141"
 email = "@mgabor3141"
+
+[ui]
+default-command = "log"
+diff-formatter = "difft"
+merge-editor = "vscode"
+pager = { command = [ "less", "-FR" ] }
+
+
+[template-aliases]
+# Full timestamp in ISO 8601 format
+# 'format_timestamp(timestamp)' = 'timestamp'
+# Relative timestamp rendered as "x days/hours/seconds ago"
+'format_timestamp(timestamp)' = 'timestamp.ago()'
+'format_short_signature(signature)' = 'signature.name()'
+
+[merge]
+hunk-level = "line"
+
+[merge-tools.difft]
+program = "sh"
+diff-args = ["-c", "difft --color=always --display=side-by-side-show-both --background=light $left $right", "|", "less -FR +/^[^ ]+\\ ---\\ .+$ -"]
+
+[git]
+track-default-bookmark-on-clone = true
+private-commits = "description(glob:'private:*')"
