@@ -8,7 +8,7 @@ email = "@mgabor3141"
 default-command = ["log", "--no-pager"]
 diff-formatter = "difft"
 merge-editor = "meld"
-pager = { command = [ "less", "-FR" ] }
+pager = { command = [ "less", "-FR", "-j3" ] }
 
 [template-aliases]
 # Full timestamp in ISO 8601 format
