@@ -1,3 +1,2 @@
 #command
-r  forw-search  ^K\^(│ )* ?[\^ ]+.*( --- .+)+$
-R  back-search  ^K\^(│ )* ?[\^ ]+.*( --- .+)+$
+r  forw-search  ^K\^(│ )* ?[\^,()]+( --- .+)+$\n
