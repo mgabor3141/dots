@@ -5,7 +5,7 @@ name = "mgabor3141"
 email = "@mgabor3141"
 
 [ui]
-default-command = "log"
+default-command = ["log", "--no-pager"]
 diff-formatter = "difft"
 merge-editor = "meld"
 pager = { command = [ "less", "-FR" ] }
