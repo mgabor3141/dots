@@ -8,8 +8,10 @@ email = "@mgabor3141"
 default-command = "log"
 diff-formatter = "difft"
 merge-editor = "vscode"
-pager = { command = [ "less", "-FR" ] }
 
+# This highlights all files as search results, `n` and `N` will cycle between them
+# \u000B is Ctrl+K, which means keep position
+pager = { command = [ "less", "-FR", "--use-backslash", "+/\u000B^((│ )* ?[^ ]+.*( --- .+)+)?.\\$" ] }
 
 [template-aliases]
 # Full timestamp in ISO 8601 format
@@ -18,12 +20,48 @@ pager = { command = [ "less", "-FR" ] }
 'format_timestamp(timestamp)' = 'timestamp.ago()'
 'format_short_signature(signature)' = 'signature.name()'
 
+[revset-aliases]
+# stack(x, n) is the set of mutable commits reachable from 'x', with 'n'
+# parents. 'n' is often useful to customize the display and return set for
+# certain operations. 'x' can be used to target the set of 'roots' to traverse,
+# e.g. @ is the current stack.
+'stack()' = 'ancestors(reachable(@, mutable()), 2)'
+'stack(x)' = 'ancestors(reachable(x, mutable()), 2)'
+'stack(x, n)' = 'ancestors(reachable(x, mutable()), n)'
+
+# The current set of "open" works. It is defined as:
+#
+# - given the set of commits not in trunk, that are written by me,
+# - calculate the given stack() for each of those commits
+#
+# n = 1, meaning that nothing from `trunk()` is included, so all resulting
+# commits are mutable by definition.
+'open()' = 'stack(trunk().. & mine(), 1)'
+
+[aliases]
+# Convenient shorthands.
+d = ["diff"]
+s = ["show"]
+ll = ["log", "-T", "builtin_log_detailed"]
+nt = ["new", "trunk()"]
+
+# Get all open stacks of work.
+open = ["log", "-r", "open()"]
+
+# Retrunk a series. Typically used as `jj retrunk -s ...`, and notably can be
+# used with open:
+# - jj retrunk -s 'all:roots(open())'
+retrunk = ["rebase", "-d", "trunk()"]
+
+# Retrunk the current stack of work.
+reheat = ["rebase", "-d", "trunk()", "-s", "all:roots(trunk()..stack(@))"]
+
 [merge]
 hunk-level = "line"
 
 [merge-tools.difft]
-program = "sh"
-diff-args = ["-c", "difft --color=always --display=side-by-side-show-both --background=light $left $right", "|", "less -FR +/^[^ ]+\\ ---\\ .+$ -"]
+program = "difft"
+diff-args = ["--color=always", "--display=side-by-side-show-both", "--background=light", "$left", "$right"]
 
 [git]
 track-default-bookmark-on-clone = true
