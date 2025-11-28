@@ -39,7 +39,7 @@ DAYS_AGO="${2:-0}"
 TICK_SECONDS="${TICK_SECONDS:-30}"
 
 # API_URL="http://localhost:8080/api/colors?locale=${MKT}&daysAgo=${DAYS_AGO}"
-API_URL="https://dailyhues.mgabor.hu/api/colors?locale=${MKT}&daysAgo=${DAYS_AGO}"
+API_URL="https://dailyhues.up.railway.app/api/colors?locale=${MKT}&daysAgo=${DAYS_AGO}"
 
 ONE_DAY=$((24 * 60 * 60))
 next_wallpaper=0
