@@ -1,6 +1,5 @@
 accordion-padding = 30
 after-login-command = []
-after-startup-command = []
 default-root-container-layout = "accordion"
 default-root-container-orientation = "horizontal"
 enable-normalization-flatten-containers = true
@@ -8,14 +7,15 @@ enable-normalization-opposite-orientation-for-nested-containers = true
 on-focused-monitor-changed = ["move-mouse monitor-lazy-center"]
 start-at-login = true
 
+after-startup-command = ['exec-and-forget sketchybar']
 exec-on-workspace-change = [
     '/bin/bash',
     '-c',
-    '/opt/homebrew/opt/sketchybar/bin/sketchybar --trigger aerospace_workspace_change AEROSPACE_FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE AEROSPACE_PREV_WORKSPACE=$AEROSPACE_PREV_WORKSPACE; ~/.config/aerospace/pip-move.sh'
+    'sketchybar --trigger aerospace_workspace_change AEROSPACE_FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE AEROSPACE_PREV_WORKSPACE=$AEROSPACE_PREV_WORKSPACE; ~/.config/aerospace/pip-move.sh'
 ]
 
 [exec.env-vars]
-PATH = "/etc/profiles/per-user/mg/bin:${PATH}"
+PATH = "/opt/homebrew/bin:/etc/profiles/per-user/mg/bin:${PATH}"
 
 [gaps.inner]
 horizontal = [
@@ -71,70 +71,58 @@ ctrl-shift-alt-cmd-f13 = "workspace-back-and-forth"
 
 ctrl-shift-alt-v = "layout h_tiles h_accordion"
 
+ctrl-shift-alt-left  = "focus left"
+ctrl-shift-alt-right = "focus right"
+ctrl-shift-alt-up    = "exec-and-forget aerospace focus up --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace prev --stdin"
+ctrl-shift-alt-down  = "exec-and-forget aerospace focus down --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace next --stdin"
+
+ctrl-shift-alt-cmd-left  = "move left --boundaries-action stop"
+ctrl-shift-alt-cmd-right = "move right --boundaries-action stop"
+ctrl-shift-alt-cmd-up    = "move-node-to-workspace --focus-follows-window prev"
+ctrl-shift-alt-cmd-down  = "move-node-to-workspace --focus-follows-window next"
+
 [[on-window-detected]]
+if.app-id = "com.apple.finder"
 run = "layout floating"
 
-[on-window-detected.if]
-app-id = "com.apple.finder"
-
 [[on-window-detected]]
+if.window-title-regex-substring = "^(Picture[- ]in[- ]Picture|Meet - [a-z-]*)$"
 run = "layout floating"
 
-[on-window-detected.if]
-window-title-regex-substring = "^(Picture[- ]in[- ]Picture|Meet - [a-z-]*)$"
-
 [[on-window-detected]]
+if.app-id = "app.zen-browser.zen"
+if.window-title-regex-substring = "Extension: "
 check-further-callbacks = true
 run = "layout floating"
 
-[on-window-detected.if]
-app-id = "app.zen-browser.zen"
-window-title-regex-substring = "Extension: "
+[[on-window-detected]]
+if.app-id = "app.zen-browser.zen"
+run = "move-node-to-workspace 1A --focus-follows-window"
 
 [[on-window-detected]]
-run = "move-node-to-workspace 1 --focus-follows-window"
-
-[on-window-detected.if]
-app-id = "app.zen-browser.zen"
+if.app-id = "dev.zed.Zed"
+run = "move-node-to-workspace 2S --focus-follows-window"
 
 [[on-window-detected]]
-run = "move-node-to-workspace 2 --focus-follows-window"
-
-[on-window-detected.if]
-app-id = "dev.zed.Zed"
+if.app-id = "com.microsoft.VSCode"
+run = "move-node-to-workspace 2S --focus-follows-window"
 
 [[on-window-detected]]
-run = "move-node-to-workspace 2 --focus-follows-window"
-
-[on-window-detected.if]
-app-id = "com.microsoft.VSCode"
+if.app-id = "com.jetbrains.WebStorm"
+run = "move-node-to-workspace 2S --focus-follows-window"
 
 [[on-window-detected]]
-run = "move-node-to-workspace 2 --focus-follows-window"
-
-[on-window-detected.if]
-app-id = "com.jetbrains.WebStorm"
+if.app-id = "com.todesktop.230313mzl4w4u92"
+run = "move-node-to-workspace 2S --focus-follows-window"
 
 [[on-window-detected]]
-run = "move-node-to-workspace 2 --focus-follows-window"
-
-[on-window-detected.if]
-app-id = "com.todesktop.230313mzl4w4u92"
+if.app-id = "com.hnc.Discord"
+run = "move-node-to-workspace 3D --focus-follows-window"
 
 [[on-window-detected]]
-run = "move-node-to-workspace 3 --focus-follows-window"
-
-[on-window-detected.if]
-app-id = "com.hnc.Discord"
+if.app-id = "com.tinyspeck.slackmacgap"
+run = "move-node-to-workspace 3D --focus-follows-window"
 
 [[on-window-detected]]
-run = "move-node-to-workspace 3 --focus-follows-window"
-
-[on-window-detected.if]
-app-id = "com.tinyspeck.slackmacgap"
-
-[[on-window-detected]]
-run = "move-node-to-workspace 3 --focus-follows-window"
-
-[on-window-detected.if]
-app-id = "com.facebook.archon"
+if.app-id = "com.facebook.archon"
+run = "move-node-to-workspace 3D --focus-follows-window"

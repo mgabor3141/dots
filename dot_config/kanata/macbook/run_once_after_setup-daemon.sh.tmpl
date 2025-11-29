@@ -1,0 +1,7 @@
+#!/bin/bash
+
+sudo cp -rf {{ .chezmoi.destDir }}/.config/kanata/macbook/io.github.jtroo.kanata.plist /Library/LaunchDaemons/io.github.jtroo.kanata.plist
+
+sudo launchctl bootstrap system /Library/LaunchDaemons/io.github.jtroo.kanata.plist
+
+sudo launchctl enable system/io.github.jtroo.kanata.plist
