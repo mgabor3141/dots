@@ -5,6 +5,7 @@
 
   process-unmapped-keys yes
   concurrent-tap-hold yes
+  log-layer-changes no
 )
 
 (defvar
@@ -32,12 +33,17 @@
 )
 
 (defoverrides
-  (lmet bspc)   (lalt bspc)
-  (lmet del)    (lalt del)
-  (lmet left)   (lalt left)
-  (lmet right)  (lalt right)
+  (lmet bspc)  (lalt bspc)
+  (lmet del)   (lalt del)
+  (lmet left)  (lalt left)
+  (lmet right) (lalt right)
 
-  ;; TODO: home and end
+  (lmet q) (lmet w)
+
+  (lctl lsft lalt spc) (sls)
+
+  (home) (lmet left)
+  (end)  (lmet right)
 )
 
 (defvirtualkeys
@@ -120,7 +126,7 @@
 (deflayer extend
   lrld brdn brup mctl sls  dtn  dnd  prev pp   next mute vold volu
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    up   _    _    _    _    _    _    _    _    _    _
+  _    RM-q _    up   _    _    _    _    _    _    _    _    _    _
   _    _    left down rght @stb _    _    _    _    _    _    _
   _    _    _    _    @ctb _    _    _    _    _    _    _    _
   _    _    _    _         _              _    _         home _    end
