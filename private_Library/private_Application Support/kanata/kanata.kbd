@@ -4,6 +4,7 @@
   )
 
   process-unmapped-keys yes
+  concurrent-tap-hold yes
 )
 
 (defvar
@@ -15,6 +16,9 @@
 
   double-tap-timeout  300
   dt $double-tap-timeout
+
+  concurrent-timeout 30
+  ct $concurrent-timeout
 )
 
 ;; MacBook ANSI
@@ -33,49 +37,74 @@
   (lmet left)   (lalt left)
   (lmet right)  (lalt right)
 
-  (lmet pgup)   (lctl lsft tab)
-  (lmet pgdn)   (lctl tab)
-
   ;; TODO: home and end
 )
 
+(defvirtualkeys
+  ctrl lctl
+)
+
 (defalias
-  up    (tap-hold $tt $ht
-            up
-            M-up
-        )
-  dn    (tap-hold $tt $ht
-            down
-            M-down
-        )
-  lft   (tap-hold $tt $ht
-            left
-            M-left
-        )
-  rgt   (tap-hold $tt $ht
-            right
-            M-right
-        )
-        
-  cps   (tap-hold-press $tt $ht
-            esc
-            lmet
-        )  
-  cmc   (switch
-            
+  fn    (layer-toggle extend)
+
+  cps   (multi
+            (tap-hold-press $tt $ht
+                esc
+                lmet
+            )
+            (on-release release-virtualkey ctrl)
         )
 
-  spc   (tap-hold-press $tt $ht
-            spc
-            (layer-toggle extend)
-        )
-  meh   (tap-dance $dt (
-            (tap-hold-press $tt $ht
-                C-A-S-M-F13             ;; tap
-                (multi lctl lalt lsft)  ;; hold
+  ;; pageup or ctrl-shift-tab
+  stb   (fork
+            pgup
+            (multi
+                (release-key lmet)
+                (on-press press-virtualkey ctrl)
+                lsft
+                tab
             )
-            (multi lctl lalt lsft lmet) ;; double-tap hold
-        ))
+            (lmet lctl)
+        )
+  ;; pagedown or ctrl-tab
+  ctb   (fork
+            pgdn
+            (multi
+                (release-key lmet)
+                (on-press press-virtualkey ctrl)
+                lctl ;; this triggers the on-press
+                tab
+            )
+            (lmet lctl)
+        )
+
+  meh   (tap-hold-press $tt $ht
+            C-A-S-M-F13             ;; tap
+            (multi lctl lalt lsft)  ;; hold
+        )
+
+  cmc   (switch
+            ((or
+                (key-history pgup 1)
+                (key-history pgdn 1)
+                (key-history pgup 2)
+                (key-history pgdn 2)
+                (key-history pgup 3)
+                (key-history pgdn 3)
+            )) lctl break
+        )
+
+  spc   (multi
+            (tap-hold $tt $ht
+                spc
+                (layer-toggle extend)
+            )
+            (on-release release-virtualkey ctrl)
+        )
+)
+
+(defchordsv2
+    (= bspc) del $ct all-released ()
 )
 
 ;; The first layer defined is the layer that will be active by default
@@ -84,24 +113,15 @@
   grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
   tab  q    w    e    r    t    y    u    i    o    p    [    ]    \
   @cps a    s    d    f    g    h    j    k    l    ;    '    ret
-  lsft z    x    c    v    b    n    m    ,    .    /    bspc @up
-  lmet lctl lalt @meh      @spc           rmet fn        @lft @dn  @rgt
+  lsft z    x    c    v    b    n    m    ,    .    /    bspc up
+  lmet lctl lalt @meh      @spc           rmet @fn       left down rght
 )
 
 (deflayer extend
-  _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    _    _    _    _    _    _    _    lrld _    _    _
-  _    _    _    @up  _    _    _    _    _    _    _    _    _    _
-  _    _    @lft @dn  @rgt pgup _    _    _    _    _    _    _
-  _    _    _    _    pgdn _    _    _    _    _    _    _    _
-  _    _    _    _         _              _    _         _    _    _
-)
-
-(deflayer fn
-  _    _    _    _    _    _    _    _    _    _    _    _    _
+  lrld brdn brup mctl sls  dtn  dnd  prev pp   next mute vold volu
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    _         _              _    _         _    _    _
+  _    _    _    up   _    _    _    _    _    _    _    _    _    _
+  _    _    left down rght @stb _    _    _    _    _    _    _
+  _    _    _    _    @ctb _    _    _    _    _    _    _    _
+  _    _    _    _         _              _    _         home _    end
 )
