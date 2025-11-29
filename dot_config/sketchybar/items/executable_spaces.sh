@@ -20,7 +20,7 @@ for sid in $(aerospace list-workspaces --all); do
     --set space."$sid" \
     display="$monitor" \
     padding_right=0 \
-    icon="$sid" \
+    icon="${sid:1}" \
     label.padding_right=7 \
     icon.padding_left=7 \
     icon.padding_right=4 \
@@ -43,4 +43,3 @@ sketchybar --add item space_separator left \
   icon.padding_right=7 \
   label.drawing=off \
   background.drawing=off
-
