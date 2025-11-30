@@ -25,9 +25,9 @@
   typing $continuous-typing-timeout
 
   non-extend-keys (
-    1 2 3 4 5 6 7 8 9 0
+    1 2 3 4 5 6 7 8 9
     q w     t y u i o p
-    a         h j k l ;
+    a         h j k l
     z x c   b n m , . /
   )
 )
@@ -100,6 +100,16 @@
             )
             $non-extend-keys
         )
+
+  í     A-Numpad1    ;; Option + NumpadN bound via QWERTY.keylayout
+  ö     A-Numpad2
+  ü     A-Numpad3
+  ó     A-Numpad4
+  ő     A-Numpad5
+  ú     A-Numpad6
+  ű     A-Numpad7
+  é     A-Numpad8
+  á     A-Numpad9
 )
 
 (defchordsv2
@@ -127,9 +137,9 @@
 
 (deflayer extend
   lrld brdn brup mctl sls  dtn  dnd  prev pp   next mute vold volu
-  _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    up   @ctb _    _    _    _    _    _    _    _    _
-  _    _    left down rght pgup _    _    _    _    _    _    _
+  @í   _    _    _    _    _    _    _    _    _    @ö   @ü   @ó   _
+  _    _    _    up   @ctb _    _    _    _    _    _    @ő   @ú   @ű
+  _    _    left down rght pgup _    _    _    _    @é   @á   _
   _    _    _    _    pgdn _    _    _    _    _    _    _    _
   _    _    _    _         _              _    _         home _    end
 )

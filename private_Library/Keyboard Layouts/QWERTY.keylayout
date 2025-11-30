@@ -410,7 +410,18 @@
 			<!-- gap, 73-75 -->
 			<key code="76" output="&#x3;" />
 			<key code="77" output="&#x1E;" />
-			<!-- gap, 78-95 -->
+			<!-- gap, 78-82 -->
+			<key code="83" output="í" />
+			<key code="84" output="ö" />
+			<key code="85" output="ü" />
+			<key code="86" output="ó" />
+			<key code="87" output="ő" />
+			<key code="88" output="ú" />
+			<key code="89" output="ű" />
+			<!-- gap, 90 -->
+			<key code="91" output="é" />
+			<key code="92" output="á" />
+			<!-- gap, 93-95 -->
 			<key code="96" output="&#x10;" />
 			<key code="97" output="&#x10;" />
 			<key code="98" output="&#x10;" />
@@ -462,7 +473,18 @@
 			<!-- gap, 73-75 -->
 			<key code="76" output="&#x3;" />
 			<key code="77" output="/" />
-			<!-- gap, 78-95 -->
+			<!-- gap, 78-82 -->
+			<key code="83" output="Í" />
+			<key code="84" output="Ö" />
+			<key code="85" output="Ü" />
+			<key code="86" output="Ó" />
+			<key code="87" output="Ő" />
+			<key code="88" output="Ú" />
+			<key code="89" output="Ű" />
+			<!-- gap, 90 -->
+			<key code="91" output="É" />
+			<key code="92" output="Á" />
+			<!-- gap, 93-95 -->
 			<key code="96" output="&#x10;" />
 			<key code="97" output="&#x10;" />
 			<key code="98" output="&#x10;" />
@@ -514,7 +536,18 @@
 			<!-- gap, 73-75 -->
 			<key code="76" output="&#x3;" />
 			<key code="77" output="&#x1E;" />
-			<!-- gap, 78-95 -->
+			<!-- gap, 78-82 -->
+			<key code="83" output="Í" />
+			<key code="84" output="Ö" />
+			<key code="85" output="Ü" />
+			<key code="86" output="Ó" />
+			<key code="87" output="Ő" />
+			<key code="88" output="Ú" />
+			<key code="89" output="Ű" />
+			<!-- gap, 90 -->
+			<key code="91" output="É" />
+			<key code="92" output="Á" />
+			<!-- gap, 93-95 -->
 			<key code="96" output="&#x10;" />
 			<key code="97" output="&#x10;" />
 			<key code="98" output="&#x10;" />
