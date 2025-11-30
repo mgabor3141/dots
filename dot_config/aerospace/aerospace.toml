@@ -69,17 +69,19 @@ ctrl-shift-alt-cmd-r = "move-node-to-workspace 8R --focus-follows-window"
 
 ctrl-shift-alt-cmd-f13 = "workspace-back-and-forth"
 
-ctrl-shift-alt-v = "layout h_tiles h_accordion"
-
 ctrl-shift-alt-left  = "focus left"
+ctrl-shift-alt-c     = "focus left"
 ctrl-shift-alt-right = "focus right"
-ctrl-shift-alt-up    = "exec-and-forget aerospace focus up --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace prev --stdin"
-ctrl-shift-alt-down  = "exec-and-forget aerospace focus down --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace next --stdin"
+ctrl-shift-alt-v     = "focus right"
+ctrl-shift-alt-up    = "exec-and-forget aerospace focus up --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace next --stdin"
+ctrl-shift-alt-down  = "exec-and-forget aerospace focus down --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace prev --stdin"
 
 ctrl-shift-alt-cmd-left  = "move left --boundaries-action stop"
 ctrl-shift-alt-cmd-right = "move right --boundaries-action stop"
-ctrl-shift-alt-cmd-up    = "move-node-to-workspace --focus-follows-window prev"
-ctrl-shift-alt-cmd-down  = "move-node-to-workspace --focus-follows-window next"
+ctrl-shift-alt-cmd-up    = "move-node-to-workspace --focus-follows-window next"
+ctrl-shift-alt-cmd-down  = "move-node-to-workspace --focus-follows-window prev"
+
+ctrl-shift-alt-b = "layout h_tiles h_accordion"
 
 [[on-window-detected]]
 if.app-id = "com.apple.finder"

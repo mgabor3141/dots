@@ -20,6 +20,16 @@
 
   concurrent-timeout 30
   ct $concurrent-timeout
+
+  continuous-typing-timeout 200
+  typing $continuous-typing-timeout
+
+  non-extend-keys (
+    1 2 3 4 5 6 7 8 9 0
+    q w     t y u i o p
+    a         h j k l ;
+    z x c   b n m , . /
+  )
 )
 
 ;; MacBook ANSI
@@ -38,8 +48,6 @@
   (lmet left)  (lalt left)
   (lmet right) (lalt right)
 
-  (lmet q) (lmet w)
-
   (lctl lsft lalt spc) (sls)
 
   (home) (lmet left)
@@ -48,10 +56,14 @@
 
 (defvirtualkeys
   ctrl lctl
+  to-base (layer-switch base)
 )
 
 (defalias
-  fn    (layer-toggle extend)
+  fn    (multi
+            (layer-toggle extend)
+            (on-release release-virtualkey ctrl)
+        )
 
   cps   (multi
             (tap-hold-press $tt $ht
@@ -61,27 +73,12 @@
             (on-release release-virtualkey ctrl)
         )
 
-  ;; pageup or ctrl-shift-tab
-  stb   (fork
-            pgup
-            (multi
-                (release-key lmet)
-                (on-press press-virtualkey ctrl)
-                lsft
-                tab
-            )
-            (lmet lctl)
-        )
-  ;; pagedown or ctrl-tab
-  ctb   (fork
-            pgdn
-            (multi
-                (release-key lmet)
-                (on-press press-virtualkey ctrl)
-                lctl ;; this triggers the on-press
-                tab
-            )
-            (lmet lctl)
+  ;; ctrl-tab, with ctrl held after
+  ctb   (multi
+            (release-key lmet)
+            (hold-for-duration 2000 ctrl)
+            lctl ;; this triggers the on-press
+            tab
         )
 
   meh   (tap-hold-press $tt $ht
@@ -89,23 +86,19 @@
             (multi lctl lalt lsft)  ;; hold
         )
 
-  cmc   (switch
-            ((or
-                (key-history pgup 1)
-                (key-history pgdn 1)
-                (key-history pgup 2)
-                (key-history pgdn 2)
-                (key-history pgup 3)
-                (key-history pgdn 3)
-            )) lctl break
+  ;; activate no-mods while actively typing
+  nm    (multi
+            (layer-switch no-mods)
+            (on-idle $typing tap-vkey to-base)
         )
 
-  spc   (multi
-            (tap-hold $tt $ht
-                spc
+  spc   (tap-hold-release-keys $tt $ht
+            (multi spc @nm)
+            (multi
                 (layer-toggle extend)
+                (on-release release-virtualkey ctrl)
             )
-            (on-release release-virtualkey ctrl)
+            $non-extend-keys
         )
 )
 
@@ -123,11 +116,20 @@
   lmet lctl lalt @meh      @spc           rmet @fn       left down rght
 )
 
+(deflayer no-mods
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _         spc            _    _         _    _    _
+)
+
 (deflayer extend
   lrld brdn brup mctl sls  dtn  dnd  prev pp   next mute vold volu
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    RM-q _    up   _    _    _    _    _    _    _    _    _    _
-  _    _    left down rght @stb _    _    _    _    _    _    _
-  _    _    _    _    @ctb _    _    _    _    _    _    _    _
+  _    _    _    up   @ctb _    _    _    _    _    _    _    _    _
+  _    _    left down rght pgup _    _    _    _    _    _    _
+  _    _    _    _    pgdn _    _    _    _    _    _    _    _
   _    _    _    _         _              _    _         home _    end
 )

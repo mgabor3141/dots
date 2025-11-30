@@ -1,3 +1,5 @@
 [git]
-autoCommit = true
-autoPush = true
+autoAdd = true
+
+[data]
+managed = {{ promptBoolOnce . "managed" "Is this a managed device" }}
