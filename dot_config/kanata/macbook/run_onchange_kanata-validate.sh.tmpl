@@ -3,7 +3,8 @@
 # This script will run if any of the following files have changed
 # kanata.kbd hash: {{ include "dot_config/kanata/macbook/kanata.kbd" | sha256sum }}
 
-kanata --check
+kanata --check -c {{ .chezmoi.sourceDir }}/dot_config/kanata/macbook/kanata.kbd
 
 echo
 echo "Reload the config with fn + esc!"
+echo
