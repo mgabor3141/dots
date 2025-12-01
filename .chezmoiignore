@@ -27,6 +27,8 @@ README.md
 .config/pavucontrol.ini
 .config/user-dirs.dirs
 .config/user-dirs.locale
+
+pacman
 {{- end }}
 
 {{- if ne .chezmoi.os "darwin" }}

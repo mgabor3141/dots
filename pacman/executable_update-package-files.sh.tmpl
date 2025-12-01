@@ -1,0 +1,5 @@
+pacman -Qqetn > {{ .chezmoi.sourceDir }}/.pacman-pkglist.txt
+
+pacman -Qqem > {{ .chezmoi.sourceDir }}/.pacman-foreignpkglist.txt
+
+comm -13 <(pacman -Qqdt | sort) <(pacman -Qqdtt | sort) > {{ .chezmoi.sourceDir }}/.pacman-optdeplist.txt

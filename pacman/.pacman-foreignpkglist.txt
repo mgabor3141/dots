@@ -1,0 +1,12 @@
+blackwidow-macro-git
+cursor-bin
+dotool
+ianny-bin
+it87-dkms-git
+niri-git
+rustdesk-bin
+systemd-manager-tui-bin
+systemd-numlockontty
+waybar-git
+webstorm
+webstorm-jre
