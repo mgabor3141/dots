@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>io.github.jtroo.kanata</string>
+  <string>io.github.jtroo.kanata.macos-razer</string>
 
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/kanata</string>
-    <string>-c</string>
-    <string>{{ .chezmoi.destDir }}/.config/kanata/macbook/kanata.kbd</string>
+    <string>--cfg</string>
+    <string>{{ .chezmoi.destDir }}/.config/kanata/kanata-macos-razer.kbd</string>
     <string>-n</string>
   </array>
 
@@ -19,7 +19,7 @@
   <key>KeepAlive</key>
   <true/>
 
-  <key>StandardOutPath</key><string>/tmp/io.github.jtroo.kanata</string>
-  <key>StandardErrorPath</key><string>/tmp/io.github.jtroo.kanata</string>
+  <key>StandardOutPath</key><string>/tmp/io.github.jtroo.kanata.macos-razer</string>
+  <key>StandardErrorPath</key><string>/tmp/io.github.jtroo.kanata.macos-razer</string>
 </dict>
 </plist>
