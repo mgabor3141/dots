@@ -8,9 +8,9 @@
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
   "base_keymap": "None",
-  "helix_mode": true,
+  "helix_mode": false,
   "vim": {
-    "toggle_relative_line_numbers": true,
+    "toggle_relative_line_numbers": true
   },
   "prettier": {
     "allowed": true
