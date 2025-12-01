@@ -30,6 +30,7 @@ cpupower
 direnv
 dmraid
 docker
+docker-compose
 dolphin-plugins
 duf
 dust
