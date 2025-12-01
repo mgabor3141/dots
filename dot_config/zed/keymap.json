@@ -2459,6 +2459,17 @@
   },
 
   // === Custom overrides
+  // MacOS compatibility
+  {
+    "context": "Editor",
+    "bindings": {
+      "alt-left": "editor::MoveToPreviousWordStart",
+      "alt-right": "editor::MoveToNextWordEnd",
+      "alt-shift-left": "editor::SelectToPreviousWordStart",
+      "alt-shift-right": "editor::SelectToNextWordEnd"
+    }
+  },
+  // Vim mode recommendations
   {
     "context": "Editor && !menu",
     "bindings": {
@@ -2476,7 +2487,8 @@
   {
     "context": "Terminal",
     "bindings": {
-      "secondary-shift-delete": "terminal::Clear"
+      "secondary-shift-delete": "terminal::Clear",
+      "secondary-v": "terminal::Paste"
     }
   },
   {
@@ -2488,7 +2500,7 @@
   {
     "context": "(Terminal && !selection)",
     "bindings": {
-      "secondary-u": ["terminal::SendKeystroke", "ctrl-c"]
+      "secondary-c": ["terminal::SendKeystroke", "ctrl-c"]
     }
   }
 ]
