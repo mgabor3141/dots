@@ -11,71 +11,43 @@
         "mappings": [
           {
             "action": {
-              "run": "\/opt\/homebrew\/bin\/aerospace focus up --boundaries-action fail || \/opt\/homebrew\/bin\/aerospace list-workspaces --monitor focused --empty no | \/opt\/homebrew\/bin\/aerospace workspace prev"
-            },
-            "option": true,
-            "scroll": "up",
-            "shift": false
-          },
-          {
-            "action": {
-              "run": "\/opt\/homebrew\/bin\/aerospace focus up --boundaries-action fail || \/opt\/homebrew\/bin\/aerospace list-workspaces --monitor focused --empty no | \/opt\/homebrew\/bin\/aerospace workspace next"
-            },
-            "option": true,
-            "scroll": "down",
-            "shift": false
-          },
-          {
-            "action": {
               "run": "\/opt\/homebrew\/bin\/aerospace focus left"
             },
-            "option": true,
             "scroll": "up",
+            "control": true,
+            "option": true,
+            "command": false,
             "shift": true
           },
           {
             "action": {
               "run": "\/opt\/homebrew\/bin\/aerospace focus right"
             },
-            "option": true,
             "scroll": "down",
+            "control": true,
+            "option": true,
+            "command": false,
             "shift": true
           },
 
           {
             "action": {
-              "run": "\/opt\/homebrew\/bin\/aerospace move-node-to-workspace --focus-follows-window prev"
-            },
-            "command": true,
-            "option": true,
-            "scroll": "up",
-            "shift": false
-          },
-          {
-            "action": {
-              "run": "\/opt\/homebrew\/bin\/aerospace move-node-to-workspace --focus-follows-window next"
-            },
-            "command": true,
-            "option": true,
-            "scroll": "down",
-            "shift": false
-          },
-          {
-            "action": {
               "run": "\/opt\/homebrew\/bin\/aerospace move left --boundaries-action stop"
             },
-            "command": true,
-            "option": true,
             "scroll": "up",
+            "control": true,
+            "option": true,
+            "command": true,
             "shift": true
           },
           {
             "action": {
               "run": "\/opt\/homebrew\/bin\/aerospace move right --boundaries-action stop"
             },
-            "command": true,
-            "option": true,
             "scroll": "down",
+            "control": true,
+            "option": true,
+            "command": true,
             "shift": true
           }
         ]
