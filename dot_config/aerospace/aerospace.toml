@@ -77,7 +77,9 @@ ctrl-shift-alt-up    = "exec-and-forget aerospace focus up --boundaries-action f
 ctrl-shift-alt-down  = "exec-and-forget aerospace focus down --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace prev --stdin"
 
 ctrl-shift-alt-cmd-left  = "move left --boundaries-action stop"
+ctrl-shift-alt-cmd-c     = "move left --boundaries-action stop"
 ctrl-shift-alt-cmd-right = "move right --boundaries-action stop"
+ctrl-shift-alt-cmd-v     = "move right --boundaries-action stop"
 ctrl-shift-alt-cmd-up    = "move-node-to-workspace --focus-follows-window next"
 ctrl-shift-alt-cmd-down  = "move-node-to-workspace --focus-follows-window prev"
 
