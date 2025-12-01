@@ -102,6 +102,10 @@ if.app-id = "app.zen-browser.zen"
 run = "move-node-to-workspace 1A --focus-follows-window"
 
 [[on-window-detected]]
+if.app-id = "com.google.Chrome"
+run = "move-node-to-workspace 1A --focus-follows-window"
+
+[[on-window-detected]]
 if.app-id = "dev.zed.Zed"
 run = "move-node-to-workspace 2S --focus-follows-window"
 
