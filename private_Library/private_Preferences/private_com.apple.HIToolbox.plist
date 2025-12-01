@@ -30,7 +30,7 @@
 			<key>InputSourceKind</key>
 			<string>Keyboard Layout</string>
 			<key>KeyboardLayout ID</key>
-			<integer>5000</integer>
+			<integer>-3141</integer>
 			<key>KeyboardLayout Name</key>
 			<string>QWERTY</string>
 		</dict>
@@ -45,7 +45,7 @@
 			<key>InputSourceKind</key>
 			<string>Keyboard Layout</string>
 			<key>KeyboardLayout ID</key>
-			<integer>5000</integer>
+			<integer>-3141</integer>
 			<key>KeyboardLayout Name</key>
 			<string>QWERTY</string>
 		</dict>
