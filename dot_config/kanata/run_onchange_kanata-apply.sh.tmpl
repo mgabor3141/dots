@@ -1,0 +1,13 @@
+#!/bin/bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# This script will run if any of the hashed files have changed
+
+# {{ include "dot_config/kanata/kanata-macbook-ansi.kbd" | sha256sum }}
+kanata --check --cfg {{ .chezmoi.sourceDir }}/dot_config/kanata/kanata-macbook-ansi.kbd
+
+# {{ include "dot_config/kanata/kanata-macos-razer.kbd" | sha256sum }}
+kanata --check --cfg {{ .chezmoi.sourceDir }}/dot_config/kanata/kanata-macos-razer.kbd
+
+sudo pkill kanata

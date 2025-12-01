@@ -1,0 +1,30 @@
+(defcfg
+  macos-dev-names-include (
+    "Razer BlackWidow Ultimate"
+  )
+
+  process-unmapped-keys yes
+  concurrent-tap-hold yes
+  log-layer-changes no
+)
+
+(defsrc
+  esc  f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12
+  grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
+  tab  q    w    e    r    t    y    u    i    o    p    [    ]    \
+  caps a    s    d    f    g    h    j    k    l    ;    '    ret
+  lsft z    x    c    v    b    n    m    ,    .    /    rsft up
+  lctl lmet lalt           spc            ralt apps rctl left down rght
+)
+
+;; The first layer defined is the layer that will be active by default
+(deflayer base
+  esc  f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12
+  grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
+  tab  q    w    e    r    t    y    u    i    o    p    [    ]    \
+  @cps a    s    d    f    g    h    j    k    l    ;    '    ret
+  lsft z    x    c    v    b    n    m    ,    .    /    rsft up
+  lmet lalt @meh           spc            @bmt @fn  rctl left down rght
+)
+
+(include shared.kbd)
