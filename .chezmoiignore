@@ -35,8 +35,8 @@ pacman
 Library
 
 .config/aerospace
-.config/karabiner
 .config/linearmouse
+.config/sketchybar
 
 .brew
 .simplebarrc
