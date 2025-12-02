@@ -1,16 +1,16 @@
 [core]
 	autocrlf = "input"
 [user]
-	name = mgabor3141
-	email = @mgabor3141
-{{ if eq .chezmoi.os "linux" }}
+	name = {{ .git.name }}
+	email = {{ .git.email }}
+{{- if eq .chezmoi.os "linux" }}
 [credential "https://github.com"]
 	helper =
 	helper = !/usr/bin/gh auth git-credential
 [credential "https://gist.github.com"]
 	helper =
 	helper = !/usr/bin/gh auth git-credential
-{{ end }}
+{{- end }}
 [push]
 	autoSetupRemote = true
 [pull]

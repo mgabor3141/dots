@@ -2,4 +2,8 @@
 autoAdd = true
 
 [data]
-managed = {{ promptBoolOnce . "managed" "Is this a managed device" }}
+managed = {{ promptBoolOnce . "managed" "managed device" }}
+
+[data.git]
+name = "{{ promptStringOnce . "git.name" "git name" }}"
+email = "{{ promptStringOnce . "git.email" "git email" }}"
