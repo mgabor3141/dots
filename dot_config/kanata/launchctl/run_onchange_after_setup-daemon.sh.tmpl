@@ -2,20 +2,23 @@
 trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
-# This script will run if any of the hashed files have changed
+install_service() {
+  local name="$1"
+  local src="{{ .chezmoi.destDir }}/.config/kanata/launchctl/$name"
+  local dst="/Library/LaunchDaemons/$name"
 
-# If you change the service names, check
-# `ps -ax | grep kanata` and `sudo launchctl list | grep kanata`
-# And remove any ghost services with bootout (or just reboot)
+  echo "▶ Installing $name"
+
+  sudo cp -rf "$src" "$dst"
+  sudo launchctl bootout system "$dst" || true
+  sudo launchctl bootstrap system "$dst"
+  sudo launchctl enable "system/$name"
+
+  echo "✅ $name installed"
+}
 
 # {{ include "dot_config/kanata/launchctl/io.github.jtroo.kanata.macbook-ansi.plist.tmpl" | sha256sum }}
-sudo cp -rf {{ .chezmoi.destDir }}/.config/kanata/launchctl/io.github.jtroo.kanata.macbook-ansi.plist /Library/LaunchDaemons/io.github.jtroo.kanata.macbook-ansi.plist
-sudo launchctl bootout system /Library/LaunchDaemons/io.github.jtroo.kanata.macbook-ansi.plist || true
-sudo launchctl bootstrap system /Library/LaunchDaemons/io.github.jtroo.kanata.macbook-ansi.plist
-sudo launchctl enable system/io.github.jtroo.kanata.macbook-ansi.plist
+install_service io.github.jtroo.kanata.macbook-ansi.plist
 
 # {{ include "dot_config/kanata/launchctl/io.github.jtroo.kanata.macos-razer.plist.tmpl" | sha256sum }}
-sudo cp -rf {{ .chezmoi.destDir }}/.config/kanata/launchctl/io.github.jtroo.kanata.macos-razer.plist /Library/LaunchDaemons/io.github.jtroo.kanata.macos-razer.plist
-sudo launchctl bootout system /Library/LaunchDaemons/io.github.jtroo.kanata.macos-razer.plist || true
-sudo launchctl bootstrap system /Library/LaunchDaemons/io.github.jtroo.kanata.macos-razer.plist
-sudo launchctl enable system/io.github.jtroo.kanata.macos-razer.plist
+install_service io.github.jtroo.kanata.macos-razer.plist
