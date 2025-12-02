@@ -14,11 +14,7 @@ kanata --check --cfg {{ .chezmoi.sourceDir }}/dot_config/kanata/kanata-macos-raz
 send_reload() {
   local port="$1"
   printf '{"Reload":{}}\n' |
-    nc -w 1 127.0.0.1 "$port" |
-    awk '
-      /"status":"Ok"/ { exit 0 }
-      { print }
-    '
+    nc -w 1 127.0.0.1 "$port"
 }
 
 send_reload 53141
