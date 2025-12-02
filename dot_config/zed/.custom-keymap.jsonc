@@ -1,0 +1,30 @@
+[
+  // Personal preferences
+  {
+    "context": "Editor",
+    "bindings": {
+      "secondary-[": "pane::GoBack",
+      "secondary-]": "pane::GoForward",
+      "secondary-/": ["editor::ToggleComments", { "advance_downwards": true }],
+    },
+  },
+  {
+    "context": "Terminal",
+    "bindings": {
+      "secondary-shift-delete": "terminal::Clear",
+      "secondary-v": "terminal::Paste",
+    },
+  },
+  {
+    "context": "(Terminal && selection)",
+    "bindings": {
+      "secondary-c": "terminal::Copy",
+    },
+  },
+  {
+    "context": "(Terminal && !selection)",
+    "bindings": {
+      "secondary-c": ["terminal::SendKeystroke", "ctrl-c"],
+    },
+  },
+]

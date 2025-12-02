@@ -1,0 +1,71 @@
+// chezmoi:template:left-delimiter="[]/*" right-delimiter="*/"
+// []/* $ctrlToSecondary := `(.[] | select(has("bindings")) | .bindings) |= with_entries(.key |= gsub("ctrl"; "secondary"))` */
+[
+  // === Default Linux bindings, ctrl replaced with secondary
+  []/* joinPath (.chezmoi.targetFile | dir) "_defaults/default-linux.json" | include
+      | fromJsonc | jq $ctrlToSecondary | first
+      | toPrettyJson | trim | trimPrefix "[" | trimSuffix "]" | trim */,
+
+  // === Vim mode keybinds, ctrl replaced with secondary
+  []/* joinPath (.chezmoi.targetFile | dir) "_defaults/vim.json" | include
+      | fromJsonc | jq $ctrlToSecondary | first
+      | toPrettyJson | trim | trimPrefix "[" | trimSuffix "]" | trim */,
+
+  // === Everything above is generated/copied, do not modify manually!
+
+  // Restore defaults in Vim mode
+  // https://zed.dev/docs/vim#restoring-common-text-editing-and-zed-keybindings
+  {
+    "context": "Editor && !menu",
+    "bindings": {
+      "secondary-c": "editor::Copy", //              // vim default: return to normal mode
+      "secondary-x": "editor::Cut", //               // vim default: decrement
+      "secondary-v": "editor::Paste", //             // vim default: visual block mode
+      "secondary-z": "editor::Undo", //              // vim default: line up
+      "secondary-f": "buffer_search::Deploy", //     // vim default: page down
+      // [MODIFIED] "secondary-o": "workspace::Open", //           // vim default: go back
+      "secondary-s": "workspace::Save", //           // vim default: show signature
+      "secondary-a": "editor::SelectAll", //         // vim default: increment
+      "secondary-b": "workspace::ToggleLeftDock" //  // vim default: down
+    }
+  },
+
+  // === MacOS compatibility
+  // These work together with the kanata configs to achieve positional consistency
+  {
+    "context": "Editor && os == macos",
+    "bindings": {
+      "alt-left": "editor::MoveToPreviousWordStart",
+      "alt-right": "editor::MoveToNextWordEnd",
+      "alt-shift-left": "editor::SelectToPreviousWordStart",
+      "alt-shift-right": "editor::SelectToNextWordEnd",
+      "alt-backspace": [
+        "editor::DeleteToPreviousWordStart",
+        { "ignore_newlines": false, "ignore_brackets": false }
+      ],
+      "alt-delete": [
+        "editor::DeleteToNextWordEnd",
+        { "ignore_newlines": false, "ignore_brackets": false }
+      ],
+      "cmd-left": [
+        "editor::MoveToBeginningOfLine",
+        { "stop_at_soft_wraps": true, "stop_at_indent": true }
+      ],
+      "cmd-right": ["editor::MoveToEndOfLine", { "stop_at_soft_wraps": true }],
+      "cmd-shift-left": [
+        "editor::SelectToBeginningOfLine",
+        { "stop_at_soft_wraps": true, "stop_at_indent": true }
+      ],
+      "cmd-shift-right": [
+        "editor::SelectToEndOfLine",
+        { "stop_at_soft_wraps": true }
+      ],
+      "alt-shift-f18": "editor::SelectSmallerSyntaxNode", // alt-shift-left from kanata
+      "alt-shift-f19": "editor::SelectLargerSyntaxNode" // alt-shift-right from kanata
+    }
+  },
+
+  // === Custom modifications
+  []/* joinPath (.chezmoi.sourceFile | dir) ".custom-keymap.jsonc" | include
+      | trim | trimPrefix "[" | trimSuffix "]" | trim */
+]

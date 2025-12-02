@@ -1,0 +1,9 @@
+# The file paths have to be alphabetically before the keymap due to processing order
+
+["_defaults/default-linux.json"]
+    type = "file"
+    url = "https://raw.githubusercontent.com/zed-industries/zed/refs/tags/v{{ output "/bin/bash" "-c" "zed -v | awk '{print $2}'" | trim }}/assets/keymaps/default-linux.json"
+
+["_defaults/vim.json"]
+    type = "file"
+    url = "https://raw.githubusercontent.com/zed-industries/zed/refs/tags/v{{ output "/bin/bash" "-c" "zed -v | awk '{print $2}'" | trim }}/assets/keymaps/vim.json"
