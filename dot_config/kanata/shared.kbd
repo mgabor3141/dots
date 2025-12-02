@@ -10,10 +10,20 @@
 )
 
 (defoverrides
-  (lmet bspc)  (lalt bspc)
-  (lmet del)   (lalt del)
-  (lmet left)  (lalt left)
-  (lmet right) (lalt right)
+  (lmet bspc)      (lalt bspc)
+  (lmet del)       (lalt del)
+  (lmet lsft del)  (lmet lsft del)
+  (lmet lsft bspc) (lmet lsft bspc)
+
+  (lmet left)      (lalt left)
+  (lmet right)     (lalt right)
+
+  (lalt left)        (lalt f18)
+  (lalt lmet left)   (lalt lmet left)
+  (lalt lctl left)   (lalt lctl left)
+  (lalt right)       (lalt f19)
+  (lalt lmet right)  (lalt lmet right)
+  (lalt lctl right)  (lalt lctl right)
 
   (lctl lsft lalt spc) (sls)
 
