@@ -28,6 +28,8 @@
   "close_on_file_delete": true,
   "use_smartcase_search": true,
   "redact_private_values": true,
+  "extend_comment_on_newline": false,
+  "inline_code_actions": false,
   "use_system_prompts": false,
   "buffer_line_height": "comfortable",
   "buffer_font_weight": 450.0,
@@ -163,6 +165,20 @@
       "settings": {
         "codeActionOnSave": {
           "rules": ["import/order"]
+        }
+      }
+    },
+    "json-language-server": {
+      "settings": {
+        "json": {
+          "schemas": [
+            {
+              "fileMatch": ["*.jsonc"],
+              "schema": {
+                "allowTrailingCommas": true
+              }
+            }
+          ]
         }
       }
     }
