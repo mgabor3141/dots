@@ -3,6 +3,7 @@ trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
 # This script will run if any of the hashed files have changed
+# {{ include "dot_config/kanata/shared.kbd" | sha256sum }}
 
 # {{ include "dot_config/kanata/kanata-macbook-ansi.kbd" | sha256sum }}
 kanata --check --cfg {{ .chezmoi.sourceDir }}/dot_config/kanata/kanata-macbook-ansi.kbd
@@ -10,4 +11,17 @@ kanata --check --cfg {{ .chezmoi.sourceDir }}/dot_config/kanata/kanata-macbook-a
 # {{ include "dot_config/kanata/kanata-macos-razer.kbd" | sha256sum }}
 kanata --check --cfg {{ .chezmoi.sourceDir }}/dot_config/kanata/kanata-macos-razer.kbd
 
-sudo pkill kanata
+send_reload() {
+  local port="$1"
+  printf '{"Reload":{}}\n' |
+    nc -w 1 127.0.0.1 "$port" |
+    awk '
+      /"status":"Ok"/ { exit 0 }
+      { print }
+    '
+}
+
+send_reload 53141
+send_reload 53142
+
+echo "Kanata configuration applied"
