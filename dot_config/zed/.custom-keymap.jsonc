@@ -9,8 +9,17 @@
     },
   },
   {
+    "context": "Workspace && !Terminal",
+    "bindings": {
+      "secondary-r": "task::Rerun",
+      "secondary-shift-r": ["task::Spawn", { "reveal_target": "dock" }],
+    },
+  },
+  {
     "context": "Terminal",
     "bindings": {
+      "secondary-r": "terminal::RerunTask",
+      "secondary-shift-r": ["task::Spawn", { "reveal_target": "dock" }],
       "secondary-shift-delete": "terminal::Clear",
       "secondary-v": "terminal::Paste",
     },
