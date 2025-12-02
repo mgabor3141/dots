@@ -1,8 +1,5 @@
 (defvar
-  tap-repress-timeout   100
-  tt $tap-repress-timeout
-
-  hold-timeout  200
+  hold-timeout  150
   ht $hold-timeout
 
   concurrent-timeout 30
@@ -39,7 +36,7 @@
         )
 
   cps   (multi
-            (tap-hold-press $tt $ht
+            (tap-hold-press 0 $ht
                 esc
                 lmet
             )
@@ -54,12 +51,13 @@
             tab
         )
 
-  meh   (tap-hold-press $tt $ht
-            C-A-S-M-F13             ;; tap
-            (multi lctl lalt lsft)  ;; hold
+  meh   (multi lctl lalt lsft
+            (tap-hold-press 0 $ht
+                M-F13 XX
+            )
         )
 
-  bmt  (tap-hold-press $tt $ht
+  bmt  (tap-hold-press 0 $ht
             bspc  ;; tap
             rmet  ;; hold
         )
