@@ -1,0 +1,9 @@
+{
+  "file_types": {
+    "JSONC": ["**/*.json.tmpl", "**/*.jsonc.tmpl"],
+    "TOML": ["**/*.toml.tmpl"]
+  },
+  "auto_install_extensions": {
+    "xml": true
+  }
+}
