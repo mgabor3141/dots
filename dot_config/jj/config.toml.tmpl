@@ -1,8 +1,8 @@
 #:schema https://jj-vcs.github.io/jj/latest/config-schema.json
 
 [user]
-name = "mgabor3141"
-email = "@mgabor3141"
+name = "{{ .git.name }}"
+email = "{{ .git.email }}"
 
 [ui]
 default-command = ["log", "--no-pager"]
