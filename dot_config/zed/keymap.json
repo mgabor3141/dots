@@ -2487,7 +2487,9 @@
       "cmd-shift-right": [
         "editor::SelectToEndOfLine",
         { "stop_at_soft_wraps": true }
-      ]
+      ],
+      "alt-shift-f18": "editor::SelectSmallerSyntaxNode", // alt-left in kanata
+      "alt-shift-f19": "editor::SelectLargerSyntaxNode" // alt-right in kanata
     }
   },
   // Vim mode recommendations

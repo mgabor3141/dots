@@ -6,6 +6,7 @@
   process-unmapped-keys yes
   concurrent-tap-hold yes
   log-layer-changes no
+  delegate-to-first-layer yes
 )
 
 (defsrc
