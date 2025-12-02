@@ -1,5 +1,5 @@
 (defvar
-  hold-timeout  150
+  hold-timeout  200
   ht $hold-timeout
 
   concurrent-timeout 30
@@ -23,6 +23,9 @@
   (lalt lctl right)  (lalt lctl right)
 
   (lctl lsft lalt spc) (sls)
+
+  (home)   (lmet left)
+  (end)    (lmet right)
 )
 
 (defvirtualkeys
