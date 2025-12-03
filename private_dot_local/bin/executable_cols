@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+# Detect terminal size
+if tty -s; then
+    read -r term_h term_w < <(stty size 2>/dev/null)
+fi
+: "${term_w:=${COLUMNS:-80}}"
+: "${term_h:=${LINES:-24}}"
+((term_h--))
+
+awk -v W="$term_w" -v H="$term_h" '
+
+function vislen(s, t) {
+    t = s
+    gsub(/\x1b\[[0-9;]*[A-Za-z]/, "", t)
+    return length(t)
+}
+
+{
+    raw[NR] = $0
+    len[NR] = vislen($0)
+    total = NR
+}
+
+END {
+    if (total == 0) exit
+
+    # Start with preferred terminal height
+    rows = (total < H ? total : H)
+
+    while (1) {
+
+        # Compute needed columns for given rows
+        cols = int((total + rows - 1) / rows)
+
+        # Reset widths
+        for (c = 1; c <= cols; c++)
+            colw[c] = 0
+
+        # Compute widths
+        for (c = 1; c <= cols; c++) {
+            for (r = 1; r <= rows; r++) {
+                i = (c - 1) * rows + r
+                if (i <= total && len[i] > colw[c])
+                    colw[c] = len[i]
+            }
+        }
+
+        # Compute total width
+        total_w = 0
+        for (c = 1; c <= cols; c++)
+            total_w += colw[c] + 2
+
+        # ✅ Fits width → accept layout
+        if (total_w <= W)
+            break
+
+        # ✅ If it does not fit and we can grow vertically → increase rows
+        if (rows < total) {
+            rows++
+            continue
+        }
+
+        # ✅ Hard stop (no layout can fit)
+        break
+    }
+
+    cols = int((total + rows - 1) / rows)
+
+    while (1) {
+
+        for (c = 1; c <= cols; c++)
+            colw[c] = 0
+
+        for (c = 1; c <= cols; c++) {
+            for (r = 1; r <= rows; r++) {
+                i = (c - 1) * rows + r
+                if (i <= total && len[i] > colw[c])
+                    colw[c] = len[i]
+            }
+        }
+
+        total_w = 0
+        for (c = 1; c <= cols; c++)
+            total_w += colw[c] + 2
+
+        if (total_w <= W || cols == 1)
+            break
+
+        cols--
+    }
+
+    for (r = 1; r <= rows; r++) {
+        for (c = 1; c <= cols; c++) {
+            i = (c - 1) * rows + r
+            if (i <= total) {
+                pad = colw[c] - len[i]
+                printf "%s%*s  ", raw[i], pad, ""
+            }
+        }
+        print ""
+    }
+}
+' | LESS='-FRS~' less
