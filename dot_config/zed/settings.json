@@ -15,15 +15,16 @@
   "prettier": {
     "allowed": true
   },
-  "toolbar": {
-    "code_actions": true
-  },
   "project_panel": {
     "hide_root": true
   },
+  "resize_all_panels_in_dock": [],
+  "seed_search_query_from_cursor": "selection",
+  "use_system_path_prompts": false,
   "title_bar": {
     "show_sign_in": false,
-    "show_user_picture": false
+    "show_user_picture": false,
+    "show_branch_name": false
   },
   "close_on_file_delete": true,
   "use_smartcase_search": true,
@@ -31,6 +32,10 @@
   "extend_comment_on_newline": false,
   "inline_code_actions": false,
   "use_system_prompts": false,
+  "diagnostics_max_severity": "info",
+  "scrollbar": {
+    "diagnostics": "warning"
+  },
   "buffer_line_height": "comfortable",
   "buffer_font_weight": 450.0,
   "buffer_font_family": "Fira Code",
@@ -46,8 +51,12 @@
     "line_width": 4
   },
   "minimap": {
-    "show": "auto"
+    "show": "never"
   },
+  // "experimental.theme_overrides": {
+  //   "title_bar.inactive_background": "#003337ff",
+  //   "title_bar.background": "#003337ff"
+  // },
   "drag_and_drop_selection": {
     "delay": 0
   },
@@ -71,7 +80,7 @@
     },
     "line_height": { "custom": 1.2 },
     "toolbar": {
-      "breadcrumbs": true
+      "breadcrumbs": false
     }
   },
   "soft_wrap": "editor_width",
@@ -121,6 +130,10 @@
       "function": false
     }
   },
+  "tab_bar": {
+    "show_nav_history_buttons": false,
+    "show_tab_bar_buttons": false
+  },
   "tabs": {
     // Show git status colors in the editor tabs.
     "file_icons": true,
@@ -138,6 +151,24 @@
     // Whether a preview tab gets replaced when code navigation is used to navigate away from the tab.
     "enable_preview_from_code_navigation": true
   },
+
+  // Profiles
+  "profiles": {
+    "Minimal": {
+      "status_bar": {
+        "experimental.show": false
+      },
+      "toolbar": {
+        "agent_review": false,
+        "breadcrumbs": false,
+        "code_actions": false,
+        "quick_actions": false,
+        "selections_menu": false
+      }
+    }
+  },
+
+  // Language specific
   "auto_install_extensions": {
     "html": true,
     "toml": true,
