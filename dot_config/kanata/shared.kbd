@@ -24,8 +24,10 @@
 
   (lctl lsft lalt spc) (sls)
 
-  (home)   (lmet left)
-  (end)    (lmet right)
+  (home)      (lmet left)
+  (end)       (lmet right)
+  (lmet home) (lmet home)
+  (lmet end)  (lmet end)
 )
 
 (defvirtualkeys
