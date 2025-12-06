@@ -33,6 +33,13 @@
   // === MacOS compatibility
   // These work together with the kanata configs to achieve positional consistency
   {
+    "context": "os == macos",
+    "bindings": {
+      "cmd-left": "menu::SelectFirst",
+      "cmd-right": "menu::SelectLast"
+    }
+  },
+  {
     "context": "Editor && os == macos",
     "bindings": {
       "alt-left": "editor::MoveToPreviousWordStart",
@@ -62,6 +69,13 @@
       ],
       "alt-shift-f18": "editor::SelectSmallerSyntaxNode", // alt-shift-left from kanata
       "alt-shift-f19": "editor::SelectLargerSyntaxNode" // alt-shift-right from kanata
+    }
+  },
+  {
+    "context": "Terminal && os == macos",
+    "bindings":{
+      "cmd-left": ["terminal::SendKeystroke", "home"],
+      "cmd-right": ["terminal::SendKeystroke", "end"]
     }
   },
 
