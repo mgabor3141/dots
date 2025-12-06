@@ -29,8 +29,10 @@
       "secondary-r": "terminal::RerunTask",
       "secondary-f": "buffer_search::Deploy",
       "secondary-shift-r": ["task::Spawn", { "reveal_target": "dock" }],
-      "secondary-shift-delete": "terminal::Clear",
       "secondary-v": "terminal::Paste",
+
+      "secondary-shift-backspace": ["terminal::SendText", "\u0015"], // ctrl-u: clear line
+      "secondary-shift-delete": ["terminal::SendText", "\u000b"], // ctrl-k: delete to end of line
     },
   },
   {

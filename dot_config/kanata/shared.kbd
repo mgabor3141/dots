@@ -7,25 +7,31 @@
 )
 
 (defoverrides
+  ;; Meh + Space is Spotlight Search
+  (lctl lsft lalt spc) (sls)
+  
+  ;; Ctrl + left/right/backspace/delete mapped to MacOS equivalents
+  (lmet left)      (lalt left)
+  (lmet right)     (lalt right)
   (lmet bspc)      (lalt bspc)
   (lmet del)       (lalt del)
+  ;; -- Exceptions --
   (lmet lsft del)  (lmet lsft del)
   (lmet lsft bspc) (lmet lsft bspc)
 
-  (lmet left)      (lalt left)
-  (lmet right)     (lalt right)
-
+  ;; Alt + left/right mapped to F keys so that they're still available
   (lalt left)        (lalt f18)
+  (lalt right)       (lalt f19)
+  ;; -- Exceptions --
   (lalt lmet left)   (lalt lmet left)
   (lalt lctl left)   (lalt lctl left)
-  (lalt right)       (lalt f19)
   (lalt lmet right)  (lalt lmet right)
   (lalt lctl right)  (lalt lctl right)
 
-  (lctl lsft lalt spc) (sls)
-
+  ;; Home and End key equivalents
   (home)      (lmet left)
   (end)       (lmet right)
+  ;; -- Exceptions --
   (lmet home) (lmet home)
   (lmet end)  (lmet end)
 )
