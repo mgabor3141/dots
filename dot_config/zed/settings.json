@@ -204,7 +204,7 @@
         "json": {
           "schemas": [
             {
-              "fileMatch": ["*.jsonc"],
+              "fileMatch": ["*.jsonc", "*.json.tmpl"],
               "schema": {
                 "allowTrailingCommas": true
               }

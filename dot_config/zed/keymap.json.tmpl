@@ -1,76 +1,43 @@
-// chezmoi:template:left-delimiter="[]/*" right-delimiter="*/"
-// []/* $ctrlToSecondary := `(.[] | select(has("bindings")) | .bindings) |= with_entries(.key |= gsub("ctrl"; "secondary"))` */
+// chezmoi:template:left-delimiter="/*#" right-delimiter="*/"
+// Zed version: /*# output "/bin/bash" "-c" "zed -v | awk '{print $2}'" -*/
+
+/*#- if false *//*
+  Available modifiers:
+    - ctrl- The control key
+    - cmd-, win- or super- for the platform modifier (Command on macOS, Windows key on Windows, and the Super key on Linux).
+    - alt- for alt (option on macOS)
+    - shift- The shift key
+    - fn- The function key
+    - secondary- Equivalent to cmd when Zed is running on macOS and ctrl when on Windows and Linux
+
+  We assume that out input only contains: ctrl, alt, shift, super, fn
+  Single letters for regex purposes, that are unique to only one modifer: c, a, h, u, n
+  (this jq does not support lookahead/lookbehind unfortunately)
+/*# end -*/
+
+/*# $macOSPostProcess := `.[].bindings |= with_entries(
+    select((
+      if (.value | type) == "string" then
+        .value
+      elif (.value | type) == "array" then
+        .value[0]
+      end
+    ) | test("app_menu::") | not) |
+    .key |= (
+      gsub("^(?<pre>[^c]*a[^c ]*-)left$";  "\(.pre)f18") |
+      gsub("^(?<pre>[^c]*a[^c ]*-)right$"; "\(.pre)f19") |
+      gsub("^(?<pre>[^a]*-?)ctrl-(?<mid>[^a ]*-?)(?<key>(left|right|backspace|delete))$";  "\(.pre)alt-\(.mid)\(.key)") |
+      gsub("^(?<pre>[^c]*-?)home$"; "\(.pre)secondary-left")  |
+      gsub("^(?<pre>[^c]*-?)end$";  "\(.pre)secondary-right") |
+      gsub("ctrl"; "secondary")
+))` -*/
 [
-  // === Default Linux bindings, ctrl replaced with secondary
-  []/* joinPath (.chezmoi.targetFile | dir) "_defaults/default-linux.json" | include
-      | fromJsonc | jq $ctrlToSecondary | first
-      | toPrettyJson | trim | trimPrefix "[" | trimSuffix "]" | trim */,
-
-  // === Vim mode keybinds, ctrl replaced with secondary
-  // []/ * joinPath (.chezmoi.targetFile | dir) "_defaults/vim.json" | include
-  //     | fromJsonc | jq $ctrlToSecondary | first
-  //     | toPrettyJson | trim | trimPrefix "[" | trimSuffix "]" | trim * /,
-
-  // === Everything above is generated/copied, do not modify manually!
-
-  // Restore defaults in Vim mode
-  // https://zed.dev/docs/vim#restoring-common-text-editing-and-zed-keybindings
-  // {
-  //   "context": "Editor && !menu",
-  //   "bindings": {
-  //     "secondary-c": "editor::Copy", //              // vim default: return to normal mode
-  //     "secondary-x": "editor::Cut", //               // vim default: decrement
-  //     "secondary-v": "editor::Paste", //             // vim default: visual block mode
-  //     "secondary-z": "editor::Undo", //              // vim default: line up
-  //     "secondary-f": "buffer_search::Deploy", //     // vim default: page down
-  //     // [MODIFIED] "secondary-o": "workspace::Open", //           // vim default: go back
-  //     "secondary-s": "workspace::Save", //           // vim default: show signature
-  //     "secondary-a": "editor::SelectAll", //         // vim default: increment
-  //     "secondary-b": "workspace::ToggleLeftDock" //  // vim default: down
-  //   }
-  // },
+  // === Default Linux bindings, processed with jq to be cross-platform
+  /*# joinPath (.chezmoi.targetFile | dir) "_defaults/default-linux.json" | include
+      | fromJsonc | jq $macOSPostProcess | first
+      | toPrettyJson | trim | trimPrefix "[" | trimSuffix "]" | trim *//*# "," */
 
   // === MacOS compatibility
-  // These work together with the kanata configs to achieve positional consistency
-  {
-    "context": "os == macos",
-    "bindings": {
-      "cmd-left": "menu::SelectFirst",
-      "cmd-right": "menu::SelectLast"
-    }
-  },
-  {
-    "context": "Editor && os == macos",
-    "bindings": {
-      "alt-left": "editor::MoveToPreviousWordStart",
-      "alt-right": "editor::MoveToNextWordEnd",
-      "alt-shift-left": "editor::SelectToPreviousWordStart",
-      "alt-shift-right": "editor::SelectToNextWordEnd",
-      "alt-backspace": [
-        "editor::DeleteToPreviousWordStart",
-        { "ignore_newlines": false, "ignore_brackets": false }
-      ],
-      "alt-delete": [
-        "editor::DeleteToNextWordEnd",
-        { "ignore_newlines": false, "ignore_brackets": false }
-      ],
-      "cmd-left": [
-        "editor::MoveToBeginningOfLine",
-        { "stop_at_soft_wraps": true, "stop_at_indent": true }
-      ],
-      "cmd-right": ["editor::MoveToEndOfLine", { "stop_at_soft_wraps": true }],
-      "cmd-shift-left": [
-        "editor::SelectToBeginningOfLine",
-        { "stop_at_soft_wraps": true, "stop_at_indent": true }
-      ],
-      "cmd-shift-right": [
-        "editor::SelectToEndOfLine",
-        { "stop_at_soft_wraps": true }
-      ],
-      "alt-shift-f18": "editor::SelectSmallerSyntaxNode", // alt-shift-left from kanata
-      "alt-shift-f19": "editor::SelectLargerSyntaxNode" // alt-shift-right from kanata
-    }
-  },
   {
     "context": "Terminal && os == macos",
     "bindings":{
@@ -80,6 +47,6 @@
   },
 
   // === Custom modifications
-  []/* joinPath (.chezmoi.sourceFile | dir) ".custom-keymap.jsonc" | include
+  /*# joinPath (.chezmoi.sourceFile | dir) ".custom-keymap.jsonc" | include
       | trim | trimPrefix "[" | trimSuffix "]" | trim */
 ]
