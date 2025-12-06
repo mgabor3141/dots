@@ -35,6 +35,7 @@
   "scrollbar": {
     "diagnostics": "warning"
   },
+  "colorize_brackets": true,
   "buffer_line_height": "comfortable",
   "buffer_font_weight": 450.0,
   "buffer_font_family": "Fira Code",
