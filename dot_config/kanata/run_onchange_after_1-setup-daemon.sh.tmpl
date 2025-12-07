@@ -1,0 +1,37 @@
+#!/bin/bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+install_service() {
+  local name="$1"
+  local src="{{ .chezmoi.destDir }}/.config/kanata/launchctl/$name.plist"
+  local dst="/Library/LaunchDaemons/$name.plist"
+
+  echo "Installing $name..."
+
+  sudo cp -rf "$src" "$dst"
+  sudo launchctl bootout system "$dst" || true
+  sudo launchctl bootstrap system "$dst"
+  sudo launchctl enable "system/$name"
+}
+
+wait_for_service() {
+    local svc="$1"
+    echo "Waiting for $svc..."
+
+    until sudo launchctl print "system/$svc" 2>/dev/null | grep -q "pid ="; do
+        sleep 1
+    done
+}
+
+# {{ include "dot_config/kanata/launchctl/io.github.jtroo.kanata.macbook-ansi.plist.tmpl" | sha256sum }}
+install_service io.github.jtroo.kanata.macbook-ansi
+
+# {{ include "dot_config/kanata/launchctl/io.github.jtroo.kanata.macos-razer.plist.tmpl" | sha256sum }}
+install_service io.github.jtroo.kanata.macos-razer
+
+# wait for services to come online
+wait_for_service io.github.jtroo.kanata.macbook-ansi
+wait_for_service io.github.jtroo.kanata.macos-razer
+
+echo Done setting up kanata services
