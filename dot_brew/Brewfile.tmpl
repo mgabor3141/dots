@@ -63,7 +63,7 @@ cask "font-sketchybar-app-font"
 tap "nikitabobko/tap"
 cask "nikitabobko/tap/aerospace"
 
-# Tools for managed system in place of nix/devenv
+# Tools to install with brew if nix/devenv is not available
 {{- if .managed }}
 brew "fnm",
     postinstall: "ls ~/.local/bin/nvm >/dev/null 2>&1 || ln -s `which fnm` $HOME/.local/bin/nvm"

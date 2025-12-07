@@ -1,9 +1,21 @@
-{ config, pkgs, ... }:
+{ pkgs, ... }:
 {
   nix = {
     enable = true;
     # gc.automatic = true;
     optimise.automatic = true;
+    settings = {
+      experimental-features = "nix-command flakes";
+      substituters = [
+        "https://devenv.cachix.org"
+        "https://nix-community.cachix.org"
+        "https://cache.nixos.org/"
+      ];
+      trusted-public-keys = [
+        "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=" "nixpkgs-python.cachix.org-1:hxjI7pFxTyuTHn2NkvWCrAUcNZLNS3ZAvfYNuYifcEU="
+        "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
+      ];
+    };
   };
 
   security.pam.services.sudo_local = {
@@ -71,49 +83,9 @@
 
   system.startup.chime = false;
 
-  environment.userLaunchAgents."hu.mgabor.bing-wallpaper.plist" = {
-    text = ''
-      <?xml version="1.0" encoding="UTF-8"?>
-      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-      <plist version="1.0">
-      <dict>
-        <key>Label</key>
-        <string>hu.mgabor.bing-wallpaper</string>
-
-        <key>ProgramArguments</key>
-        <array>
-          <string>/Users/mg/.local/bin/bing-wallpaper.sh</string>
-        </array>
-
-        <key>RunAtLoad</key>
-        <true/>
-
-        <!-- Launch on each unlock event -->
-        <key>LaunchEvents</key>
-        <dict>
-          <key>com.apple.notifyd.matching</key>
-          <dict>
-            <key>com.apple.screenIsUnlocked</key>
-            <dict>
-              <key>Notification</key>
-              <string>com.apple.screenIsUnlocked</string>
-            </dict>
-          </dict>
-        </dict>
-
-        <key>KeepAlive</key>
-        <true/>
-
-        <key>StandardOutPath</key><string>/tmp/hu.mgabor.bing-wallpaper</string>
-        <key>StandardErrorPath</key><string>/tmp/hu.mgabor.bing-wallpaper</string>
-
-        <key>EnvironmentVariables</key>
-        <dict>
-          <key>PATH</key>
-          <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-        </dict>
-      </dict>
-      </plist>
-    '';
-  };
+  environment.systemPackages = [
+    pkgs.nil
+    pkgs.nixd
+    pkgs.devenv
+  ];
 }
