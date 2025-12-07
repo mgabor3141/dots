@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>AppleCurrentKeyboardLayoutInputSourceID</key>
-	<string>com.apple.keylayout.QWERTY</string>
+	<string>org.unknown.keylayout.QWERTY</string>
 	<key>AppleDictationAutoEnable</key>
 	<integer>1</integer>
 	<key>AppleEnabledInputSources</key>
@@ -48,6 +48,18 @@
 			<integer>-3141</integer>
 			<key>KeyboardLayout Name</key>
 			<string>QWERTY</string>
+		</dict>
+		<dict>
+			<key>Bundle ID</key>
+			<string>com.apple.PressAndHold</string>
+			<key>InputSourceKind</key>
+			<string>Non Keyboard Input Method</string>
+		</dict>
+		<dict>
+			<key>Bundle ID</key>
+			<string>com.apple.CharacterPaletteIM</string>
+			<key>InputSourceKind</key>
+			<string>Non Keyboard Input Method</string>
 		</dict>
 	</array>
 </dict>
