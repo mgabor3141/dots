@@ -8,7 +8,8 @@
   {
     "label": "apply",
     "command": "chezmoi apply",
-    "show_command": false
+    "show_command": false,
+    "reveal": "never"
   },
   {
     "label": "update",

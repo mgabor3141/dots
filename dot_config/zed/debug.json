@@ -1,0 +1,36 @@
+[
+  {
+    "label": "jest $ZED_SYMBOL",
+    "program": "$ZED_CUSTOM_TYPESCRIPT_JEST_PACKAGE_PATH/node_modules/jest/bin/jest.js",
+    "args": [
+      "--runInBand",
+      "--detectOpenHandles",
+      "--verbose=false",
+      "--testNamePattern",
+      "$ZED_SYMBOL",
+      "--runTestsByPath",
+      "$ZED_FILE"
+    ],
+    "cwd": "$ZED_DIRNAME",
+    "adapter": "JavaScript",
+    "request": "launch",
+    "type": "pwa-node",
+    "tags": ["ts-test", "js-test", "tsx-test"]
+  },
+  {
+    "label": "jest $ZED_FILE",
+    "program": "$ZED_CUSTOM_TYPESCRIPT_JEST_PACKAGE_PATH/node_modules/jest/bin/jest.js",
+    "args": [
+      "--runInBand",
+      "--detectOpenHandles",
+      "--verbose=false",
+      "--runTestsByPath",
+      "$ZED_FILE"
+    ],
+    "cwd": "$ZED_DIRNAME",
+    "adapter": "JavaScript",
+    "request": "launch",
+    "type": "pwa-node",
+    "tags": ["ts-test", "js-test", "tsx-test"]
+  }
+]
