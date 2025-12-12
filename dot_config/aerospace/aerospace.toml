@@ -6,11 +6,12 @@ enable-normalization-flatten-containers = true
 enable-normalization-opposite-orientation-for-nested-containers = true
 on-focused-monitor-changed = ["move-mouse monitor-lazy-center"]
 start-at-login = true
+automatically-unhide-macos-hidden-apps = false
 
 exec-on-workspace-change = [
     '/bin/bash',
     '-c',
-    'sketchybar --trigger aerospace_workspace_change AEROSPACE_FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE AEROSPACE_PREV_WORKSPACE=$AEROSPACE_PREV_WORKSPACE; ~/.config/aerospace/pip-move.sh'
+    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE PREV_WORKSPACE=$AEROSPACE_PREV_WORKSPACE; ~/.config/aerospace/pip-move.sh'
 ]
 
 [exec.env-vars]
@@ -57,14 +58,14 @@ ctrl-shift-alt-w = "workspace 6W"
 ctrl-shift-alt-e = "workspace 7E"
 ctrl-shift-alt-r = "workspace 8R"
 
-ctrl-shift-alt-cmd-a = "move-node-to-workspace 1A"
-ctrl-shift-alt-cmd-s = "move-node-to-workspace 2S"
-ctrl-shift-alt-cmd-d = "move-node-to-workspace 3D"
-ctrl-shift-alt-cmd-f = "move-node-to-workspace 4F"
-ctrl-shift-alt-cmd-q = "move-node-to-workspace 5Q"
-ctrl-shift-alt-cmd-w = "move-node-to-workspace 6W"
-ctrl-shift-alt-cmd-e = "move-node-to-workspace 7E"
-ctrl-shift-alt-cmd-r = "move-node-to-workspace 8R"
+ctrl-shift-alt-cmd-a = ["move-node-to-workspace 1A", "exec-and-forget sketchybar --trigger aerospace_node_moved TARGET_WORKSPACE=1A"]
+ctrl-shift-alt-cmd-s = ["move-node-to-workspace 2S", "exec-and-forget sketchybar --trigger aerospace_node_moved TARGET_WORKSPACE=2S"]
+ctrl-shift-alt-cmd-d = ["move-node-to-workspace 3D", "exec-and-forget sketchybar --trigger aerospace_node_moved TARGET_WORKSPACE=3D"]
+ctrl-shift-alt-cmd-f = ["move-node-to-workspace 4F", "exec-and-forget sketchybar --trigger aerospace_node_moved TARGET_WORKSPACE=4F"]
+ctrl-shift-alt-cmd-q = ["move-node-to-workspace 5Q", "exec-and-forget sketchybar --trigger aerospace_node_moved TARGET_WORKSPACE=5Q"]
+ctrl-shift-alt-cmd-w = ["move-node-to-workspace 6W", "exec-and-forget sketchybar --trigger aerospace_node_moved TARGET_WORKSPACE=6W"]
+ctrl-shift-alt-cmd-e = ["move-node-to-workspace 7E", "exec-and-forget sketchybar --trigger aerospace_node_moved TARGET_WORKSPACE=7E"]
+ctrl-shift-alt-cmd-r = ["move-node-to-workspace 8R", "exec-and-forget sketchybar --trigger aerospace_node_moved TARGET_WORKSPACE=8R"]
 
 ctrl-shift-alt-cmd-f13 = "workspace-back-and-forth"
 
