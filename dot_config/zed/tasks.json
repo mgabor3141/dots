@@ -1,6 +1,6 @@
 [
   {
-    "label": "modified",
+    "label": "jj modified",
     "command": "watchexec -rq --debounce '5s' --wrap-process 'none' 'tput reset && jj diff --from \"trunk()\" --summary --color always | env COLUMNS=$(tput cols) LINES=$(tput lines) cols'",
     "show_command": false,
     "show_summary": false
