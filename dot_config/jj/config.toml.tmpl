@@ -5,6 +5,7 @@ name = "{{ .git.name }}"
 email = "{{ .git.email }}"
 
 [ui]
+editor = ["zed", "--wait"]
 default-command = ["log", "--no-pager"]
 diff-formatter = "difft"
 merge-editor = "meld"
@@ -36,7 +37,8 @@ pager = { command = [ "less", "-FR", "-j3" ] }
 'open()' = 'stack(trunk().. & mine(), 1)'
 
 [aliases]
-gp = ["git", "push"]
+gp = ["git", "push", "--tracked"]
+gc = ["git", "push", "--change", "@"]
 gf = ["git", "fetch"]
 
 # Convenient shorthands.
@@ -66,3 +68,9 @@ diff-args = ["--color=always", "--display=side-by-side-show-both", "--background
 [git]
 track-default-bookmark-on-clone = true
 private-commits = "description(glob:'private:*')"
+
+[remotes.origin]
+auto-track-bookmarks = "glob:*/*"
+
+[templates]
+git_push_bookmark = '''"feat/" ++ description.lower().trim().replace(regex:'\W+', "-")'''
