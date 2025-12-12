@@ -69,6 +69,7 @@ brew "fnm",
     postinstall: "ls ~/.local/bin/nvm >/dev/null 2>&1 || ln -s `which fnm` $HOME/.local/bin/nvm"
 
 cask "gcloud-cli"
+brew "openjdk"
 {{- end }}
 
 # Fails on managed system
