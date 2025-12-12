@@ -17,7 +17,6 @@ install_service() {
 
 wait_for_service() {
     local svc="$1"
-    echo "Waiting for $svc..."
 
     until sudo launchctl print "system/$svc" 2>/dev/null | grep -q "pid ="; do
         sleep 1
@@ -30,8 +29,11 @@ install_service io.github.jtroo.kanata.macbook-ansi
 # {{ include "dot_config/kanata/launchctl/io.github.jtroo.kanata.macos-razer.plist.tmpl" | sha256sum }}
 install_service io.github.jtroo.kanata.macos-razer
 
-# wait for services to come online
+echo "Waiting for services to come online..."
 wait_for_service io.github.jtroo.kanata.macbook-ansi
 wait_for_service io.github.jtroo.kanata.macos-razer
+
+# wait for kanata launch delay
+sleep 2
 
 echo Done setting up kanata services
