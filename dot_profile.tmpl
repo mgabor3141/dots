@@ -1,8 +1,7 @@
 export EDITOR=nano
+export VISUAL=zed
 
 {{- if eq .chezmoi.os "linux" }}
-alias zed="zeditor"
-
 export BROWSER=zen-browser
 
 export QT_STYLE_OVERRIDE=kvantum
@@ -20,5 +19,3 @@ export QT_ENABLE_HIGHDPI_SCALING=1
 export PATH="/opt/homebrew/bin:$PATH"
 export XDG_CONFIG_HOME="$HOME/.config"
 {{- end }}
-
-export VISUAL=zed
