@@ -15,26 +15,29 @@
   (this jq does not support lookahead/lookbehind unfortunately)
 /*# end -*/
 
-/*# $macOSPostProcess := `.[].bindings |= with_entries(
-    select((
-      if (.value | type) == "string" then
-        .value
-      elif (.value | type) == "array" then
-        .value[0]
-      end
-    ) | test("app_menu::") | not) |
-    .key |= (
-      gsub("^(?<pre>[^c]*a[^c ]*-)left$";  "\(.pre)f18") |
-      gsub("^(?<pre>[^c]*a[^c ]*-)right$"; "\(.pre)f19") |
-      gsub("^(?<pre>[^a]*-?)ctrl-(?<mid>[^a ]*-?)(?<key>(left|right|backspace|delete))$";  "\(.pre)alt-\(.mid)\(.key)") |
-      gsub("^(?<pre>[^c]*-?)home$"; "\(.pre)secondary-left")  |
-      gsub("^(?<pre>[^c]*-?)end$";  "\(.pre)secondary-right") |
-      gsub("ctrl"; "secondary")
-))` -*/
+/*# $darwinPostProcess := `.` -*/
+/*#- if eq .chezmoi.os "darwin" -*/
+  /*# $darwinPostProcess = `.[].bindings |= with_entries(
+      select((
+        if (.value | type) == "string" then
+          .value
+        elif (.value | type) == "array" then
+          .value[0]
+        end
+      ) | test("app_menu::") | not) |
+      .key |= (
+        gsub("^(?<pre>[^c]*a[^c ]*-)left$";  "\(.pre)f18") |
+        gsub("^(?<pre>[^c]*a[^c ]*-)right$"; "\(.pre)f19") |
+        gsub("^(?<pre>[^a]*-?)ctrl-(?<mid>[^a ]*-?)(?<key>(left|right|backspace|delete))$";  "\(.pre)alt-\(.mid)\(.key)") |
+        gsub("^(?<pre>[^c]*-?)home$"; "\(.pre)secondary-left")  |
+        gsub("^(?<pre>[^c]*-?)end$";  "\(.pre)secondary-right") |
+        gsub("ctrl"; "secondary")
+  ))` -*/
+/*#- end -*/
 [
   // === Default Linux bindings, processed with jq to be cross-platform
   /*# joinPath (.chezmoi.targetFile | dir) "_defaults/default-linux.json" | include
-      | fromJsonc | jq $macOSPostProcess | first
+      | fromJsonc | jq $darwinPostProcess | first
       | toPrettyJson | trim | trimPrefix "[" | trimSuffix "]" | trim *//*# "," */
 
   // === MacOS compatibility
