@@ -1,7 +1,5 @@
-# TODO: Make the scripts aware of the ignores
-
 {{- if ne .chezmoi.os "darwin" }}
-launchctl
+darwin
 
 kanata-macbook-ansi.kbd
 kanata-macos-razer.kbd
