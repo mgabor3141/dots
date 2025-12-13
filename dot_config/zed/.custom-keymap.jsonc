@@ -20,11 +20,6 @@
       "secondary-home": "terminal::ScrollToTop",
       "secondary-end": "terminal::ScrollToBottom",
 
-      "shift-left": "editor::SelectLeft",
-
-      "shift-home": "editor::SelectLine",
-      "cmd-shift-alt-u": "editor::SelectLine",
-
       "secondary-e": "file_finder::Toggle",
       "secondary-r": "terminal::RerunTask",
       "secondary-f": "buffer_search::Deploy",
