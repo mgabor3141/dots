@@ -10,7 +10,7 @@
 )
 
 (include shared/common.kbd)
-(include shared/delete-chord.kbd)
+(include shared/chords.kbd)
 
 ;; MacBook ANSI (single row enter) physical layout
 (defsrc

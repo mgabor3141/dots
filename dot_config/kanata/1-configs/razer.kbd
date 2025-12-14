@@ -27,7 +27,7 @@
 )
 
 (deflayermap (base)
-  brk sleep
+  brk @sleep
 
   caps @cps
 
