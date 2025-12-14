@@ -25,6 +25,10 @@
   rse @rsecondary
 )
 
+;; Sleep key is not available on MacOS
+(platform (macos) (defalias sleep XX   ))
+(platform (linux) (defalias sleep sleep))
+
 ;; MacOS specific remaps, intended to standardize key positions between platforms
 (platform (macos)
   (defoverrides
