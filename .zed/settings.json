@@ -1,7 +1,8 @@
 {
   "file_types": {
     "JSONC": ["**/*.json.tmpl", "**/*.jsonc.tmpl"],
-    "TOML": ["**/*.toml.tmpl"]
+    "TOML": ["**/*.toml.tmpl"],
+    "Shell Script": ["**/dot_*profile.tmpl"]
   },
   "auto_install_extensions": {
     "xml": true

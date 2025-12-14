@@ -54,14 +54,14 @@ update_once() {
     "$API_URL")"
 
   # 2) Parse with jq
-  uhd_url="$(jq -r '.images.UHD // empty' <<<"$json")"
-  startdate="$(jq -r '.startdate // empty' <<<"$json")"
-  fullstartdate="$(jq -r '.fullstartdate // empty' <<<"$json")"
-  title="$(jq -r '.title // empty' <<<"$json")"
-  gradient_angle="$(jq -r '.colors.gradient_angle // empty' <<<"$json")"
-  gradient_from="$(jq -r '.colors.gradient_from // empty' <<<"$json")"
-  gradient_to="$(jq -r '.colors.gradient_to // empty' <<<"$json")"
-  copyright="$(jq -r '.copyright // empty' <<<"$json")"
+  uhd_url="$(jq -r '.images.UHD' <<<"$json")"
+  startdate="$(jq -r '.startdate' <<<"$json")"
+  fullstartdate="$(jq -r '.fullstartdate' <<<"$json")"
+  title="$(jq -r '.title' <<<"$json")"
+  gradient_angle="$(jq -r '.colors.gradient_angle' <<<"$json")"
+  gradient_from="$(jq -r '.colors.gradient_from' <<<"$json")"
+  gradient_to="$(jq -r '.colors.gradient_to' <<<"$json")"
+  copyright="$(jq -r '.copyright' <<<"$json")"
 
   # 4) Filename (unique per day; title sanitized)
   safe_title="${title//[^[:alnum:] _-]/}"

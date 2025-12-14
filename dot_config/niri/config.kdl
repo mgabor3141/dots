@@ -19,8 +19,7 @@ input {
     }
 
     disable-power-key-handling
-    focus-follows-mouse // max-scroll-amount="85%" // Automatically focus windows under the mouse pointer
-    workspace-auto-back-and-forth // Enable workspace back & forth switching
+    focus-follows-mouse max-scroll-amount="50%" // Automatically focus windows under the mouse pointer
 }
 
 gestures {
@@ -55,9 +54,39 @@ output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538" {
 }
 
 output "Dell Inc. DELL S2721D JRNFP43" {
+    position x=-2194 y=-200
     mode "2560x1440@74.971"
     variable-refresh-rate
     scale 1.25
+
+    layout {
+        always-center-single-column true
+    }
+}
+
+workspace "A" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "S" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "D" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "F" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "Q" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "W" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "E" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "R" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
 }
 
 // ────────────── Keybindings ──────────────
@@ -85,17 +114,20 @@ binds {
     F13                                 allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
 
     // ─── Window Movement and Focus ───
-    Mod+Shift+Alt+Q                              { close-window; }
+    Ctrl+Q                                       { close-window; }
 
     Mod+Shift+Alt+LEFT                           { focus-column-left; }
+    Mod+Shift+Alt+C                              { focus-column-left; }
     Mod+Shift+Alt+RIGHT                          { focus-column-right; }
-    // Mod+Shift+Alt+UP                             { focus-window-up; }
-    // Mod+Shift+Alt+DOWN                           { focus-window-down; }
+    Mod+Shift+Alt+V                              { focus-column-right; }
+
+    Mod+Shift+Alt+UP                             { focus-window-or-workspace-up; }
+    Mod+Shift+Alt+DOWN                           { focus-window-or-workspace-down; }
 
     Mod+Shift+Alt+Ctrl+LEFT                      { move-column-left; }
     Mod+Shift+Alt+Ctrl+RIGHT                     { move-column-right; }
-    Mod+Shift+Alt+Ctrl+UP                        { move-window-up; }
-    Mod+Shift+Alt+Ctrl+DOWN                      { move-window-down; }
+    // Mod+Shift+Alt+Ctrl+UP                        { move-window-up; }
+    // Mod+Shift+Alt+Ctrl+DOWN                      { move-window-down; }
 
     Mod+Shift+Alt+HOME                           { focus-column-first; }
     Mod+Shift+Alt+END                            { focus-column-last; }
@@ -109,38 +141,33 @@ binds {
     Mod+Shift+Alt+CTRL+PAGE_DOWN                 { move-column-to-monitor-right; }
 
     // ─── Workspace Switching ───
-    Mod+Shift+Alt+WHEELSCROLLDOWN                { focus-column-right; }
-    Mod+Shift+Alt+WHEELSCROLLUP                  { focus-column-left; }
+    Mod+Shift+Alt+WHEELSCROLLDOWN                { focus-window-down-or-column-right; }
+    Mod+Shift+Alt+WHEELSCROLLUP                  { focus-window-down-or-column-left; }
     Mod+Shift+Alt+CTRL+WHEELSCROLLDOWN           { move-column-right; }
     Mod+Shift+Alt+CTRL+WHEELSCROLLUP             { move-column-left; }
 
-    Mod+Shift+Alt+1                              { focus-workspace 1; }
-    Mod+Shift+Alt+2                              { focus-workspace 2; }
-    Mod+Shift+Alt+3                              { focus-workspace 3; }
-    Mod+Shift+Alt+4                              { focus-workspace 4; }
-    Mod+Shift+Alt+5                              { focus-workspace 5; }
-    Mod+Shift+Alt+6                              { focus-workspace 6; }
-    Mod+Shift+Alt+7                              { focus-workspace 7; }
-    Mod+Shift+Alt+8                              { focus-workspace 8; }
-    Mod+Shift+Alt+9                              { focus-workspace 9; }
+    Mod+Shift+Alt+Q                              { focus-workspace "Q"; }
+    Mod+Shift+Alt+W                              { focus-workspace "W"; }
+    Mod+Shift+Alt+E                              { focus-workspace "E"; }
+    Mod+Shift+Alt+R                              { focus-workspace "R"; }
+    Mod+Shift+Alt+A                              { focus-workspace "A"; }
+    Mod+Shift+Alt+S                              { focus-workspace "S"; }
+    Mod+Shift+Alt+D                              { focus-workspace "D"; }
+    Mod+Shift+Alt+F                              { focus-workspace "F"; }
 
-    Mod+Shift+Alt+UP                             { focus-workspace-up; }
-    Mod+Shift+Alt+DOWN                           { focus-workspace-down; }
+    Mod+Shift+Alt+Ctrl+Q                         { move-column-to-workspace "Q"; }
+    Mod+Shift+Alt+Ctrl+W                         { move-column-to-workspace "W"; }
+    Mod+Shift+Alt+Ctrl+E                         { move-column-to-workspace "E"; }
+    Mod+Shift+Alt+Ctrl+R                         { move-column-to-workspace "R"; }
+    Mod+Shift+Alt+Ctrl+A                         { move-column-to-workspace "A"; }
+    Mod+Shift+Alt+Ctrl+S                         { move-column-to-workspace "S"; }
+    Mod+Shift+Alt+Ctrl+D                         { move-column-to-workspace "D"; }
+    Mod+Shift+Alt+Ctrl+F                         { move-column-to-workspace "F"; }
 
-    Mod+Shift+Alt+CTRL+1                         { move-column-to-workspace 1; }
-    Mod+Shift+Alt+CTRL+2                         { move-column-to-workspace 2; }
-    Mod+Shift+Alt+CTRL+3                         { move-column-to-workspace 3; }
-    Mod+Shift+Alt+CTRL+4                         { move-column-to-workspace 4; }
-    Mod+Shift+Alt+CTRL+5                         { move-column-to-workspace 5; }
-    Mod+Shift+Alt+CTRL+6                         { move-column-to-workspace 6; }
-    Mod+Shift+Alt+CTRL+7                         { move-column-to-workspace 7; }
-    Mod+Shift+Alt+CTRL+8                         { move-column-to-workspace 8; }
-    Mod+Shift+Alt+CTRL+9                         { move-column-to-workspace 9; }
+    Mod+Shift+Alt+CTRL+UP                        { move-column-to-workspace-up; }
+    Mod+Shift+Alt+CTRL+DOWN                      { move-column-to-workspace-down; }
 
-    // Mod+Shift+Alt+CTRL+UP                        { move-column-to-workspace-up; }
-    // Mod+Shift+Alt+CTRL+DOWN                      { move-column-to-workspace-down; }
-
-    Mod+F20                                      { focus-workspace-previous; }
+    Mod+Shift+Alt+F20                                { focus-workspace-previous; }
 
     // ─── Layout Controls ───
     // Mod+Shift+Alt+CTRL+F                         { expand-column-to-available-width; }
@@ -228,6 +255,7 @@ binds {
 // ────────────── Animation Settings ──────────────
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Animations
     animations {
+        slowdown 0.5
         workspace-switch {
             spring damping-ratio=1.0 stiffness=1000 epsilon=0.0001
         }
@@ -371,6 +399,17 @@ binds {
             inactive-color "#7d0d2d"
         }
     }
+
+    window-rule {
+        match app-id="dev.zed.Zed"
+        open-on-workspace "S"
+    }
+
+    window-rule {
+        match app-id="zen"
+        open-on-workspace "A"
+    }
+
 
 // ────────────── Environment Variables ──────────────
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Miscellaneous#environment

@@ -1,0 +1,1 @@
+{{ includeTemplate "dot_profile.tmpl" . | replaceAllRegex "export ([A-Z_]+)=(.*)" "set -gx $1 $2" }}

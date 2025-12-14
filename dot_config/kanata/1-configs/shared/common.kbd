@@ -101,7 +101,7 @@
 (defalias
   meh   (multi @meh-modifiers
           (tap-hold-press 0 $ht
-              M-F20 XX
+              F20 XX
           )
         )
 )

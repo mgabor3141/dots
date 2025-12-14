@@ -3,7 +3,6 @@ Description=Kanata Service
 After=default.target
 
 [Service]
-ExecStartPre=/usr/bin/modprobe uinput
 ExecStart=/usr/bin/kanata -c %h/.config/kanata/1-configs/razer.kbd --port 53141
 Restart=no
 
