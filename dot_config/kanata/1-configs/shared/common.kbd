@@ -1,0 +1,140 @@
+;; Timing constants
+(defvar
+  hold-timeout  200
+  ht $hold-timeout
+
+  concurrent-timeout 30
+  ct $concurrent-timeout
+)
+
+;; Secondary is Meta (Cmd) on MacOS, Ctrl otherwise
+(platform (macos)
+  (defalias
+    lsecondary lmeta
+    rsecondary rmeta
+  )
+)
+(platform (linux)
+  (defalias
+    lsecondary lctrl
+    rsecondary rctrl
+  )
+)
+(defalias
+  lse @lsecondary
+  rse @rsecondary
+)
+
+;; MacOS specific remaps, intended to standardize key positions between platforms
+(platform (macos)
+  (defoverrides
+    ;; Meh + Space is Spotlight Search
+    (lctl lsft lalt spc) (sls)
+
+    ;; Ctrl + left/right/backspace/delete mapped to MacOS equivalents
+    (lmet left)      (lalt left)
+    (lmet right)     (lalt right)
+    (lmet bspc)      (lalt bspc)
+    (lmet del)       (lalt del)
+    ;; -- Exceptions --
+    (lmet lsft del)  (lmet lsft del)
+    (lmet lsft bspc) (lmet lsft bspc)
+
+    ;; Alt + left/right mapped to F keys so that they're still available
+    (lalt left)        (lalt f18)
+    (lalt right)       (lalt f19)
+    ;; -- Exceptions --
+    (lalt lmet left)   (lalt lmet left)
+    (lalt lctl left)   (lalt lctl left)
+    (lalt lmet right)  (lalt lmet right)
+    (lalt lctl right)  (lalt lctl right)
+
+    ;; Home and End key equivalents
+    (home)      (lmet left)
+    (end)       (lmet right)
+    ;; -- Exceptions --
+    (lmet home) (lmet home)
+    (lmet end)  (lmet end)
+  )
+)
+
+;; Hungarian keys
+(platform (macos)
+  (defalias
+    í     A-Numpad1    ;; Option + NumpadN bound via QWERTY.keylayout
+    ö     A-Numpad2
+    ü     A-Numpad3
+    ó     A-Numpad4
+    ő     A-Numpad5
+    ú     A-Numpad6
+    ű     A-Numpad7
+    é     A-Numpad8
+    á     A-Numpad9
+  )
+)
+(platform (linux)
+  (defalias
+    í     (unicode í)    ;; Option + NumpadN bound via QWERTY.keylayout
+    ö     (unicode ö)
+    ü     (unicode ü)
+    ó     (unicode ó)
+    ő     (unicode ő)
+    ú     (unicode ú)
+    ű     (unicode ű)
+    é     (unicode é)
+    á     (unicode á)
+  )
+)
+
+;; Meh key (becomes Hyper with +secondary)
+(platform (macos)
+  (defalias
+    meh-modifiers (multi lctl lalt lsft)
+  )
+)
+(platform (linux)
+  (defalias
+    meh-modifiers (multi lmet lalt lsft)
+  )
+)
+;; Send special key when meh is tapped (bound to "previous workspace")
+(defalias
+  meh   (multi @meh-modifiers
+          (tap-hold-press 0 $ht
+              M-F20 XX
+          )
+        )
+)
+
+;; This allows binding Ctrl+(Shift+)Tab to other keys with Ctrl held down
+(defvirtualkeys
+  ctrl lctl
+)
+
+(defalias
+  fn    (multi
+            (layer-toggle extend)
+            (on-release release-virtualkey ctrl)
+        )
+
+  cps   (multi
+            (tap-hold-press 0 $ht
+                esc
+                @lse
+            )
+            (on-release release-virtualkey ctrl)
+        )
+
+  ;; ctrl-tab, with ctrl held after
+  ctb   (multi
+            (release-key lmet)
+            (hold-for-duration 2000 ctrl)
+            lctl ;; this triggers the on-press
+            tab
+        )
+
+  bmt  (tap-hold-press 0 $ht
+            bspc  ;; tap
+            rmet  ;; hold
+        )
+)

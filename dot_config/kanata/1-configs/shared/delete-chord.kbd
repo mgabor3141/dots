@@ -1,0 +1,4 @@
+;; Equals key and Backspase key together => Delete key
+(defchordsv2
+    (= bspc) del $ct all-released ()
+)

@@ -3,6 +3,7 @@ cursor-bin
 dotool
 ianny-bin
 it87-dkms-git
+kanata-bin
 niri-git
 rustdesk-bin
 systemd-manager-tui-bin

@@ -1,0 +1,45 @@
+(defcfg
+  linux-dev-names-include (
+    "Razer Razer BlackWidow Ultimate"
+    "Razer Razer BlackWidow Ultimate Keyboard"
+  )
+
+  macos-dev-names-include (
+    "Razer BlackWidow Ultimate"
+  )
+
+  process-unmapped-keys yes
+  concurrent-tap-hold yes
+  log-layer-changes no
+  delegate-to-first-layer yes
+)
+
+(include shared/common.kbd)
+
+(defsrc
+        esc       f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12   ;; sys  slck brk
+  f13   grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc  ;; ins  home pgup
+  f14   tab  q    w    e    r    t    y    u    i    o    p    [    ]    \     ;; del  end  pgdn
+  f15   caps a    s    d    f    g    h    j    k    l    ;    '    ret
+  f16   lsft z    x    c    v    b    n    m    ,    .    /    rsft            ;;      up
+  f17   lctl lmet lalt           spc                 ralt f24  apps rctl       ;; left down rght
+)
+
+(deflayermap (base)
+  caps @cps
+
+  f17  @fn
+  lctl @lse
+  lmet lalt
+  lalt @meh
+  f24  @fn
+)
+
+(deflayer extend
+        _         _    _    _    _    _    _    _    _    _    _    _    _     ;; sys  slck brk
+  _     @í   _    _    _    _    _    _    _    _    _    @ö   @ü   @ó   _     ;; ins  home pgup
+  _     _    _    _    up   _    _    _    _    _    _    _    @ő   @ú   @ű    ;; del  end  pgdn
+  _     _    _    left down rght _    _    _    _    _    @é   @á   _
+  _     _    _    _    _    _    _    _    _    _    _    _    _               ;;      up
+  XX    lctl _    _              _                   _    _    _    _          ;; left down rght
+)

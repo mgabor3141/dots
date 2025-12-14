@@ -1,6 +1,9 @@
 README.md
 
 {{- if ne .chezmoi.os "linux" }}
+# Folders named "linux" anywhere
+**/linux/**
+
 # Folders
 .config/gtk-3.0
 .config/gtk-4.0
@@ -32,6 +35,9 @@ pacman
 {{- end }}
 
 {{- if ne .chezmoi.os "darwin" }}
+# Folders named "darwin" anywhere
+**/darwin/**
+
 Library
 
 .config/aerospace

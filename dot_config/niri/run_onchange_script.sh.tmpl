@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# {{ include (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "config.kdl") | sha256sum }}
+
+niri validate
