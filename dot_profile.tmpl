@@ -1,6 +1,9 @@
 export EDITOR=nano
 export VISUAL=zed
 
+# export LESS="-FR -j3 --color=always"
+# export PAGER="less -FR -j3 --color=always"
+
 {{- if eq .chezmoi.os "linux" }}
 export BROWSER=zen-browser
 
