@@ -1,6 +1,0 @@
-{{- if ne .chezmoi.os "darwin" }}
-darwin
-
-kanata-macbook-ansi.kbd
-kanata-macos-razer.kbd
-{{- end }}

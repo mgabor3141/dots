@@ -1,0 +1,11 @@
+#!/bin/bash
+# {{ include (joinPath (.chezmoi.targetFile | dir) "kanata.service") | sha256sum }}
+
+echo "Restarting kanata service..."
+
+systemctl --user daemon-reload
+systemctl --user enable kanata.service
+systemctl --user stop kanata.service
+systemctl --user start kanata.service
+
+sleep 2

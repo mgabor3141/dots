@@ -1,0 +1,24 @@
+#!/bin/bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+send_reload() {
+  local port="$1"
+  printf '{"Reload":{}}\n' |
+    nc -w 1 127.0.0.1 "$port"
+}
+
+# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../1-configs/**/*.kbd")) }}
+#   {{ include . | sha256sum }}
+# {{ end }}
+
+# {{ if eq .chezmoi.os "darwin" }}
+    kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../1-configs/macbook-ansi.kbd" }}
+# {{ end }}"
+
+kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../1-configs/razer.kbd" }}
+
+send_reload 53141
+send_reload 53142 || true
+
+echo "Kanata configuration applied"
