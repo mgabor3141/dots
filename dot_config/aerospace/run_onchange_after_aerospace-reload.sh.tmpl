@@ -1,6 +1,6 @@
 #!/bin/bash
 
 # This script will run if any of the following files have changed
-# aerospace.toml hash: {{ include "dot_config/aerospace/aerospace.toml" | sha256sum }}
+# {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "aerospace.toml" | include | sha256sum }}
 
 aerospace reload-config
