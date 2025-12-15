@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# This script will run if any of the following files have changed
-# flake.lock hash: {{ include "nix-darwin/flake.lock" | sha256sum }}
-# flake.nix.tmpl hash: {{ include "nix-darwin/flake.nix.tmpl" | sha256sum }}
-# darwin-config.nix hash: {{ include "nix-darwin/darwin-config.nix" | sha256sum }}
+# This script will run if any of the files in this directory have changed
+# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "*")) }}
+#   {{ include . | sha256sum }}
+# {{ end }}
 
 if ! nix --version >/dev/null 2>&1; then
   curl -fsSL https://install.determinate.systems/nix | sh -s -- install || {

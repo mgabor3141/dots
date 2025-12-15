@@ -23,10 +23,10 @@ wait_for_service() {
     done
 }
 
-# {{ include "dot_config/kanata/2-daemons/darwin/io.github.jtroo.kanata.macbook-ansi.plist.tmpl" | sha256sum }}
+# {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "io.github.jtroo.kanata.macbook-ansi.plist.tmpl" | include | sha256sum }}
 install_service io.github.jtroo.kanata.macbook-ansi
 
-# {{ include "dot_config/kanata/2-daemons/darwin/io.github.jtroo.kanata.macos-razer.plist.tmpl" | sha256sum }}
+# {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "io.github.jtroo.kanata.macos-razer.plist.tmpl" | include | sha256sum }}
 install_service io.github.jtroo.kanata.macos-razer
 
 echo "Waiting for services to come online..."
