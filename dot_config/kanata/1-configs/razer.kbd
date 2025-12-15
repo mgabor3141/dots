@@ -1,7 +1,11 @@
 (defcfg
+  ;; See: https://github.com/jtroo/kanata/issues/1479#issuecomment-3655060020
   macos-dev-names-include (
     "Razer BlackWidow Ultimate"
   )
+  ;; macos-dev-names-exclude (
+  ;;   "Apple Internal Keyboard / Trackpad"
+  ;; )
 
   linux-dev-names-include (
     "Razer Razer BlackWidow Ultimate"
