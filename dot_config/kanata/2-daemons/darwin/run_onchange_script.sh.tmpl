@@ -9,8 +9,8 @@ install_service() {
 
   echo "Installing $name..."
 
+  sudo rm /tmp/$name
   sudo cp -rf "$src" "$dst"
-  sudo launchctl bootout system "$dst" || true
   sudo launchctl bootstrap system "$dst"
   sudo launchctl enable "system/$name"
 }
@@ -23,6 +23,17 @@ wait_for_service() {
     done
 }
 
+# Clean up all services, even if they have been renamed
+shopt -s nullglob
+for plist in /Library/LaunchDaemons/io.github.jtroo.kanata.*; do
+    # Only act on regular files
+    if [[ -f "$plist" ]]; then
+        echo "Unloading: $plist"
+        sudo launchctl bootout system "$plist" || true
+        sudo rm "$plist"
+    fi
+done
+
 # {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "io.github.jtroo.kanata.macbook-ansi.plist.tmpl" | include | sha256sum }}
 install_service io.github.jtroo.kanata.macbook-ansi
 
@@ -34,7 +45,9 @@ wait_for_service io.github.jtroo.kanata.macbook-ansi
 wait_for_service io.github.jtroo.kanata.macos-razer
 
 # wait for kanata launch delay
-sleep 2
+sleep 3
+
+cat /tmp/io.github.jtroo.kanata.macbook-ansi
+cat /tmp/io.github.jtroo.kanata.macos-razer
 
 echo "Done setting up kanata services"
-echo "Don't forget to remove stale services if the names change"
