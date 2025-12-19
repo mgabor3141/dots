@@ -4,3 +4,8 @@
 # {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "aerospace.toml" | include | sha256sum }}
 
 aerospace reload-config
+
+if ! defaults read com.apple.dock expose-group-apps 2>/dev/null | grep -q '^1$'; then
+  defaults write com.apple.dock expose-group-apps -bool true
+  killall Dock
+fi
