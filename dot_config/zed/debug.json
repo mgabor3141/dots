@@ -7,9 +7,9 @@
       "--detectOpenHandles",
       "--verbose=false",
       "--testNamePattern",
-      "$ZED_SYMBOL",
+      "\"$ZED_SYMBOL\"",
       "--runTestsByPath",
-      "$ZED_FILE"
+      "\"$ZED_FILE\""
     ],
     "cwd": "$ZED_DIRNAME",
     "adapter": "JavaScript",
@@ -25,7 +25,7 @@
       "--detectOpenHandles",
       "--verbose=false",
       "--runTestsByPath",
-      "$ZED_FILE"
+      "\"$ZED_FILE\""
     ],
     "cwd": "$ZED_DIRNAME",
     "adapter": "JavaScript",

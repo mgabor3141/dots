@@ -13,9 +13,9 @@
       "--detectOpenHandles",
       "--verbose=false",
       "--testNamePattern",
-      "$ZED_SYMBOL",
+      "\"$ZED_SYMBOL\"",
       "--runTestsByPath",
-      "$ZED_FILE"
+      "\"$ZED_FILE\""
     ],
     "cwd": "$ZED_DIRNAME",
     "tags": ["ts-test", "js-test", "tsx-test"]
@@ -28,9 +28,9 @@
       "--detectOpenHandles",
       "--verbose=false",
       "--testNamePattern",
-      "$ZED_SYMBOL",
+      "\"$ZED_SYMBOL\"",
       "--runTestsByPath",
-      "$ZED_FILE"
+      "\"$ZED_FILE\""
     ],
     "cwd": "$ZED_DIRNAME",
     "tags": ["ts-test", "js-test", "tsx-test"]
