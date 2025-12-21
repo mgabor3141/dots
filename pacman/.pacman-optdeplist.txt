@@ -21,6 +21,5 @@ python-tqdm
 python-truststore
 qt5-x11extras
 rrdtool
-snap-pac
 speech-dispatcher
 xorg-xset
