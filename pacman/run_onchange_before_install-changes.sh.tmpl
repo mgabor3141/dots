@@ -1,0 +1,46 @@
+#!/bin/bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2; \
+      echo "Reboot, then run `chezmoi apply` again" >&2' ERR
+set -Eeuo pipefail
+
+# .pacman-pkglist.txt hash: {{ include "pacman/.pacman-pkglist.txt" | sha256sum }}
+# .pacman-optdeplist.txt hash: {{ include "pacman/.pacman-optdeplist.txt" | sha256sum }}
+# .pacman-foreignpkglist.txt hash: {{ include "pacman/.pacman-foreignpkglist.txt" | sha256sum }}
+
+NEEDED="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-pkglist.txt"
+OPTDEPS="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-optdeplist.txt"
+FOREIGN="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-foreignpkglist.txt"
+
+# Make sure files exist and are not empty
+[ -s $NEEDED ] || { echo "$NEEDED missing or empty"; exit 1; }
+[ -s $OPTDEPS ] || { echo "$OPTDEPS missing or empty"; exit 1; }
+[ -s $FOREIGN ] || { echo "$FOREIGN missing or empty"; exit 1; }
+
+echo ">>> Refreshing sync database"
+sudo pacman -Sy
+
+echo ">>> Installing"
+echo ">>>> Install needed packages"
+sudo pacman -S --needed - < "$NEEDED"
+
+echo ">>>> Install optional dependencies"
+sudo pacman -S --needed --asdeps - < "$OPTDEPS"
+
+echo ">>>> Install foreign packages"
+paru -S --needed - < "$FOREIGN"
+
+echo ">>> Remove packages that are installed but are not listed in files"
+echo ">>>> Installed"
+sudo pacman -Rsu --confirm $(comm -23 \
+    <(sudo pacman -Qqetn --confirm | sort) \
+    <(sort "$NEEDED")) || true
+
+echo ">>>> Optional"
+sudo pacman -Rsu --confirm $(comm -23 \
+    <(sudo pacman -Qqem --confirm | sort) \
+    <(sort "$FOREIGN")) || true
+
+echo ">>>> Foreign"
+sudo pacman -Rsu --confirm $(comm -23 \
+    <(sudo pacman -Qqem --confirm | sort) \
+    <(sort "$FOREIGN")) || true
