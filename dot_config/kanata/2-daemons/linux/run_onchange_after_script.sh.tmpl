@@ -1,0 +1,157 @@
+#!/bin/bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# Kanata service setup script adapted from
+#   https://github.com/jtroo/kanata/discussions/130#discussioncomment-12782201
+
+# ==============================================================================
+# Script to set up Kanata with a dedicated user and hardened systemd service
+# ==============================================================================
+
+# CONFIGURATION
+USER_KANATA_CONFIG_FILE="{{ joinPath (.chezmoi.targetFile | dir) "../../1-configs/razer.kbd" }}"
+USER_KANATA_CONFIG_DIR="{{ joinPath (.chezmoi.targetFile | dir) "../../1-configs" }}"
+
+# System location where the kanata config file will be placed
+SYSTEM_KANATA_CONFIG_DST="/etc/kanata"
+
+# Dedicated user/group names
+KANATA_USER="kanata"
+UINPUT_GROUP="uinput"
+
+# FUNCTION TO PRINT MESSAGES
+echoinfo() {
+    echo "[INFO] $1"
+}
+echoerror() {
+    echo "[ERROR] $1" >&2
+}
+
+# CHECK FOR ROOT/SUDO
+if [ "$(id -u)" -ne 0 ]; then
+    sudo "$0" "$@"
+    exit $?
+fi
+
+echoinfo "Using source config file: $USER_KANATA_CONFIG_FILE"
+
+echoinfo "Starting Kanata hardened setup..."
+
+#========================
+# STEP 1: Create User/Group
+#========================
+echoinfo "Creating group '$UINPUT_GROUP' (if it doesn't exist)..."
+groupadd "$UINPUT_GROUP" || echoinfo "Group '$UINPUT_GROUP' likely already exists."
+
+echoinfo "Creating user '$KANATA_USER' (if it doesn't exist)..."
+useradd --system --no-create-home --groups input,"$UINPUT_GROUP" --shell /bin/false --user-group "$KANATA_USER" || echoinfo "User '$KANATA_USER' likely already exists."
+
+#========================
+# STEP 2: Prepare Config Directory & Copy Config
+#========================
+echoinfo "Creating directory $SYSTEM_KANATA_CONFIG_DST..."
+rm -rf ${SYSTEM_KANATA_CONFIG_DST:-!?}
+mkdir -p $SYSTEM_KANATA_CONFIG_DST
+
+echoinfo "Copying Kanata config from $USER_KANATA_CONFIG_DIR to $SYSTEM_KANATA_CONFIG_DST..."
+cp -r ${USER_KANATA_CONFIG_DIR}/* "$SYSTEM_KANATA_CONFIG_DST/"
+if [ $? -ne 0 ]; then
+    echoerror "Failed to copy config files. Please check permissions and paths."
+    exit 1
+fi
+
+#========================
+# STEP 3: Set Config Permissions
+#========================
+echoinfo "Setting permissions on $SYSTEM_KANATA_CONFIG_DST..."
+chown -R root:"$KANATA_USER" "$SYSTEM_KANATA_CONFIG_DST"
+chmod -R g+rX "$SYSTEM_KANATA_CONFIG_DST"
+
+#========================
+# STEP 4: Create udev Rule
+#========================
+echoinfo "Creating udev rule for /dev/uinput..."
+echo "KERNEL==\"uinput\", MODE=\"0660\", GROUP=\"$UINPUT_GROUP\", OPTIONS+=\"static_node=uinput\"" > /etc/udev/rules.d/50-kanata.rules
+
+KANATA_BIN_PATH="/usr/bin/kanata"
+
+#========================
+# STEP 6: Create Systemd Service Unit
+#========================
+echoinfo "Creating systemd service file /etc/systemd/system/kanata.service..."
+# Use cat with EOF for cleaner multi-line definition
+cat << EOF > /etc/systemd/system/kanata.service
+[Unit]
+Description=Kanata keyboard remapper
+Documentation=https://github.com/jtroo/kanata
+Wants=modprobe@uinput.service
+After=modprobe@uinput.service
+
+[Service]
+Type=simple
+User=$KANATA_USER
+Group=$KANATA_USER
+ExecStart=$KANATA_BIN_PATH --cfg "$SYSTEM_KANATA_CONFIG_DST/razer.kbd"
+Restart=yes
+# Security
+CapabilityBoundingSet=
+DeviceAllow=/dev/uinput rw
+DeviceAllow=char-input
+DeviceAllow=/dev/stdin
+DevicePolicy=strict
+PrivateDevices=true
+BindPaths=/dev/uinput
+BindReadOnlyPaths=/dev/stdin
+BindReadOnlyPaths=/dev/input/
+InaccessiblePaths=/dev/shm
+LockPersonality=true
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateNetwork=true
+PrivateUsers=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectSystem=strict
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX # Allow only Unix sockets, deny others like network
+RestrictNamespaces=true
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+RemoveIPC=true
+IPAddressDeny=any
+RestrictSUIDSGID=true
+RestrictRealtime=true
+MemoryDenyWriteExecute=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+#========================
+# STEP 7: Reload Systemd, Enable & Start Service
+#========================
+echoinfo "Reloading systemd daemon..."
+systemctl daemon-reload
+
+echoinfo "Enabling kanata.service..."
+systemctl enable kanata.service
+
+echoinfo "Starting/Restarting kanata.service..."
+systemctl restart kanata.service
+
+
+echoinfo "Kanata setup script done"
+echoinfo "Waiting for kanata initial delay..."
+
+sleep 3
+
+echoinfo "Kanata setup script finished!"
+
+exit 0
