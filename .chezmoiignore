@@ -12,6 +12,7 @@ README.md
 .config/mako
 .config/MangoHud
 .config/niri
+.config/org.coolercontrol.CoolerControl
 .config/pipewire
 .config/systemd
 .config/qt5ct
@@ -22,6 +23,8 @@ README.md
 .config/xkb
 
 # Files
+.config/.dmenurc
+.config/dolphinrc
 .config/filetypesrc
 .config/kiorc
 .config/konsolerc
