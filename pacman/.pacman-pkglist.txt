@@ -8,6 +8,7 @@ base
 bluez-hid2hci
 bluez-utils
 btop
+btrfs-assistant
 cachyos-fish-config
 cachyos-gaming-applications
 cachyos-hello
@@ -20,9 +21,11 @@ cachyos-niri-settings
 cachyos-packageinstaller
 cachyos-plymouth-bootanimation
 cachyos-rate-mirrors
+cachyos-snapper-support
 cachyos-v3-mirrorlist
 cachyos-v4-mirrorlist
 cachyos-zsh-config
+cantarell-fonts
 chezmoi
 chromium
 coolercontrol
@@ -56,6 +59,7 @@ kitty
 lazygit
 libva-nvidia-driver
 libwnck3
+limine-snapper-sync
 linux-cachyos-headers
 linux-cachyos-lts-headers
 linux-cachyos-lts-nvidia-open
@@ -65,11 +69,13 @@ logrotate
 lsscsi
 man-pages
 meld
+mtools
 namcap
 nano-syntax-highlighting
 netctl
 networkmanager-openvpn
 nfs-utils
+niri
 nix
 noto-color-emoji-fontconfig
 ntp
@@ -78,6 +84,7 @@ nvidia-prime
 octopi
 ollama-cuda
 opendesktop-fonts
+os-prober
 parsec-bin
 partclone
 pavucontrol
@@ -95,7 +102,6 @@ sunshine
 swayidle
 systemd-boot-manager
 tailscale
-timeshift
 ttf-fira-code
 ttf-opensans
 udiskie
@@ -104,6 +110,7 @@ unrar
 vesktop-bin
 vi
 vlc-plugins-all
+waybar
 wayland-protocols
 wev
 xl2tpd
