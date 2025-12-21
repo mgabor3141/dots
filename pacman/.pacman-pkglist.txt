@@ -79,6 +79,7 @@ octopi
 ollama-cuda
 opendesktop-fonts
 parsec-bin
+partclone
 pavucontrol
 pv
 python-pywal
