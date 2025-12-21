@@ -114,7 +114,7 @@ binds {
     F13                                 allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
 
     // ─── Window Movement and Focus ───
-    Ctrl+Q                                       { close-window; }
+    Ctrl+Q                                       repeat=false { close-window; }
 
     Mod+Shift+Alt+LEFT                           { focus-column-or-monitor-left; }
     Mod+Shift+Alt+C                              { focus-column-or-monitor-left; }
@@ -141,8 +141,8 @@ binds {
     Mod+Shift+Alt+CTRL+PAGE_DOWN                 { move-column-to-monitor-right; }
 
     // ─── Workspace Switching ───
-    Mod+Shift+Alt+WHEELSCROLLUP                  { focus-column-left; }
-    Mod+Shift+Alt+WHEELSCROLLDOWN                { focus-column-right; }
+    Mod+Shift+Alt+WHEELSCROLLUP                  { focus-window-up-or-column-left; }
+    Mod+Shift+Alt+WHEELSCROLLDOWN                { focus-window-down-or-column-right; }
     Mod+Shift+Alt+CTRL+WHEELSCROLLUP             { move-column-left; }
     Mod+Shift+Alt+CTRL+WHEELSCROLLDOWN           { move-column-right; }
 
@@ -155,14 +155,14 @@ binds {
     Mod+Shift+Alt+D                              { focus-workspace "D"; }
     Mod+Shift+Alt+F                              { focus-workspace "F"; }
 
-    Mod+Shift+Alt+Ctrl+Q                         { move-column-to-workspace "Q"; }
-    Mod+Shift+Alt+Ctrl+W                         { move-column-to-workspace "W"; }
-    Mod+Shift+Alt+Ctrl+E                         { move-column-to-workspace "E"; }
-    Mod+Shift+Alt+Ctrl+R                         { move-column-to-workspace "R"; }
-    Mod+Shift+Alt+Ctrl+A                         { move-column-to-workspace "A"; }
-    Mod+Shift+Alt+Ctrl+S                         { move-column-to-workspace "S"; }
-    Mod+Shift+Alt+Ctrl+D                         { move-column-to-workspace "D"; }
-    Mod+Shift+Alt+Ctrl+F                         { move-column-to-workspace "F"; }
+    Mod+Shift+Alt+Ctrl+Q                         { move-column-to-workspace "Q" focus=false; }
+    Mod+Shift+Alt+Ctrl+W                         { move-column-to-workspace "W" focus=false; }
+    Mod+Shift+Alt+Ctrl+E                         { move-column-to-workspace "E" focus=false; }
+    Mod+Shift+Alt+Ctrl+R                         { move-column-to-workspace "R" focus=false; }
+    Mod+Shift+Alt+Ctrl+A                         { move-column-to-workspace "A" focus=false; }
+    Mod+Shift+Alt+Ctrl+S                         { move-column-to-workspace "S" focus=false; }
+    Mod+Shift+Alt+Ctrl+D                         { move-column-to-workspace "D" focus=false; }
+    Mod+Shift+Alt+Ctrl+F                         { move-column-to-workspace "F" focus=false; }
 
     Mod+Shift+Alt+CTRL+UP                        { move-column-to-workspace-up; }
     Mod+Shift+Alt+CTRL+DOWN                      { move-column-to-workspace-down; }
@@ -183,7 +183,7 @@ binds {
     Mod+Shift+Alt+Y                              { toggle-window-floating; }
     // Mod+Shift+Alt+T                              { maximize-column; }
     Mod+Shift+Alt+Ctrl+T                         { fullscreen-window; }
-    Mod+Shift+Alt+G                              { toggle-column-tabbed-display; }
+    Mod+Shift+Alt+B                              { toggle-column-tabbed-display; }
 
     // ─── Screenshots ───
     CTRL+SHIFT+1                                 { screenshot; }
@@ -293,10 +293,9 @@ binds {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Window-Rules
 
     window-rule {
-        match app-id=r#"discord$"#
         match app-id="vesktop"
-        match app-id="Spotify"
-        open-on-output "Dell Inc. DELL S2721D JRNFP43"
+        match app-id="spotify"
+        open-on-workspace "Q"
         open-focused false
         default-column-width {
             proportion 0.5
@@ -358,7 +357,7 @@ binds {
         match at-startup=true
 
         // Properties that apply continuously.
-        opacity 0.99999
+        opacity 0.99999 // Needed to avoid corner transparency rendering bug
         block-out-from "screencast"
         // block-out-from "screen-capture"
 
