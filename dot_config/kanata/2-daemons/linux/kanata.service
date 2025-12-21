@@ -4,7 +4,7 @@ After=default.target
 
 [Service]
 ExecStart=/usr/bin/kanata -c %h/.config/kanata/1-configs/razer.kbd --port 53141
-Restart=no
+Restart=yes
 
 [Install]
 WantedBy=default.target
