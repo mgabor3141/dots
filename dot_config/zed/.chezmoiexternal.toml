@@ -2,8 +2,8 @@
 
 ["_defaults/default-linux.json"]
     type = "file"
-    url = "https://raw.githubusercontent.com/zed-industries/zed/refs/tags/v{{ output "/bin/sh" "-c" "zed -v | awk '{print $2}'" | trim }}/assets/keymaps/default-linux.json"
+    url = "https://raw.githubusercontent.com/zed-industries/zed/refs/tags/v{{ output "/bin/sh" "-c" "(zed -v 2>/dev/null || zeditor -v) | awk '{print $2}'" | trim }}/assets/keymaps/default-linux.json"
 
 ["_defaults/vim.json"]
     type = "file"
-    url = "https://raw.githubusercontent.com/zed-industries/zed/refs/tags/v{{ output "/bin/sh" "-c" "zed -v | awk '{print $2}'" | trim }}/assets/keymaps/vim.json"
+    url = "https://raw.githubusercontent.com/zed-industries/zed/refs/tags/v{{ output "/bin/sh" "-c" "(zed -v 2>/dev/null || zeditor -v) | awk '{print $2}'" | trim }}/assets/keymaps/vim.json"
