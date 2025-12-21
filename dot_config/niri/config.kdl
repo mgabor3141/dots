@@ -77,10 +77,10 @@ workspace "F" {
     open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
 }
 workspace "Q" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+    open-on-output "Dell Inc. DELL S2721D JRNFP43"
 }
 workspace "W" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+    open-on-output "Dell Inc. DELL S2721D JRNFP43"
 }
 workspace "E" {
     open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
@@ -116,16 +116,16 @@ binds {
     // ─── Window Movement and Focus ───
     Ctrl+Q                                       { close-window; }
 
-    Mod+Shift+Alt+LEFT                           { focus-column-left; }
-    Mod+Shift+Alt+C                              { focus-column-left; }
-    Mod+Shift+Alt+RIGHT                          { focus-column-right; }
-    Mod+Shift+Alt+V                              { focus-column-right; }
+    Mod+Shift+Alt+LEFT                           { focus-column-or-monitor-left; }
+    Mod+Shift+Alt+C                              { focus-column-or-monitor-left; }
+    Mod+Shift+Alt+RIGHT                          { focus-column-or-monitor-right; }
+    Mod+Shift+Alt+V                              { focus-column-or-monitor-right; }
 
     Mod+Shift+Alt+UP                             { focus-window-or-workspace-up; }
     Mod+Shift+Alt+DOWN                           { focus-window-or-workspace-down; }
 
-    Mod+Shift+Alt+Ctrl+LEFT                      { move-column-left; }
-    Mod+Shift+Alt+Ctrl+RIGHT                     { move-column-right; }
+    Mod+Shift+Alt+Ctrl+LEFT                      { move-column-left-or-to-monitor-left; }
+    Mod+Shift+Alt+Ctrl+RIGHT                     { move-column-right-or-to-monitor-right; }
     // Mod+Shift+Alt+Ctrl+UP                        { move-window-up; }
     // Mod+Shift+Alt+Ctrl+DOWN                      { move-window-down; }
 
@@ -141,10 +141,10 @@ binds {
     Mod+Shift+Alt+CTRL+PAGE_DOWN                 { move-column-to-monitor-right; }
 
     // ─── Workspace Switching ───
-    Mod+Shift+Alt+WHEELSCROLLDOWN                { focus-window-down-or-column-right; }
-    Mod+Shift+Alt+WHEELSCROLLUP                  { focus-window-down-or-column-left; }
-    Mod+Shift+Alt+CTRL+WHEELSCROLLDOWN           { move-column-right; }
+    Mod+Shift+Alt+WHEELSCROLLUP                  { focus-column-left; }
+    Mod+Shift+Alt+WHEELSCROLLDOWN                { focus-column-right; }
     Mod+Shift+Alt+CTRL+WHEELSCROLLUP             { move-column-left; }
+    Mod+Shift+Alt+CTRL+WHEELSCROLLDOWN           { move-column-right; }
 
     Mod+Shift+Alt+Q                              { focus-workspace "Q"; }
     Mod+Shift+Alt+W                              { focus-workspace "W"; }
@@ -167,7 +167,7 @@ binds {
     Mod+Shift+Alt+CTRL+UP                        { move-column-to-workspace-up; }
     Mod+Shift+Alt+CTRL+DOWN                      { move-column-to-workspace-down; }
 
-    Mod+Shift+Alt+F20                                { focus-workspace-previous; }
+    Mod+Shift+Alt+F20                            { focus-workspace-previous; }
 
     // ─── Layout Controls ───
     // Mod+Shift+Alt+CTRL+F                         { expand-column-to-available-width; }
@@ -177,13 +177,13 @@ binds {
     // Mod+Shift+Alt+EQUAL                          { set-column-width "+10%"; }
     // Mod+Shift+Alt+SHIFT+MINUS                    { set-window-height "-10%"; }
     // Mod+Shift+Alt+SHIFT+EQUAL                    { set-window-height "+10%"; }
-    // Mod+Shift+Alt+R                              { switch-preset-column-width; }
+    Mod+Shift+Alt+T                              { switch-preset-column-width; }
 
     // ─── Modes ───
-    // Mod+Shift+Alt+T                              { toggle-window-floating; }
-    // Mod+Shift+Alt+F                              { maximize-column; }
-    // Mod+Shift+Alt+SHIFT+F                        { fullscreen-window; }
-    // Mod+Shift+Alt+W                              { toggle-column-tabbed-display; }
+    Mod+Shift+Alt+Y                              { toggle-window-floating; }
+    // Mod+Shift+Alt+T                              { maximize-column; }
+    Mod+Shift+Alt+Ctrl+T                         { fullscreen-window; }
+    Mod+Shift+Alt+G                              { toggle-column-tabbed-display; }
 
     // ─── Screenshots ───
     CTRL+SHIFT+1                                 { screenshot; }
@@ -230,6 +230,7 @@ binds {
             proportion 0.33333
             proportion 0.5
             proportion 0.66667
+            proportion 1.0
         }
 
         default-column-width {}
@@ -292,9 +293,9 @@ binds {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Window-Rules
 
     window-rule {
-        match app-id=r#"discord$"# at-startup=true
-        match app-id="vesktop" at-startup=true
-        match app-id="Spotify" at-startup=true
+        match app-id=r#"discord$"#
+        match app-id="vesktop"
+        match app-id="Spotify"
         open-on-output "Dell Inc. DELL S2721D JRNFP43"
         open-focused false
         default-column-width {
@@ -403,11 +404,13 @@ binds {
     window-rule {
         match app-id="dev.zed.Zed"
         open-on-workspace "S"
+        open-focused true
     }
 
     window-rule {
         match app-id="zen"
         open-on-workspace "A"
+        open-focused true
     }
 
 
