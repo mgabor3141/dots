@@ -3,17 +3,16 @@
   {
     "label": "diff",
     "command": "chezmoi diff",
-    "show_command": false
+    "show_command": false,
   },
   {
     "label": "apply",
     "command": "chezmoi apply",
     "show_command": false,
-    "reveal": "never"
   },
   {
     "label": "update",
     "command": "chezmoi update",
-    "show_command": false
-  }
+    "show_command": false,
+  },
 ]
