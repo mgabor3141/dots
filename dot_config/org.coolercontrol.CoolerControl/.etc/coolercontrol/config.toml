@@ -1,0 +1,257 @@
+# This is the CoolerControl configuration file.
+# Comments and most formatting is preserved.
+# Most of this file you can edit by hand, but it is recommended to stop the daemon when doing so.
+# -------------------------------
+
+
+# Unique ID Device List
+# -------------------------------
+# This is a simple UID and device name key-value pair, that is automatically generated at startup
+#  to help humans distinguish which UID belongs to which device in this config file.
+#  Only the device name is given here, complete Device information can be requested from the API.
+#  UIDs are generated sha256 hashes based on specific criteria to help determine device uniqueness.
+# ANY CHANGES WILL BE OVERWRITTEN.
+# Example:
+# 21091c4fb341ceab6236e8c9e905ccc263a4ac08134b036ed415925ba4c1645d = "Nvidia GPU"
+[devices]
+5153c5966680878f294ad5401db86dc0446cb4a095588ca6c708807af04c8e3d = "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz"
+17f3b2ffc9bbe8895e0fd93883c904a7aaca162878fd8a539cfa4f4ac9232307 = "gigabyte_wmi"
+691e7081bb6200c867c899de204315f307f4eaab3d594e0b80f200e94b7dc219 = "nvme1"
+f42333b13a2853dfb8e516c576470622e74a4659bfffe7ca229f68733beae979 = "acpitz"
+19e098e312e1b1b39163a343ea22b6ea17f18ec1a803ffe0ce44f5bacd6076ee = "Custom Sensors"
+33f022b13ddcf5eef2951eec6ee8e408eabdf92b3ae22bbc7d2c06decea183cb = "pch_cannonlake"
+568337579da7d84e9da34a40400764635a1b25773ca66f11a4dcb7b2d03050fc = "NVIDIA GeForce RTX 3080 Ti"
+8067df3c612703bdffa20254ec7ab8f7de7d1f89a16f9df02db3860965451000 = "nvme1"
+fa49f4645cba12961942172e0455e53675b4adbc2ed077a740863e40266e9803 = "it8688"
+138bbb6620b274867e872a56ecb2fd674bc169e35be77b2267b135b93e54e63d = "gigabyte_wmi"
+c12522959604eb3bba9f9414a7317b830d71909f4b214a8db9e614e9e10e6c68 = "nvme0"
+
+
+# Legacy690 Option for devices
+# -------------------------------
+# There are 2 Asetek 690LC liquid coolers that have the same device ID.
+#  To tell them apart we need user input to know which cooler we're actually dealing with.
+#  This is an assignment of liquidctl AseTek690LC device UIDs to true/false:
+#   true = Legacy690 Cooler aka NZXT Kraken X40, X60, X31, X41, X51 and X61
+#   false = Modern690 Cooler aka EVGA CLC 120 (CLC12), 240, 280 and 360
+# Example:
+# 21091c4fb341ceab6236e8c9e905ccc263a4ac08134b036ed415925ba4c1645d = true
+[legacy690]
+
+
+# Device Settings
+# -------------------------------
+# This is where CoolerControl will save device settings for the cooresponding device.
+# Settings can be set here also specifically by hand. (restart required for applying)
+# These settings are applied on startup and each is overwritten once a new setting
+# has been applied.
+# Example:
+# [device-settings.4b9cd1bc5fb2921253e6b7dd5b1b011086ea529d915a86b3560c236084452807]
+# pump = { speed_fixed = 30 }
+# logo = { lighting = { mode = "fixed", colors = [[0, 255, 255]] } }
+# ring = { lighting = { mode = "spectrum-wave", backward = true, colors = [] } }
+[device-settings]
+
+[device-settings.fa49f4645cba12961942172e0455e53675b4adbc2ed077a740863e40266e9803]
+fan3 = { profile_uid = "dee4f1e0-7f39-4b95-991b-b157c63d8304" }
+fan4 = { profile_uid = "c9b1aed8-78bf-49c5-ad83-4fbe3fb92fa4" }
+fan2 = { profile_uid = "dee4f1e0-7f39-4b95-991b-b157c63d8304" }
+fan1 = { profile_uid = "0ec1d851-697e-4b84-9ae4-afdb2e10b456" }
+
+[device-settings.568337579da7d84e9da34a40400764635a1b25773ca66f11a4dcb7b2d03050fc]
+fan1 = { profile_uid = "0" }
+fan2 = { profile_uid = "0" }
+
+
+# A list of profiles to be used with each device's settings
+# -------------------------------
+[[profiles]]
+uid = "0"
+name = "Default Profile"
+p_type = "Default"
+function = "0"
+
+[[profiles]]
+uid = "0ec1d851-697e-4b84-9ae4-afdb2e10b456"
+name = "CPU Fan"
+p_type = "Graph"
+speed_profile = [[20.0, 28], [44.6, 35], [60.0, 60], [70.0, 100], [100.0, 100]]
+temp_source = { temp_name = "temp1", device_uid = "5153c5966680878f294ad5401db86dc0446cb4a095588ca6c708807af04c8e3d" }
+temp_min = 20.0
+temp_max = 100.0
+function_uid = "60536540-2d6e-459e-91b5-38c2140941d7"
+offset_profile = []
+
+[[profiles]]
+uid = "a0432581-3fd4-428a-8abd-d16654e26edd"
+name = "GPU Fans"
+p_type = "Graph"
+speed_profile = [[20.0, 0], [54.0, 0], [70.0, 100], [100.0, 100]]
+temp_source = { temp_name = "GPU Temp", device_uid = "568337579da7d84e9da34a40400764635a1b25773ca66f11a4dcb7b2d03050fc" }
+temp_min = 20.0
+temp_max = 100.0
+function_uid = "02ba5ea0-89cc-4085-808f-c3b1cc97963b"
+offset_profile = []
+
+[[profiles]]
+uid = "dee4f1e0-7f39-4b95-991b-b157c63d8304"
+name = "Case Fans"
+p_type = "Mix"
+speed_profile = []
+function_uid = "0"
+member_profile_uids = ["0ec1d851-697e-4b84-9ae4-afdb2e10b456", "a0432581-3fd4-428a-8abd-d16654e26edd"]
+mix_function_type = "Max"
+offset_profile = []
+
+[[profiles]]
+uid = "c9b1aed8-78bf-49c5-ad83-4fbe3fb92fa4"
+name = "Bottom Case Fan"
+p_type = "Overlay"
+speed_profile = []
+function_uid = "0"
+member_profile_uids = ["dee4f1e0-7f39-4b95-991b-b157c63d8304"]
+offset_profile = [[0, -100], [69, -100], [70, 0], [89, 0], [90, 100], [100, 100]]
+
+# A list of functions to be applied to the various profiles
+# -------------------------------
+[[functions]]
+uid = "0"
+name = "Default Function"
+f_type = "Identity"
+
+[[functions]]
+uid = "02ba5ea0-89cc-4085-808f-c3b1cc97963b"
+name = "GPU Hysteresis"
+f_type = "Standard"
+duty_minimum = 5
+duty_maximum = 100
+response_delay = 3
+deviance = 4.0
+only_downward = true
+
+[[functions]]
+uid = "60536540-2d6e-459e-91b5-38c2140941d7"
+name = "CPU Hysteresis"
+f_type = "Standard"
+duty_minimum = 15
+duty_maximum = 100
+response_delay = 8
+deviance = 2.0
+only_downward = false
+
+
+# Cooler Control Settings
+# -------------------------------
+# This is where CoolerControl specifc general and specifc device settings are set. These device
+# settings differ from the above Device Settings, in that they are applied to CoolerControl,
+# and not on the devices themselves. For ex. settings such as disabling/enabling a particular device.
+[settings]
+
+# whether to apply the saved device settings on daemon startup
+apply_on_boot = true
+
+# Whether to enable the integration with liquidctl.
+# Disabling this will prevent any communication with liquidctl,
+# and all HWMon supported devices will be shown.
+liquidctl_integration = true
+
+# There are some devices that are supported both by liquidctl and hwmon drivers. Normally the
+# preference is to use liquidctl as it supports more features such as RGB control. There are
+# some cases where the hwmon driver is preferred though. Note: Care should be taken to blacklist
+# one of the devices to avoid needlessly loading the device IO and avoid concurrency issues.
+# Use at your own risk.
+hide_duplicate_devices = true
+
+# Will skip initialization calls for liquidctl devices. ONLY USE if you are doing initialiation manually.
+no_init = false
+
+# Startup Delay (seconds) is an integer value between 0 and 10
+startup_delay = 2
+
+# For ThinkPads, wheather to use the 'full-speed' option when settings the fan to 100%
+# This option drives the fan as fast as it can go, which might exceed hardware limits,
+# so use this level with caution.
+thinkpad_full_speed = false
+
+# API Address and Port:
+# The daemon by default uses port 11987 and the standard loopback IPv4 and IPv6 addresses.
+# You can set an IPv4, IPv6 or both addresses to listen on. An empty string will disable the address.
+# It is highly recommended to use the default settings unless you have a specific reason to change them
+# and understand the implications. The API is not secure and should not be exposed to a public network.
+# For more information see the project wiki.
+# Example:
+# port = 11987
+# ipv4_address = "127.0.0.1"
+# ipv6_address = "::1"
+
+# Whether to compress the response data from the API. This can reduce the size of the response
+# but will increase CPU usage. This is useful if you are running the API over a network.
+compress = false
+
+# The polling rate for sensor data collection. The default is 1.0 second. Limited to values
+# between 0.5 and 5.0 seconds in half-second increments.
+# Note: Caution should be used when using values less than 1.0.
+# poll_rate = 1.0
+
+# Whether to check if drivetemp supported drives are in a suspended state/spun down, and if so,
+# return 0C as their reporting temperature.
+drivetemp_suspend = false
+
+[settings.5153c5966680878f294ad5401db86dc0446cb4a095588ca6c708807af04c8e3d]
+name = "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz"
+disable = false
+
+[settings.5153c5966680878f294ad5401db86dc0446cb4a095588ca6c708807af04c8e3d.channel_settings]
+
+[settings.568337579da7d84e9da34a40400764635a1b25773ca66f11a4dcb7b2d03050fc]
+name = "NVIDIA GeForce RTX 3080 Ti"
+disable = false
+
+[settings.568337579da7d84e9da34a40400764635a1b25773ca66f11a4dcb7b2d03050fc.channel_settings]
+
+[settings.f42333b13a2853dfb8e516c576470622e74a4659bfffe7ca229f68733beae979]
+name = "acpitz"
+disable = true
+
+[settings.f42333b13a2853dfb8e516c576470622e74a4659bfffe7ca229f68733beae979.channel_settings]
+
+[settings.17f3b2ffc9bbe8895e0fd93883c904a7aaca162878fd8a539cfa4f4ac9232307]
+name = "gigabyte_wmi"
+disable = true
+
+[settings.17f3b2ffc9bbe8895e0fd93883c904a7aaca162878fd8a539cfa4f4ac9232307.channel_settings]
+
+[settings.fa49f4645cba12961942172e0455e53675b4adbc2ed077a740863e40266e9803]
+name = "Gigabyte Z390 GAMING X-CF"
+disable = false
+
+[settings.fa49f4645cba12961942172e0455e53675b4adbc2ed077a740863e40266e9803.channel_settings]
+fan5 = { label = "Fan5", disabled = true }
+
+[settings.8067df3c612703bdffa20254ec7ab8f7de7d1f89a16f9df02db3860965451000]
+name = "Samsung SSD 970 EVO 500GB"
+disable = true
+
+[settings.8067df3c612703bdffa20254ec7ab8f7de7d1f89a16f9df02db3860965451000.channel_settings]
+
+[settings.691e7081bb6200c867c899de204315f307f4eaab3d594e0b80f200e94b7dc219]
+name = "WDC PC SN730 SDBQNTY-256G-1001"
+disable = false
+
+[settings.691e7081bb6200c867c899de204315f307f4eaab3d594e0b80f200e94b7dc219.channel_settings]
+
+[settings.33f022b13ddcf5eef2951eec6ee8e408eabdf92b3ae22bbc7d2c06decea183cb]
+name = "pch_cannonlake"
+disable = true
+
+[settings.33f022b13ddcf5eef2951eec6ee8e408eabdf92b3ae22bbc7d2c06decea183cb.channel_settings]
+
+[settings.c12522959604eb3bba9f9414a7317b830d71909f4b214a8db9e614e9e10e6c68]
+name = "CT1000P3PSSD8"
+disable = true
+
+[settings.c12522959604eb3bba9f9414a7317b830d71909f4b214a8db9e614e9e10e6c68.channel_settings]
+
+# CoolerControl Device settings Example:
+# [settings.4b9cd1bc5fb2921253e6b7dd5b1b011086ea529d915a86b3560c236084452807]
+# disabled = true
