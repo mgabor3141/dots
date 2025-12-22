@@ -5,6 +5,7 @@ README.md
 **/linux/**
 
 # Folders
+.config/autostart
 .config/gtk-3.0
 .config/gtk-4.0
 .config/io.github.zefr0x.ianny
