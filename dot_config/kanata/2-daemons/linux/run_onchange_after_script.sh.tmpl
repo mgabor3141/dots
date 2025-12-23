@@ -28,7 +28,7 @@ echoerror() {
     echo "[ERROR] $1" >&2
 }
 
-# CHECK FOR ROOT/SUDO
+# Upgrade to sudo
 if [ "$(id -u)" -ne 0 ]; then
     sudo "$0" "$@"
     exit $?

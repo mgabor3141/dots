@@ -34,6 +34,8 @@
 .config/pavucontrol.ini
 .config/user-dirs.dirs
 .config/user-dirs.locale
+
+.config/sleep.sh
 .config/theme.sh
 
 pacman
