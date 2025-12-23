@@ -1,1 +1,1 @@
-/Users/mg/.zen/user.js
+/home/mg/.zen/user.js
