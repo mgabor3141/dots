@@ -13,7 +13,7 @@ user_pref(
 );
 user_pref("general.autoScroll", true);
 user_pref("layout.css.backdrop-filter.force-enabled", true);
-user_pref("permissions.default.shortcuts", 2);
+user_pref("permissions.default.shortcuts", 3);
 user_pref("privacy.donottrackheader.enabled", true);
 user_pref("zen.urlbar.behavior", "float");
 user_pref("zen.view.experimental-no-window-controls", true);
