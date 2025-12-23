@@ -91,7 +91,7 @@ pamixer
 parsec-bin
 partclone
 pavucontrol
-polkit-kde-agent
+polkit-gnome
 pv
 python-pywal
 qt5ct
