@@ -77,7 +77,11 @@ window#waybar {
     color: @background;
     background: @highlight;
     transition-property: background-color;
-    transition-duration: 0.5s;
+    transition-duration: 0.25s;
+}
+
+#workspaces button.empty {
+    opacity: 0.25;
 }
 
 #workspaces button:not(.active):hover {

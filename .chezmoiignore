@@ -34,6 +34,7 @@ README.md
 .config/pavucontrol.ini
 .config/user-dirs.dirs
 .config/user-dirs.locale
+.config/theme.sh
 
 pacman
 {{- end }}
