@@ -12,13 +12,13 @@
     ],
 
     "modules-left": [
-        // "custom/appmenu",
+        "custom/appmenu",
         "wlr/taskbar",
         "niri/window"
     ],
 
     "modules-center": [
-        "custom/niri-overview",
+        // "custom/niri-overview",
         "niri/workspaces"
     ],
 

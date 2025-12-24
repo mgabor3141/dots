@@ -1,3 +1,5 @@
+/* https://docs.gtk.org/gtk3/css-overview.html */
+
 @define-color background #0f1117;
 @define-color item-background #1e222a;
 @define-color text #e0e0e0;
@@ -24,12 +26,12 @@ window#waybar {
 /* Left-most: Arch icon */
 #custom-appmenu {
     font-size: 4px;
-    background-image: url("/usr/share/icons/cachyos.svg");
+    background-image: url("/home/mg/.config/waybar/logo.png");
     background-color: @item-background;
     background-position: center;
     background-repeat: no-repeat;
-    background-size: contain;
-    padding: 0px 12px;
+    background-size: 16px 16px;
+    padding: 0px 12px 0 16px;
 }
 
 /* Right-most: Clock */
@@ -90,13 +92,13 @@ window#waybar {
 
 /* Power/exit button */
 #custom-exit {
-    background-color: @highlight;
+    background-color: @item-background;
     transition-property: background-color;
     transition-duration: 0.5s;
     font-size: 14px;
     font-weight: 800;
-    color: @background;
-    padding: 0 8px 0 6px;
+    color: @text;
+    padding: 0 8px 0 0;
     /*margin: 2px 2px 2px 0;*/
 }
 
