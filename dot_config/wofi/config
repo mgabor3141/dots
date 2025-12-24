@@ -5,4 +5,5 @@ term=kitty
 mode=drun
 prompt=Launch
 insensitive=true
---show
+layer=overlay
+single_click=true
