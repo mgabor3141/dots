@@ -75,7 +75,6 @@ mtools
 namcap
 nano-syntax-highlighting
 netctl
-networkmanager-openvpn
 nfs-utils
 niri
 nix
