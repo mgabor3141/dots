@@ -12,35 +12,33 @@ OPTDEPS="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-optdep
 FOREIGN="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-foreignpkglist.txt"
 
 # Make sure files exist and are not empty
-[ -s $NEEDED ] || { echo "$NEEDED missing or empty"; exit 1; }
-[ -s $OPTDEPS ] || { echo "$OPTDEPS missing or empty"; exit 1; }
-[ -s $FOREIGN ] || { echo "$FOREIGN missing or empty"; exit 1; }
+[ -s $NEEDED ] || { echo "❌ [ERROR] $NEEDED missing or empty"; exit 1; }
+[ -s $OPTDEPS ] || { echo "❌ [ERROR] $OPTDEPS missing or empty"; exit 1; }
+[ -s $FOREIGN ] || { echo "❌ [ERROR] $FOREIGN missing or empty"; exit 1; }
 
 echo ">>> Refreshing sync database"
 sudo pacman -Sy
 
-echo ">>> Installing"
-echo ">>>> Install needed packages"
+echo ">>> Installing packages"
 sudo pacman -S --needed - < "$NEEDED"
 
-echo ">>>> Install optional dependencies"
+echo ">>> Installing optional dependencies"
 sudo pacman -S --needed --asdeps - < "$OPTDEPS"
 
-echo ">>>> Install foreign packages"
+echo ">>> Installing foreign packages"
 paru -S --needed - < "$FOREIGN"
 
-echo ">>> Remove packages that are installed but are not listed in files"
-echo ">>>> Installed"
+echo ">>> Uninstalling removed packages (error means nothing to do)"
 sudo pacman -Rsu --confirm $(comm -23 \
     <(sudo pacman -Qqetn --confirm | sort) \
     <(sort "$NEEDED")) || true
 
-echo ">>>> Optional"
+echo ">>> Uninstalling removed optional dependencies (error means nothing to do)"
 sudo pacman -Rsu --confirm $(comm -23 \
     <(sudo pacman -Qqem --confirm | sort) \
     <(sort "$FOREIGN")) || true
 
-echo ">>>> Foreign"
+echo ">>> Uninstalling removed foreign packages (error means nothing to do)"
 sudo pacman -Rsu --confirm $(comm -23 \
     <(sudo pacman -Qqem --confirm | sort) \
     <(sort "$FOREIGN")) || true
