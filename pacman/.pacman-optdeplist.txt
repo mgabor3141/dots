@@ -3,6 +3,7 @@ evince
 ffmpegthumbs
 filelight
 flite
+glib2-devel
 kde-cli-tools
 kdegraphics-thumbnailers
 kdenetwork-filesharing
@@ -10,14 +11,13 @@ kdf
 kio-admin
 kompare
 konsole
-ninja
+libappindicator
 pigz
 pulse-native-provider
 purpose
 python-html5lib
 python-pygments
 python-scipy
-python-tqdm
 python-truststore
 qt5-x11extras
 rrdtool
