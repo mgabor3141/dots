@@ -96,8 +96,8 @@ binds {
     Mod+Shift+Alt+Escape                         { show-hotkey-overlay; }
 
     // ─── Applications ───
-    Mod+Shift+Alt+RETURN                         hotkey-overlay-title="Open Terminal: kitty" { spawn-sh "kitty"; }
-    Mod+Shift+Alt+SPACE                          hotkey-overlay-title="Open App Launcher: wofi" { spawn-sh "wofi --conf ~/.config/wofi/config --style ~/.config/wofi/style.css -replace"; }
+    Mod+Shift+Alt+RETURN                         hotkey-overlay-title="Open Terminal" { spawn-sh "kitty"; }
+    Mod+Shift+Alt+SPACE                          hotkey-overlay-title="Open Launcher" { spawn-sh "wofi"; }
 
     // ─── Audio Controls ───
     // Example volume keys mappings for PipeWire & WirePlumber.
@@ -293,30 +293,9 @@ binds {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Window-Rules
 
     window-rule {
-        match app-id="spotify"
-        open-on-workspace "Q"
-        default-column-width {
-            proportion 0.33333
-        }
-    }
-
-    window-rule {
-        match app-id="vesktop"
-        open-on-workspace "Q"
-        default-column-width {
-            proportion 0.66667
-        }
-    }
-
-    window-rule {
         match app-id=r#"(firefox|zen)$"# title="^Picture-in-Picture$" // Always float Firefox PiP windows
         match app-id="steam" title="Friends List"
         open-floating true
-    }
-
-    window-rule {
-        match app-id="zen"
-        draw-border-with-background false
     }
 
     // Example: block out windows from screen capture.
@@ -406,18 +385,6 @@ binds {
         }
     }
 
-    window-rule {
-        match app-id="dev.zed.Zed"
-        open-on-workspace "S"
-        open-focused true
-    }
-
-    window-rule {
-        match app-id="zen"
-        open-on-workspace "A"
-        open-focused true
-    }
-
 
 // ────────────── Environment Variables ──────────────
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Miscellaneous#environment
@@ -437,4 +404,41 @@ binds {
 
     debug {
         // preview-render "screencast"
+    }
+
+// Custom window workspaces and positions
+
+    window-rule {
+        match app-id="zen"
+        draw-border-with-background false
+        open-on-workspace "A"
+        default-column-width {
+            proportion 0.9
+        }
+    }
+
+    window-rule {
+        match app-id="dev.zed.Zed"
+        open-on-workspace "S"
+    }
+
+    window-rule {
+        match app-id="steam"
+        open-on-workspace "D"
+    }
+
+    window-rule {
+        match app-id="spotify"
+        open-on-workspace "Q"
+        default-column-width {
+            proportion 0.42
+        }
+    }
+
+    window-rule {
+        match app-id="vesktop"
+        open-on-workspace "Q"
+        default-column-width {
+            proportion 0.58
+        }
     }
