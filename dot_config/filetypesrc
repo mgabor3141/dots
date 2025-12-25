@@ -1,3 +1,4 @@
 [EmbedSettings]
 embed-application/pdf=false
 embed-application/yaml=false
+embed-image/png=false
