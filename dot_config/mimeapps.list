@@ -1,4 +1,5 @@
 [Added Associations]
+application/json=dev.zed.Zed.desktop;
 application/pdf=evince-previewer.desktop;zen-browser.desktop;
 application/x-extension-htm=zen.desktop;
 application/x-extension-html=zen.desktop;
@@ -7,14 +8,15 @@ application/x-extension-xht=zen.desktop;
 application/x-extension-xhtml=zen.desktop;
 application/xhtml+xml=zen.desktop;
 application/yaml=zeditor.desktop;
+image/png=zen-browser.desktop;
 text/html=zen.desktop;
 text/x-csrc=dev.zed.Zed.desktop;
 x-scheme-handler/chrome=zen.desktop;
 x-scheme-handler/http=zen.desktop;
 x-scheme-handler/https=zen.desktop;
-application/json=dev.zed.Zed.desktop;
 
 [Default Applications]
+application/json=dev.zed.Zed.desktop
 application/pdf=evince-previewer.desktop;
 application/x-extension-htm=zen.desktop
 application/x-extension-html=zen.desktop
@@ -23,10 +25,10 @@ application/x-extension-xht=zen.desktop
 application/x-extension-xhtml=zen.desktop
 application/xhtml+xml=zen.desktop
 application/yaml=zeditor.desktop;
+image/png=zen-browser.desktop;
 text/html=zen.desktop
 text/x-csrc=dev.zed.Zed.desktop
 x-scheme-handler/chrome=zen.desktop
 x-scheme-handler/discord=vesktop.desktop
 x-scheme-handler/http=zen.desktop
 x-scheme-handler/https=zen.desktop
-application/json=dev.zed.Zed.desktop
