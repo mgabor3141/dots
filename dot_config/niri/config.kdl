@@ -207,6 +207,10 @@ binds {
     spawn-sh-at-startup "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &" // Polkit
     spawn-sh-at-startup "swww-daemon --layer bottom && swww restore" // Wallpaper
     spawn-sh-at-startup "swww-daemon --namespace backdrop && swww restore --namespace backdrop" // Overview backdrop
+
+    // Mute indicator
+    spawn-sh-at-startup "pactl subscribe | ~/.config/waybar-mute-indicator/handle-mute-events.sh"
+
     spawn-at-startup    "bing-wallpaper.sh"
     spawn-at-startup    "swayidle" "-w" \
         "timeout" "300" "niri msg action power-off-monitors" \
@@ -348,17 +352,13 @@ binds {
 
         shadow {
             on
-            // off
             softness 40
             spread 5
             offset x=0 y=5
             draw-behind-window true
             color "#00000064"
-            // inactive-color "#00000064"
         }
 
-        geometry-corner-radius 12
-        place-within-backdrop true
         // baba-is-float true
     }
 
@@ -420,6 +420,7 @@ binds {
     window-rule {
         match app-id="dev.zed.Zed"
         open-on-workspace "S"
+        open-focused true
     }
 
     window-rule {

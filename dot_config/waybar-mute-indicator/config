@@ -1,0 +1,12 @@
+{
+    "layer": "overlay",
+    "position": "bottom",
+    "margin-bottom": -4,
+    "width": 500,
+    "margin-left": 6,
+    "margin-right": 6,
+    "exclusive": false,
+    "start_hidden": true,
+    "on-sigusr1": "show",
+    "on-sigusr2": "hide"
+}
