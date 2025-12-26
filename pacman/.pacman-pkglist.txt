@@ -56,6 +56,7 @@ impression
 inetutils
 intel-ucode
 jfsutils
+jujutsu
 kitty
 kvantum-theme-nordic-git
 lazygit
