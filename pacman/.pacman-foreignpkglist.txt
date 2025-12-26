@@ -1,5 +1,6 @@
 blackwidow-macro-git
 cursor-bin
+customizepkg-git
 ianny-bin
 it87-dkms-git
 kanata-bin
@@ -8,5 +9,6 @@ nautilus-gnome-disks
 rustdesk-bin
 systemd-manager-tui-bin
 systemd-numlockontty
+vesktop-git
 webstorm
 webstorm-jre
