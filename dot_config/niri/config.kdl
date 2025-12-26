@@ -114,7 +114,7 @@ binds {
     F13                                 allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
 
     // ─── Window Movement and Focus ───
-    Ctrl+Q                                       repeat=false { close-window; }
+    Mod+Shift+Alt+X                              repeat=false { close-window; }
 
     Mod+Shift+Alt+LEFT                           { focus-column-or-monitor-left; }
     Mod+Shift+Alt+C                              { focus-column-or-monitor-left; }
