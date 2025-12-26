@@ -10,12 +10,14 @@ while IFS= read -r line; do
 
             if pactl get-source-mute @DEFAULT_SOURCE@ | grep -q "Mute: yes"; then
                 # Muted
-                systemctl --user kill --signal SIGUSR1 waybar-mute-indicator.service
+                systemctl --user kill --signal SIGUSR1 waybar-mute-indicator.service || true
                 niri msg action set-window-urgent --id "$discord_id" || true
+                echo "VCD_SELF_MUTE" >> $XDG_RUNTIME_DIR/vesktop-ipc || true
             else
                 # Unmuted
-                systemctl --user kill --signal SIGUSR2 waybar-mute-indicator.service
+                systemctl --user kill --signal SIGUSR2 waybar-mute-indicator.service || true
                 niri msg action unset-window-urgent --id "$discord_id" || true
+                echo "VCD_SELF_UNMUTE" >> $XDG_RUNTIME_DIR/vesktop-ipc || true
             fi
             ;;
     esac

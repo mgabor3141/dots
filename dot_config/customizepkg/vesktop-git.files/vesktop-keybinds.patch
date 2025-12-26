@@ -1,0 +1,214 @@
+Index: src/main/constants.ts
+===================================================================
+diff --git a/src/main/constants.ts b/src/main/constants.ts
+--- a/src/main/constants.ts	(revision 0f509b002dfd62721b500726b85fc301964cef31)
++++ b/src/main/constants.ts	(revision 328710d112d1aba6dbb3b7b9431938a9c1be244d)
+@@ -59,3 +59,7 @@
+ }
+ 
+ export const IS_FLATPAK = process.env.FLATPAK_ID !== undefined;
++
++export const isWayland =
++    process.platform === "linux" && (process.env.XDG_SESSION_TYPE === "wayland" || !!process.env.WAYLAND_DISPLAY);
++export const isLinux = process.platform === "linux";
+Index: src/main/keybinds.ts
+===================================================================
+diff --git a/src/main/keybinds.ts b/src/main/keybinds.ts
+new file mode 100644
+--- /dev/null	(revision 328710d112d1aba6dbb3b7b9431938a9c1be244d)
++++ b/src/main/keybinds.ts	(revision 328710d112d1aba6dbb3b7b9431938a9c1be244d)
+@@ -0,0 +1,83 @@
++/*
++ * Vesktop, a desktop app aiming to give you a snappier Discord Experience
++ * Copyright (c) 2024 Vendicated and Vencord contributors
++ * SPDX-License-Identifier: GPL-3.0-or-later
++ */
++
++import { spawnSync } from "node:child_process";
++import { constants, existsSync, open, unlinkSync } from "node:fs";
++import { join } from "node:path";
++
++import { Socket } from "net";
++import { IpcEvents } from "shared/IpcEvents";
++
++import { mainWin } from "./mainWindow";
++
++const xdgRuntimeDir = process.env.XDG_RUNTIME_DIR || process.env.TMP || "/tmp";
++const socketFile = join(xdgRuntimeDir, "vesktop-ipc");
++
++const Actions = new Set([
++    IpcEvents.TOGGLE_SELF_MUTE,
++    IpcEvents.SELF_MUTE,
++    IpcEvents.SELF_UNMUTE,
++    IpcEvents.TOGGLE_SELF_DEAF
++]);
++
++function createFIFO() {
++    if (existsSync(socketFile)) {
++        try {
++            unlinkSync(socketFile);
++        } catch (err) {
++            console.error("Failed to remove existing mkfifo file:", err);
++            return false;
++        }
++    }
++
++    try {
++        spawnSync("mkfifo", [socketFile]);
++    } catch (err) {
++        console.error("Failed to create mkfifo while initializing keybinds:", err);
++        return false;
++    }
++    return true;
++}
++
++function openFIFO() {
++    try {
++        open(socketFile, constants.O_RDONLY | constants.O_NONBLOCK, (err, fd) => {
++            if (err) {
++                console.error("Error opening pipe while initializing keybinds:", err);
++                return;
++            }
++
++            const pipe = new Socket({ fd });
++            pipe.on("data", data => {
++                const action = data.toString().trim();
++                if (Actions.has(action as IpcEvents)) {
++                    mainWin.webContents.send(action);
++                }
++            });
++
++            pipe.on("end", () => {
++                pipe.destroy();
++                openFIFO();
++            });
++        });
++    } catch (err) {
++        console.error("Can't open socket file.", err);
++    }
++}
++
++function cleanup() {
++    try {
++        unlinkSync(socketFile);
++    } catch (err) {}
++}
++
++process.on("exit", cleanup);
++
++export function initKeybinds() {
++    if (createFIFO()) {
++        openFIFO();
++    }
++}
+Index: src/main/mainWindow.ts
+===================================================================
+diff --git a/src/main/mainWindow.ts b/src/main/mainWindow.ts
+--- a/src/main/mainWindow.ts	(revision 0f509b002dfd62721b500726b85fc301964cef31)
++++ b/src/main/mainWindow.ts	(revision 328710d112d1aba6dbb3b7b9431938a9c1be244d)
+@@ -24,10 +24,11 @@
+ import { createAboutWindow } from "./about";
+ import { initArRPC } from "./arrpc";
+ import { CommandLine } from "./cli";
+-import { BrowserUserAgent, DEFAULT_HEIGHT, DEFAULT_WIDTH, MIN_HEIGHT, MIN_WIDTH } from "./constants";
++import { BrowserUserAgent, DEFAULT_HEIGHT, DEFAULT_WIDTH, isLinux, MIN_HEIGHT, MIN_WIDTH } from "./constants";
+ import { AppEvents } from "./events";
+ import { darwinURL } from "./index";
+ import { sendRendererCommand } from "./ipcCommands";
++import { initKeybinds } from "./keybinds";
+ import { Settings, State, VencordSettings } from "./settings";
+ import { createSplashWindow, updateSplashMessage } from "./splash";
+ import { destroyTray, initTray } from "./tray";
+@@ -483,4 +484,5 @@
+     });
+ 
+     initArRPC();
++    if (isLinux) initKeybinds();
+ }
+Index: src/main/screenShare.ts
+===================================================================
+diff --git a/src/main/screenShare.ts b/src/main/screenShare.ts
+--- a/src/main/screenShare.ts	(revision 0f509b002dfd62721b500726b85fc301964cef31)
++++ b/src/main/screenShare.ts	(revision 328710d112d1aba6dbb3b7b9431938a9c1be244d)
+@@ -8,12 +8,10 @@
+ import type { StreamPick } from "renderer/components/ScreenSharePicker";
+ import { IpcCommands, IpcEvents } from "shared/IpcEvents";
+ 
++import { isWayland } from "./constants";
+ import { sendRendererCommand } from "./ipcCommands";
+ import { handle } from "./utils/ipcWrappers";
+ 
+-const isWayland =
+-    process.platform === "linux" && (process.env.XDG_SESSION_TYPE === "wayland" || !!process.env.WAYLAND_DISPLAY);
+-
+ export function registerScreenShareHandler() {
+     handle(IpcEvents.CAPTURER_GET_LARGE_THUMBNAIL, async (_, id: string) => {
+         const sources = await desktopCapturer.getSources({
+Index: src/preload/VesktopNative.ts
+===================================================================
+diff --git a/src/preload/VesktopNative.ts b/src/preload/VesktopNative.ts
+--- a/src/preload/VesktopNative.ts	(revision 0f509b002dfd62721b500726b85fc301964cef31)
++++ b/src/preload/VesktopNative.ts	(revision 328710d112d1aba6dbb3b7b9431938a9c1be244d)
+@@ -98,6 +98,20 @@
+         copyImage: (imageBuffer: Uint8Array, imageSrc: string) =>
+             invoke<void>(IpcEvents.CLIPBOARD_COPY_IMAGE, imageBuffer, imageSrc)
+     },
++    voice: {
++        onToggleSelfMute: (listener: (...args: any[]) => void) => {
++            ipcRenderer.on(IpcEvents.TOGGLE_SELF_MUTE, listener);
++        },
++        onSelfMute: (listener: (...args: any[]) => void) => {
++            ipcRenderer.on(IpcEvents.SELF_MUTE, listener);
++        },
++        onSelfUnmute: (listener: (...args: any[]) => void) => {
++            ipcRenderer.on(IpcEvents.SELF_UNMUTE, listener);
++        },
++        onToggleSelfDeaf: (listener: (...args: any[]) => void) => {
++            ipcRenderer.on(IpcEvents.TOGGLE_SELF_DEAF, listener);
++        }
++    },
+     debug: {
+         launchGpu: () => invoke<void>(IpcEvents.DEBUG_LAUNCH_GPU),
+         launchWebrtcInternals: () => invoke<void>(IpcEvents.DEBUG_LAUNCH_WEBRTC_INTERNALS)
+Index: src/renderer/index.ts
+===================================================================
+diff --git a/src/renderer/index.ts b/src/renderer/index.ts
+--- a/src/renderer/index.ts	(revision 0f509b002dfd62721b500726b85fc301964cef31)
++++ b/src/renderer/index.ts	(revision 328710d112d1aba6dbb3b7b9431938a9c1be244d)
+@@ -13,6 +13,8 @@
+ 
+ export * as Components from "./components";
+ 
++import { findByPropsLazy } from "@vencord/types/webpack";
++
+ import SettingsUi from "./components/settings/Settings";
+ import { VesktopLogger } from "./logger";
+ import { Settings } from "./settings";
+@@ -43,3 +45,10 @@
+ 
+     document.addEventListener("DOMContentLoaded", () => document.documentElement.append(style), { once: true });
+ }
++
++const VoiceActions = findByPropsLazy("toggleSelfMute");
++
++VesktopNative.voice.onToggleSelfMute(() => VoiceActions.toggleSelfMute());
++VesktopNative.voice.onSelfMute(() => VoiceActions.setSelfMute("default", true));
++VesktopNative.voice.onSelfUnmute(() => VoiceActions.setSelfMute("default", false));
++VesktopNative.voice.onToggleSelfDeaf(() => VoiceActions.toggleSelfDeaf());
+Index: src/shared/IpcEvents.ts
+===================================================================
+diff --git a/src/shared/IpcEvents.ts b/src/shared/IpcEvents.ts
+--- a/src/shared/IpcEvents.ts	(revision 0f509b002dfd62721b500726b85fc301964cef31)
++++ b/src/shared/IpcEvents.ts	(revision 328710d112d1aba6dbb3b7b9431938a9c1be244d)
+@@ -54,6 +54,11 @@
+ 
+     CLIPBOARD_COPY_IMAGE = "VCD_CLIPBOARD_COPY_IMAGE",
+ 
++    TOGGLE_SELF_MUTE = "VCD_TOGGLE_SELF_MUTE",
++    SELF_MUTE = "VCD_SELF_MUTE",
++    SELF_UNMUTE = "VCD_SELF_UNMUTE",
++    TOGGLE_SELF_DEAF = "VCD_TOGGLE_SELF_DEAF",
++
+     DEBUG_LAUNCH_GPU = "VCD_DEBUG_LAUNCH_GPU",
+     DEBUG_LAUNCH_WEBRTC_INTERNALS = "VCD_DEBUG_LAUNCH_WEBRTC",
+ 

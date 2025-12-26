@@ -115,7 +115,6 @@ ttf-opensans
 udiskie
 ufw
 unrar
-vesktop-bin
 vi
 vlc-plugins-all
 wayland-protocols

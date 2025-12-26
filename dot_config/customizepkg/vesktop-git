@@ -1,0 +1,6 @@
+# Add mute/unmute IPC support for Vesktop
+# See:
+#   https://github.com/Vencord/Vesktop/pull/609
+#   https://github.com/mgabor3141/Vesktop/pull/2
+
+patch#1#vesktop-keybinds.patch
