@@ -26,7 +26,7 @@ echo ">>> Installing optional dependencies"
 sudo pacman -S --needed --asdeps - < "$OPTDEPS"
 
 echo ">>> Installing foreign packages"
-paru -S --needed - < "$FOREIGN"
+paru -S --needed --confirm - < "$FOREIGN"
 
 echo ">>> Uninstalling removed packages (error means nothing to do)"
 sudo pacman -Rsu --confirm $(comm -23 \

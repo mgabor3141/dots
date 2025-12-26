@@ -6,3 +6,5 @@ sudo systemctl enable --now coolercontrold.service
 
 sudo systemctl enable --now docker.socket
 sudo usermod -aG docker $USER
+
+sudo systemctl enable --now nix-daemon
