@@ -12,10 +12,8 @@ send_reload() {
 #   {{ include . | sha256sum }}
 # {{ end }}
 
-# {{ if eq .chezmoi.os "darwin" }}
-    kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../1-configs/macbook-ansi.kbd" }}
-# {{ end }}"
-
+kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../1-configs/macbook-ansi.kbd" }}
+# " (this is to fix syntax highlighting)
 kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../1-configs/razer.kbd" }}
 
 send_reload 53141
