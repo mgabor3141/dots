@@ -1,6 +1,6 @@
 ;; Timing constants
 (defvar
-  hold-timeout  200
+  hold-timeout 250
   ht $hold-timeout
 
   concurrent-timeout 30
@@ -90,20 +90,21 @@
   )
 )
 
-;; Meh key (becomes Hyper with +secondary)
+
 (platform (macos)
   (defalias
-    meh-modifiers (multi lctl lalt lsft)
+    ;; Meh key (becomes Hyper with +secondary)
+    wm-modifiers (multi lctl lalt lsft)
   )
 )
 (platform (linux)
   (defalias
-    meh-modifiers (multi lmet lalt lsft)
+    wm-modifiers lmet
   )
 )
-;; Send special key when meh is tapped (bound to "previous workspace")
+;; Send special key when wm is tapped (bound to "previous workspace")
 (defalias
-  meh   (multi @meh-modifiers
+  wm    (multi @wm-modifiers
           (tap-hold-press 0 $ht
               F20 XX
           )
