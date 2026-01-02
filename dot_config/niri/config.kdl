@@ -106,10 +106,11 @@ binds {
     // XF86AudioLowerVolume                allow-when-locked=true { spawn-sh "pactl set-volume @DEFAULT_AUDIO_SINK@ 0.1-"; }
     XF86AudioMute                       allow-when-locked=true { spawn-sh "pactl set-sink-mute @DEFAULT_SINK@ toggle"; }
     XF86AudioMicMute                    allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
-    XF86AudioNext                       allow-when-locked=true { spawn-sh "playerctl next"; }
-    XF86AudioPause                      allow-when-locked=true { spawn-sh "playerctl play-pause"; }
-    XF86AudioPlay                       allow-when-locked=true { spawn-sh "playerctl play-pause"; }
-    XF86AudioPrev                       allow-when-locked=true { spawn-sh "playerctl previous"; }
+    XF86AudioNext                       allow-when-locked=true { spawn-sh "playerctl next --ignore-player=firefox"; }
+    XF86AudioPause                      allow-when-locked=true { spawn-sh "playerctl play-pause --ignore-player=firefox"; }
+    XF86AudioPlay                       allow-when-locked=true { spawn-sh "playerctl play-pause --ignore-player=firefox"; }
+    XF86AudioStop                       allow-when-locked=true { spawn-sh "playerctl play-pause --ignore-player=firefox"; }
+    XF86AudioPrev                       allow-when-locked=true { spawn-sh "playerctl previous --ignore-player=firefox"; }
 
     F13                                 allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
 
