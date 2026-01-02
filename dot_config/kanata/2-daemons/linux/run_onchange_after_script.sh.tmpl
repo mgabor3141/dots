@@ -2,6 +2,12 @@
 trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
+# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../1-configs/**/*.kbd")) }}
+#   {{ include . | sha256sum }}
+# {{ end }}
+
+kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/razer.kbd" }}
+
 # Kanata service setup script adapted from
 #   https://github.com/jtroo/kanata/discussions/130#discussioncomment-12782201
 
