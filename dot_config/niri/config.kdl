@@ -181,7 +181,7 @@ binds {
     Mod+T                              { switch-preset-column-width; }
 
     // ─── Modes ───
-    Mod+Y                              { toggle-window-floating; }
+    Mod+G                              { toggle-window-floating; }
     // Mod+T                              { maximize-column; }
     Mod+Ctrl+T                         { fullscreen-window; }
     Mod+B                              { toggle-column-tabbed-display; }
@@ -297,15 +297,11 @@ binds {
 // ────────────── Window Rules ──────────────
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Window-Rules
 
-    window-rule {
-        match app-id=r#"(firefox|zen)$"# title="^Picture-in-Picture$" // Always float Firefox PiP windows
-        match app-id="steam" title="Friends List"
-        open-floating true
-    }
-
     // Example: block out windows from screen capture.
     window-rule {
         match app-id="zen" title=r#"^Extension:"#
+        match app-id="zen" title=r#"(Gmail|Home Assistant|Zoho Mail .*|Messenger)\s— Zen Browser$"#
+        match app-id="zen" title=r#"^Google Calendar - .* — Zen Browser$"#
         match app-id="dev.zed.Zed" title=r#"\.env$"#
         match app-id="org.kde.dolphin"
         match app-id="discord"
@@ -319,23 +315,15 @@ binds {
         // block-out-from "screencast"
     }
 
-    window-rule {
-        geometry-corner-radius 8 // Set every window radius to 20
-        clip-to-geometry true
-    }
-
     // Block out mako notifications from screencasts.
     layer-rule {
         match namespace="^notifications$"
-
         block-out-from "screencast"
     }
 
-    // Make inactive windows semitransparent.
-    /- window-rule {
-        match is-active=false
-
-        opacity 0.98
+    window-rule {
+        geometry-corner-radius 8
+        clip-to-geometry true
     }
 
     // Put swww-daemon with "backdrop" namespace as the overview backdrop.
@@ -388,7 +376,6 @@ binds {
         }
     }
 
-
 // ────────────── Environment Variables ──────────────
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Miscellaneous#environment
 
@@ -412,11 +399,25 @@ binds {
 // Custom window workspaces and positions
 
     window-rule {
-        match app-id="zen"
-        draw-border-with-background false
+        match is-floating=true
+        focus-ring {
+            width 2
+        }
+    }
+
+    window-rule {
+        match app-id="zen" at-startup=true
         open-on-workspace "A"
+    }
+
+    window-rule {
+        match app-id=r#"(firefox|zen)$"# title="^Picture-in-Picture$"
+        open-on-output "Dell Inc. DELL S2721D JRNFP43"
+        open-focused false
+        open-floating true
+        default-floating-position x=4 y=4 relative-to="top-right"
         default-column-width {
-            proportion 0.9
+            proportion 0.5
         }
     }
 
@@ -429,11 +430,13 @@ binds {
     window-rule {
         match app-id="steam"
         open-on-workspace "D"
+        open-focused true
     }
 
     window-rule {
         match app-id="spotify"
         open-on-workspace "Q"
+        open-focused true
         default-column-width {
             proportion 0.42
         }
@@ -442,7 +445,13 @@ binds {
     window-rule {
         match app-id="vesktop"
         open-on-workspace "Q"
+        open-focused true
         default-column-width {
             proportion 0.58
         }
+    }
+
+    window-rule {
+        match app-id="steam" title="Friends List"
+        open-focused true
     }
