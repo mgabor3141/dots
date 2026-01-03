@@ -2,3 +2,4 @@
 embed-application/pdf=false
 embed-application/yaml=false
 embed-image/png=false
+embed-text/x-devicetree-source=false
