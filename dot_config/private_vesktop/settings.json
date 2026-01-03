@@ -12,5 +12,6 @@
         "en-US",
         "en"
     ],
-    "enableSplashScreen": false
+    "enableSplashScreen": false,
+    "splashBackground": "rgb(28, 35, 42)"
 }
