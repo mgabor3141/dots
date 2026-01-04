@@ -78,7 +78,7 @@
 )
 (platform (linux)
   (defalias
-    í     (unicode í)    ;; Option + NumpadN bound via QWERTY.keylayout
+    í     (unicode í)    ;; TODO: Fix unicode text entry on Linux
     ö     (unicode ö)
     ü     (unicode ü)
     ó     (unicode ó)
