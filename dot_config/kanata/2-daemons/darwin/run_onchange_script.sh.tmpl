@@ -9,7 +9,7 @@ install_service() {
 
   echo "Installing $name..."
 
-  sudo rm /tmp/$name
+  sudo rm /tmp/$name || true
   sudo cp -rf "$src" "$dst"
   sudo launchctl bootstrap system "$dst"
   sudo launchctl enable "system/$name"
