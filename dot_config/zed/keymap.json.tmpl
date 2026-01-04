@@ -1,7 +1,7 @@
 // chezmoi:template:left-delimiter="/*#" right-delimiter="*/"
 // Zed version: /*# output "/bin/sh" "-c" "(zed -v 2>/dev/null || zeditor -v) | awk '{print $2}'" -*/
 
-/*#- if false *//*
+/*#- if false -*/ /*
   Available modifiers:
     - ctrl- The control key
     - cmd-, win- or super- for the platform modifier (Command on macOS, Windows key on Windows, and the Super key on Linux).
@@ -10,14 +10,14 @@
     - fn- The function key
     - secondary- Equivalent to cmd when Zed is running on macOS and ctrl when on Windows and Linux
 
-  We assume that out input only contains: ctrl, alt, shift, super, fn
+  We assume that out input only contains: ctrl, alt, shift, super, fn (NO SECONDARY)
   Single letters for regex purposes, that are unique to only one modifer: c, a, h, u, n
   (this jq does not support lookahead/lookbehind unfortunately)
 /*# end -*/
 
 /*# $darwinPostProcess := `.` -*/
 /*#- if eq .chezmoi.os "darwin" -*/
-  /*# $darwinPostProcess = `.[].bindings |= with_entries(
+/*#- $darwinPostProcess = `.[].bindings |= with_entries(
       select((
         if (.value | type) == "string" then
           .value
@@ -26,27 +26,37 @@
         end
       ) | test("app_menu::") | not) |
       .key |= (
+        # Option+Left/Right are mapped to F keys in Kanata config
         gsub("^(?<pre>[^c]*a[^c ]*-)left$";  "\(.pre)f18") |
         gsub("^(?<pre>[^c]*a[^c ]*-)right$"; "\(.pre)f19") |
+
+        # Map Ctrl+Left/Right/... to Alt+... to match MacOS behavior
         gsub("^(?<pre>[^a]*-?)ctrl-(?<mid>[^a ]*-?)(?<key>(left|right|backspace|delete))$";  "\(.pre)alt-\(.mid)\(.key)") |
+
+        # Map Home/End to Cmd+Left/Right (Except Ctrl+Home/End)
         gsub("^(?<pre>[^c]*-?)home$"; "\(.pre)secondary-left")  |
         gsub("^(?<pre>[^c]*-?)end$";  "\(.pre)secondary-right") |
-        gsub("ctrl"; "secondary")
+
+        # Map every other instance of Ctrl to Secondary
+        gsub("ctrl"; "secondary") |
+
+        # Revert Cmd+(Shift+)Tab to Ctrl as Cmd is unremappable from window switching
+        gsub("^(?<pre>.*-?)secondary-(?<mid>.*-?)tab$";  "\(.pre)ctrl-\(.mid)tab")
   ))` -*/
 /*#- end -*/
 [
   // === Default Linux bindings, processed with jq to be cross-platform
   /*# joinPath (.chezmoi.targetFile | dir) "_defaults/default-linux.json" | include
       | fromJsonc | jq $darwinPostProcess | first
-      | toPrettyJson | trim | trimPrefix "[" | trimSuffix "]" | trim *//*# "," */
+      | toPrettyJson | trim | trimPrefix "[" | trimSuffix "]" | trim */ /*# "," */
 
   // === MacOS compatibility
   {
     "context": "Terminal && os == macos",
-    "bindings":{
+    "bindings": {
       "cmd-left": ["terminal::SendKeystroke", "home"],
-      "cmd-right": ["terminal::SendKeystroke", "end"]
-    }
+      "cmd-right": ["terminal::SendKeystroke", "end"],
+    },
   },
 
   // === Custom modifications
