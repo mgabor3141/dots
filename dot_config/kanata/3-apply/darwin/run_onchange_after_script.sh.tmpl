@@ -8,13 +8,13 @@ send_reload() {
     nc -w 1 127.0.0.1 "$port"
 }
 
-# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../1-configs/**/*.kbd")) }}
+# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/**/*.kbd")) }}
 #   {{ include . | sha256sum }}
 # {{ end }}
 
-kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../1-configs/macbook-ansi.kbd" }}
+kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/macbook-ansi.kbd" }}
 # " (this is to fix syntax highlighting)
-kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../1-configs/razer.kbd" }}
+kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/razer.kbd" }}
 
 send_reload 53141
 send_reload 53142 || true
