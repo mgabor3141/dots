@@ -12,6 +12,14 @@
 (include shared/common.kbd)
 (include shared/chords.kbd)
 
+(defalias
+  ;; ctrl on double tap, fn otherwise
+  fnc (tap-dance-eager 200 (
+    @fn
+    lctl
+  ))
+)
+
 ;; MacBook ANSI (single row enter) physical layout
 (defsrc
   esc  f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12
@@ -28,7 +36,7 @@
   tab  q    w    e    r    t    y    u    i    o    p    [    ]    \
   @cps a    s    d    f    g    h    j    k    l    ;    '    ret
   lsft z    x    c    v    b    n    m    ,    .    /    rsft up
-  lmet @fn  lalt @wm       spc            @bmt @fn       left down rght
+  lmet @fnc lalt @wm       spc            @bmt @fnc      left down rght
 )
 
 (deflayer extend
