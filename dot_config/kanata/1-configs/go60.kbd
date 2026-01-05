@@ -1,0 +1,19 @@
+(defcfg
+  macos-dev-names-include (
+    "0xD9112C009D181622"
+  )
+
+  log-layer-changes no
+  process-unmapped-keys no
+)
+
+(include shared/common.kbd)
+
+(defsrc)
+
+(deflayermap (base-layer)
+  lmet @wm-modifiers
+  lctl lmet
+)
+
+(deflayermap (extend))
