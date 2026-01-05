@@ -40,14 +40,22 @@ install_service io.github.jtroo.kanata.macbook-ansi
 # {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "io.github.jtroo.kanata.macos-razer.plist.tmpl" | include | sha256sum }}
 install_service io.github.jtroo.kanata.macos-razer
 
+# {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "io.github.jtroo.kanata.go60.plist.tmpl" | include | sha256sum }}
+install_service io.github.jtroo.kanata.go60
+
 echo "Waiting for services to come online..."
 wait_for_service io.github.jtroo.kanata.macbook-ansi
 wait_for_service io.github.jtroo.kanata.macos-razer
+wait_for_service io.github.jtroo.kanata.go60
 
 # wait for kanata launch delay
 sleep 3
 
+echo -e "\t>>> Logs for macbook-ansi:"
 cat /tmp/io.github.jtroo.kanata.macbook-ansi
+echo -e "\t>>> Logs for macos-razer:"
 cat /tmp/io.github.jtroo.kanata.macos-razer
+echo -e "\t>>> Logs for go60:"
+cat /tmp/io.github.jtroo.kanata.go60
 
 echo "Done setting up kanata services"

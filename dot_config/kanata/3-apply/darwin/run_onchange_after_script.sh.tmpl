@@ -12,11 +12,15 @@ send_reload() {
 #   {{ include . | sha256sum }}
 # {{ end }}
 
-kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/macbook-ansi.kbd" }}
-# " (this is to fix syntax highlighting)
-kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/razer.kbd" }}
+echo -e "\t>>> Validating macbook-ansi.kbd:"
+kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/macbook-ansi.kbd" }} # "
+echo -e "\t>>> Validating razer.kbd:"
+kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/razer.kbd" }} # "
+echo -e "\t>>> Validating go60.kbd:"
+kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/go60.kbd" }} # "
 
 send_reload 53141
-send_reload 53142 || true
+send_reload 53142
+send_reload 53143
 
 echo "Kanata configuration applied"
