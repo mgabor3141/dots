@@ -1,3 +1,4 @@
 {{- if ne .chezmoi.os "linux" }}
 zed
+clean-disk.sh
 {{- end }}
