@@ -23,5 +23,6 @@ python-truststore
 python-wxpython
 qt5-x11extras
 rrdtool
+rustup
 speech-dispatcher
 xorg-xset
