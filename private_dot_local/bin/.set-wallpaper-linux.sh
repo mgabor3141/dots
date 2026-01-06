@@ -1,4 +1,4 @@
-# Dependencies: swww util-linux
+# Dependencies: qs, noctalia
 
 # Set waybar colors
 cat > "$CACHE_DIR/colors.css" <<EOF
@@ -18,26 +18,7 @@ layout {
 }
 EOF
 
-# Wait for swww-daemons
-deadline=$(( $(date +%s) + 20 ))
-until swww query >/dev/null 2>&1 && swww query --namespace backdrop >/dev/null 2>&1; do
-  (( $(date +%s) > deadline )) && {
-    echo "Timed out waiting for swww. Ensure both daemons are running, e.g.:
-    swww-daemon &
-    swww-daemon --namespace backdrop &" >&2
-    exit 1
-  }
-  sleep 0.1
-done
 
-# Set main wallpaper via swww with smooth transition
-swww clear-cache
-swww img "$IMAGE" \
-  --transition-type fade \
-  --transition-duration 10 \
-  --transition-fps 60
-swww img "$IMAGE_BLURRED" \
-  --namespace backdrop \
-  --transition-type fade \
-  --transition-duration 10 \
-  --transition-fps 60
+niri msg -j outputs | jq -r 'keys[]' | while read -r MONITOR; do
+  qs -c noctalia-shell ipc call wallpaper set "$IMAGE" "$MONITOR"
+done
