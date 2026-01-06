@@ -1,3 +1,5 @@
+cliphist
+ddcutil
 docker-buildx
 evince
 ffmpegthumbs
@@ -13,6 +15,7 @@ kompare
 konsole
 libappindicator
 liboggz
+matugen
 pigz
 pulse-native-provider
 purpose
@@ -25,4 +28,5 @@ qt5-x11extras
 rrdtool
 rustup
 speech-dispatcher
+wlsunset
 xorg-xset

@@ -10,21 +10,17 @@
 .config/gtk-4.0
 .config/io.github.zefr0x.ianny
 .config/Kvantum
-.config/mako
 .config/MangoHud
 .config/niri
+.config/noctalia
 .config/org.coolercontrol.CoolerControl
 .config/pipewire
 .config/systemd
 .config/qt5ct
-.config/swaylock
 .config/waybar*
-.config/wlogout
-.config/wofi
 .config/xkb
 
 # Files
-.config/.dmenurc
 .config/dolphinrc
 .config/filetypesrc
 .config/kiorc

@@ -19,7 +19,7 @@ input {
     }
 
     disable-power-key-handling
-    focus-follows-mouse max-scroll-amount="50%" // Automatically focus windows under the mouse pointer
+    // focus-follows-mouse max-scroll-amount="50%" // Automatically focus windows under the mouse pointer
 }
 
 gestures {
@@ -47,9 +47,9 @@ gestures {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Outputs
 
 output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538" {
-    mode "3840x2160@143.999" // Set resolution and refresh rate
-    scale 1.75
-    variable-refresh-rate // on-demand=true
+    mode "3840x2160@143.999"
+    scale 1.7
+    variable-refresh-rate
     focus-at-startup
 }
 
@@ -61,6 +61,7 @@ output "Dell Inc. DELL S2721D JRNFP43" {
 
     layout {
         always-center-single-column true
+        struts {}
     }
 }
 
@@ -93,11 +94,10 @@ workspace "R" {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Key-Bindings
 
 binds {
-    Mod+Escape                         { show-hotkey-overlay; }
+    Mod+Shift+Escape                   { show-hotkey-overlay; }
 
     // ─── Applications ───
-    Mod+RETURN                         hotkey-overlay-title="Open Terminal" { spawn-sh "kitty"; }
-    Mod+SPACE                          hotkey-overlay-title="Open Launcher" { spawn-sh "wofi"; }
+    Mod+SPACE                          hotkey-overlay-title="Open Launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
 
     // ─── Audio Controls ───
     // Example volume keys mappings for PipeWire & WirePlumber.
@@ -205,9 +205,9 @@ binds {
 // ────────────── Startup Applications ──────────────
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Miscellaneous#spawn-sh-at-startup
 
+    spawn-at-startup "qs" "-c" "noctalia-shell"
+
     spawn-sh-at-startup "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &" // Polkit
-    spawn-sh-at-startup "swww-daemon --layer bottom && swww restore" // Wallpaper
-    spawn-sh-at-startup "swww-daemon --namespace backdrop && swww restore --namespace backdrop" // Overview backdrop
 
     // Mute indicator
     spawn-sh-at-startup "pactl subscribe | ~/.config/waybar-mute-indicator/handle-mute-events.sh"
@@ -215,6 +215,7 @@ binds {
     spawn-at-startup    "playerctld" "daemon"
     spawn-at-startup    "bing-wallpaper.sh"
     spawn-at-startup    "swayidle" "-w" \
+        "timeout" "270" "for i in {1..5}; do qs -c noctalia-shell ipc call brightness decrease; done" \
         "timeout" "300" "niri msg action power-off-monitors" \
         "idlehint" "310"
         // Signal IdleHint to systemd, it can take over from there and account for cloudgaming
@@ -242,7 +243,7 @@ binds {
         default-column-width {}
 
         focus-ring {
-            width 4
+            width 3
             active-color "#00ac89"
             inactive-color "#505050"
         }
@@ -254,7 +255,9 @@ binds {
             color "#0007"
         }
 
-        struts {}
+        struts {
+            top -12
+        }
     }
 
     include "../../.cache/bing-wallpaper/colors-niri.kdl"
@@ -316,9 +319,9 @@ binds {
         // block-out-from "screencast"
     }
 
-    // Block out mako notifications from screencasts.
+    // Block out notifications from screencasts
     layer-rule {
-        match namespace="^notifications$"
+        match namespace="notifications"
         block-out-from "screencast"
     }
 
@@ -327,31 +330,10 @@ binds {
         clip-to-geometry true
     }
 
-    // Put swww-daemon with "backdrop" namespace as the overview backdrop.
+    // Set the overview wallpaper on the backdrop
     layer-rule {
-        match namespace="^swww-daemonbackdrop$"
+        match namespace="^noctalia-overview"
         place-within-backdrop true
-    }
-
-    layer-rule {
-        match namespace="waybar"
-        match at-startup=true
-
-        // Properties that apply continuously.
-        opacity 0.99999 // Needed to avoid corner transparency rendering bug
-        block-out-from "screencast"
-        // block-out-from "screen-capture"
-
-        shadow {
-            on
-            softness 40
-            spread 5
-            offset x=0 y=5
-            draw-behind-window true
-            color "#00000064"
-        }
-
-        // baba-is-float true
     }
 
     // Indicate screencasted windows with red colors.
@@ -384,6 +366,8 @@ binds {
         DISPLAY ":1"
         ELECTRON_OZONE_PLATFORM_HINT "auto"
         QT_QPA_PLATFORM "wayland"
+        QT_QPA_PLATFORMTHEME "qt6ct"
+        QS_ICON_THEME "breeze-dark"
         QT_WAYLAND_DISABLE_WINDOWDECORATION "1"
         XDG_SESSION_TYPE "wayland"
         XDG_CURRENT_DESKTOP "niri"
@@ -395,6 +379,7 @@ binds {
 
     debug {
         // preview-render "screencast"
+        honor-xdg-activation-with-invalid-serial
     }
 
 // Custom window workspaces and positions
@@ -453,6 +438,6 @@ binds {
     }
 
     window-rule {
-        match app-id="steam" title="Friends List"
-        open-focused true
+        match app-id="qt-sudo"
+        open-floating true
     }
