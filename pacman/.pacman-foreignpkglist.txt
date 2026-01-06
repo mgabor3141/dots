@@ -1,7 +1,7 @@
 blackwidow-macro-git
 cursor-bin
 customizepkg-git
-ianny-bin
+ianny
 it87-dkms-git
 kanata-bin
 llama.cpp-cuda

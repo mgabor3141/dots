@@ -1,0 +1,14 @@
+Index: PKGBUILD
+===================================================================
+--- PKGBUILD
++++ PKGBUILD
+@@ -15,8 +15,9 @@
+ 
+ prepare() {
+ 	cd "$pkgname-$pkgver"
+ 	# prepare build environment
++	export RUSTUP_TOOLCHAIN=stable
+ 	arch-meson build
+ }
+ 
+ build() {
