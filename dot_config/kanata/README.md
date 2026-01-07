@@ -24,20 +24,13 @@ Get daemon status and configs
 
 ```sh
 sudo launchctl list | grep kanata
-sudo launchctl print system/io.github.jtroo.kanata.macbook-ansi
-sudo launchctl print system/io.github.jtroo.kanata.macos-razer
+sudo launchctl print system/io.github.jtroo.kanata.manager
 ```
+
 Get logs
 
 ```sh
-cat /tmp/io.github.jtroo.kanata.macbook-ansi
-cat /tmp/io.github.jtroo.kanata.macos-razer
-```
-
-Force restart kanata daemons
-
-```sh
-sudo pkill kanata
+cat /tmp/io.github.jtroo.kanata.manager.log
 ```
 
 ## Linux

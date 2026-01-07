@@ -1,0 +1,44 @@
+#!/bin/bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+install_service() {
+  local name="$1"
+  local src="{{ .chezmoi.destDir }}/.config/kanata/2-daemons/darwin/$name.plist"
+  local dst="/Library/LaunchDaemons/$name.plist"
+
+  echo "Installing $name..."
+
+  sudo rm /tmp/$name.log || true
+  sudo cp -rf "$src" "$dst"
+  sudo launchctl bootstrap system "$dst"
+  sudo launchctl enable "system/$name"
+}
+
+# Clean up all services, even if they have been renamed
+shopt -s nullglob
+for plist in /Library/LaunchDaemons/io.github.jtroo.kanata.*; do
+    # Only act on regular files
+    if [[ -f "$plist" ]]; then
+        echo "Unloading: $plist"
+        sudo launchctl bootout system "$plist" || true
+        sudo rm "$plist"
+    fi
+done
+
+# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/**/*.kbd")) }}
+#   {{ include . | sha256sum }}
+# {{ end }}
+
+# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/*.kbd")) }}
+    echo -e "\t>>> Validating {{ . | base }}:"
+    kanata --check --cfg {{ . }}
+# {{ end }}
+
+# {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "executable_kanata-manager.sh.tmpl" | include | sha256sum }}
+# {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "io.github.jtroo.kanata.manager.plist.tmpl" | include | sha256sum }}
+install_service io.github.jtroo.kanata.manager
+
+echo "Kanata manager started!"
+echo "View logs:"
+echo -e "\tcat /tmp/io.github.jtroo.kanata.manager.log"
