@@ -16,29 +16,21 @@ FOREIGN="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-foreig
 [ -s $OPTDEPS ] || { echo "❌ [ERROR] $OPTDEPS missing or empty"; exit 1; }
 [ -s $FOREIGN ] || { echo "❌ [ERROR] $FOREIGN missing or empty"; exit 1; }
 
+prune() {
+    sudo pacman -Rsu --confirm $(comm -23 <(sort "$1") <(sort "$2")) || true
+}
+
 echo ">>> Refreshing sync database"
 sudo pacman -Sy
 
-echo ">>> Installing packages"
-sudo pacman -S --needed - < "$NEEDED"
-
-echo ">>> Installing optional dependencies"
-sudo pacman -S --needed --asdeps - < "$OPTDEPS"
+echo ">>> Installing packages (needed + optional deps)"
+sudo pacman -S --needed - < <(cat "$NEEDED" "$OPTDEPS")
 
 echo ">>> Installing foreign packages"
 paru -S --needed --confirm - < "$FOREIGN"
 
-echo ">>> Uninstalling removed packages (error means nothing to do)"
-sudo pacman -Rsu --confirm $(comm -23 \
-    <(sudo pacman -Qqetn --confirm | sort) \
-    <(sort "$NEEDED")) || true
+echo ">>> Pruning removed packages (error means nothing to do)"
+prune <(sudo pacman -Qqetn) "$NEEDED"
 
-echo ">>> Uninstalling removed optional dependencies (error means nothing to do)"
-sudo pacman -Rsu --confirm $(comm -23 \
-    <(sudo pacman -Qqem --confirm | sort) \
-    <(sort "$FOREIGN")) || true
-
-echo ">>> Uninstalling removed foreign packages (error means nothing to do)"
-sudo pacman -Rsu --confirm $(comm -23 \
-    <(sudo pacman -Qqem --confirm | sort) \
-    <(sort "$FOREIGN")) || true
+echo ">>> Pruning removed optional / foreign packages (error means nothing to do)"
+prune <(sudo pacman -Qqem) <(cat "$OPTDEPS" "$FOREIGN")
