@@ -2,9 +2,15 @@
   "file_types": {
     "JSONC": ["**/*.json.tmpl", "**/*.jsonc.tmpl"],
     "TOML": ["**/*.toml.tmpl"],
-    "Shell Script": ["**/dot_*profile.tmpl"]
+    "Shell Script": ["**/dot_*profile.tmpl", "**/*.sh.tmpl"],
+    "XML": ["**/*.plist.tmpl"],
   },
   "auto_install_extensions": {
-    "xml": true
-  }
+    "xml": true,
+  },
+  "languages": {
+    "XML": {
+      "format_on_save": "off",
+    },
+  },
 }
