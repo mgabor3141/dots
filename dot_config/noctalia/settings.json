@@ -72,12 +72,12 @@
                     "followFocusedScreen": true,
                     "groupedBorderOpacity": 0.8,
                     "hideUnoccupied": true,
-                    "iconScale": 0.95,
+                    "iconScale": 0.9,
                     "id": "Workspace",
                     "labelMode": "name",
                     "showApplications": true,
                     "showLabelsOnlyWhenOccupied": true,
-                    "unfocusedIconsOpacity": 0.6
+                    "unfocusedIconsOpacity": 0.75
                 }
             ],
             "right": [
@@ -280,12 +280,12 @@
     "general": {
         "allowPanelsOnScreenWithoutBar": true,
         "animationDisabled": false,
-        "animationSpeed": 1,
+        "animationSpeed": 1.25,
         "avatarImage": "/home/mg/.face",
         "boxRadiusRatio": 1,
         "compactLockScreen": true,
-        "dimmerOpacity": 0.2,
-        "enableShadows": true,
+        "dimmerOpacity": 0,
+        "enableShadows": false,
         "forceBlackScreenCorners": true,
         "iRadiusRatio": 1,
         "language": "",
@@ -336,10 +336,10 @@
         "forced": false,
         "manualSunrise": "06:30",
         "manualSunset": "18:30",
-        "nightTemp": "5000"
+        "nightTemp": "4000"
     },
     "notifications": {
-        "backgroundOpacity": 0.6,
+        "backgroundOpacity": 0.9,
         "criticalUrgencyDuration": 15,
         "enableKeyboardLayoutToast": true,
         "enabled": true,
@@ -366,17 +366,15 @@
         }
     },
     "osd": {
-        "autoHideMs": 1000,
+        "autoHideMs": 2000,
         "backgroundOpacity": 0.8,
         "enabled": true,
         "enabledTypes": [
-            0,
-            1,
             2,
             4,
             3
         ],
-        "location": "top_right",
+        "location": "top",
         "monitors": [
         ],
         "overlayLayer": true
@@ -501,7 +499,7 @@
         "panelBackgroundOpacity": 0.93,
         "panelsAttachedToBar": false,
         "settingsPanelMode": "window",
-        "tooltipsEnabled": true
+        "tooltipsEnabled": false
     },
     "wallpaper": {
         "directory": "/home/mg/Pictures/Wallpapers",
