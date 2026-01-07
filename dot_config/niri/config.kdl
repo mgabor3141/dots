@@ -215,8 +215,8 @@ binds {
     spawn-at-startup    "playerctld" "daemon"
     spawn-at-startup    "bing-wallpaper.sh"
     spawn-at-startup    "swayidle" "-w" \
-        "timeout" "270" "for i in {1..5}; do qs -c noctalia-shell ipc call brightness decrease; done" \
-        "timeout" "300" "niri msg action power-off-monitors" \
+        "timeout" "290" "notify-send --urgency=low --expire-time=10000 \"Screen is powering off soon...\"" \
+        "timeout" "302" "niri msg action power-off-monitors" \
         "idlehint" "310"
         // Signal IdleHint to systemd, it can take over from there and account for cloudgaming
         // See: /etc/systemd/logind.conf
