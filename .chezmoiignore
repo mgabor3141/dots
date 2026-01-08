@@ -46,6 +46,7 @@ Library
 
 .brew
 .simplebarrc
+.hammerspoon
 nix-darwin
 {{- end }}
 
