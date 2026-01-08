@@ -3,7 +3,7 @@ set -eu
 
 KANATA_BIN="/opt/homebrew/bin/kanata"
 CONFIG_DIR="{{ .chezmoi.destDir }}/.config/kanata/1-configs"
-LOG_PATTERN="${KANATA_LOG_PATTERN:-"doesn't match any connected device|Couldn't register device|exclusive access and device already open"}"
+LOG_PATTERN="${KANATA_LOG_PATTERN:-"doesn't match any connected device|Couldn't register device|exclusive access and device already open|not permitted"}"
 POLL_INTERVAL="${KANATA_POLL_INTERVAL:-2}"
 MAX_RESTARTS=5
 WINDOW_SECONDS=10
@@ -22,23 +22,18 @@ map_device() {
     case "$name" in
         "Apple Internal Keyboard / Trackpad") echo "macbook-ansi.kbd" ;;
         "Razer BlackWidow Ultimate") echo "razer.kbd" ;;
-        "") # unnamed devices by VID:PID
-            [ "$vid:$pid" = "5824:10203" ] && echo "go60.kbd" || echo ""
-            ;;
         *) echo "" ;;
     esac
 }
 
 YELLOW='\033[0;33m'
 GREEN='\033[0;32m'
-CYAN='\033[0;36m'
 RESET='\033[0m'
 config_color() {
     cfg="$1"
     case "$cfg" in
         macbook-ansi.kbd) echo "$YELLOW" ;;
         razer.kbd) echo "$GREEN" ;;
-        go60.kbd) echo "$CYAN" ;;
         *) echo "$RESET" ;;
     esac
 }
@@ -111,12 +106,7 @@ start_kanata() {
     echo "${color}[$cfg manager]${RESET} Kanata starting... (device: $device)"
     PIPE="$(mktemp -u)"; mkfifo "$PIPE"
 
-    if [ "$cfg" = "go60.kbd" ]; then
-        # Go60 config has to wait for the other devices to register because it can't exclude them
-        sh -c "sleep 1; exec \"$KANATA_BIN\" --cfg \"$cfg_path\"" >"$PIPE" 2>&1 &
-    else
-        "$KANATA_BIN" --cfg "$cfg_path" >"$PIPE" 2>&1 &
-    fi
+    "$KANATA_BIN" --cfg "$cfg_path" >"$PIPE" 2>&1 &
     pid=$!
 
     RUNNING_CONFIGS="$RUNNING_CONFIGS $cfg"
