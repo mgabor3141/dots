@@ -1,0 +1,1 @@
+{{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "Brewfile.tmpl" | include | sha256sum }}
