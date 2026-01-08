@@ -15,9 +15,9 @@
             },
             "scroll": "up",
             "control": true,
-            "option": true,
+            "option": false,
             "command": false,
-            "shift": true
+            "shift": false
           },
           {
             "action": {
@@ -25,9 +25,9 @@
             },
             "scroll": "down",
             "control": true,
-            "option": true,
+            "option": false,
             "command": false,
-            "shift": true
+            "shift": false
           },
 
           {
@@ -36,9 +36,9 @@
             },
             "scroll": "up",
             "control": true,
-            "option": true,
+            "option": false,
             "command": true,
-            "shift": true
+            "shift": false
           },
           {
             "action": {
@@ -46,9 +46,9 @@
             },
             "scroll": "down",
             "control": true,
-            "option": true,
+            "option": false,
             "command": true,
-            "shift": true
+            "shift": false
           }
         ]
       },

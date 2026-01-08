@@ -7,6 +7,7 @@
   },
   "auto_install_extensions": {
     "xml": true,
+    "lua": true,
   },
   "languages": {
     "XML": {

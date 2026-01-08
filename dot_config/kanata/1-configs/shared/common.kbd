@@ -29,39 +29,6 @@
 (platform (macos) (defalias sleep XX   ))
 (platform (linux) (defalias sleep sleep))
 
-;; MacOS specific remaps, intended to standardize key positions between platforms
-(platform (macos)
-  (defoverrides
-    ;; Meh + Space is Spotlight Search
-    (lctl lsft lalt spc) (sls)
-
-    ;; Ctrl + left/right/backspace/delete mapped to MacOS equivalents
-    (lmet left)      (lalt left)
-    (lmet right)     (lalt right)
-    (lmet bspc)      (lalt bspc)
-    (lmet del)       (lalt del)
-    ;; -- Exceptions --
-    (lmet lsft del)  (lmet lsft del)
-    (lmet lsft bspc) (lmet lsft bspc)
-
-    ;; Alt + left/right mapped to F keys so that they're still available
-    (lalt left)        (lalt f18)
-    (lalt right)       (lalt f19)
-    ;; -- Exceptions --
-    (lalt lmet left)   (lalt lmet left)
-    (lalt lctl left)   (lalt lctl left)
-    (lalt lmet right)  (lalt lmet right)
-    (lalt lctl right)  (lalt lctl right)
-
-    ;; Home and End key equivalents
-    (home)      (lmet left)
-    (end)       (lmet right)
-    ;; -- Exceptions --
-    (lmet home) (lmet home)
-    (lmet end)  (lmet end)
-  )
-)
-
 ;; Hungarian keys
 (platform (macos)
   (defalias
@@ -90,21 +57,19 @@
   )
 )
 
-
 (platform (macos)
   (defalias
-    ;; Meh key (becomes Hyper with +secondary)
-    wm-modifiers (multi lctl lalt lsft)
+    wm-modifier lctl
   )
 )
 (platform (linux)
   (defalias
-    wm-modifiers lmet
+    wm-modifier lmet
   )
 )
-;; Send special key when wm is tapped (bound to "previous workspace")
+;; Send special key when wm is tapped (bound to previous workspace)
 (defalias
-  wm    (multi @wm-modifiers
+  wm    (multi @wm-modifier
           (tap-hold-press 0 $ht
               F20 XX
           )
