@@ -8,6 +8,7 @@
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
   "git_panel": {
+    "tree_view": true,
     "sort_by_path": true
   },
   "base_keymap": "None",
@@ -151,8 +152,8 @@
     "enabled": true,
     // Whether to open tabs in preview mode when selected from the file finder.
     "enable_preview_from_file_finder": true,
-    // Whether a preview tab gets replaced when code navigation is used to navigate away from the tab.
-    "enable_preview_from_code_navigation": true
+    // Whether a preview tab gets reused when code navigation is used to navigate away from the tab.
+    "enable_keep_preview_on_code_navigation": true
   },
 
   // Profiles
