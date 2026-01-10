@@ -55,3 +55,6 @@ nix-darwin
 {{- else }}
 .config/fish/conf.d/fnm.fish
 {{- end }}
+
+# Unmanaged
+**/.DS_Store
