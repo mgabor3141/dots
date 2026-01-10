@@ -3,7 +3,7 @@
     "JSONC": ["**/*.json.tmpl", "**/*.jsonc.tmpl"],
     "TOML": ["**/*.toml.tmpl"],
     "Shell Script": ["**/dot_*profile.tmpl", "**/*.sh.tmpl"],
-    "XML": ["**/*.plist.tmpl"],
+    "XML": ["**/*.plist", "**/*.plist.tmpl"],
   },
   "auto_install_extensions": {
     "xml": true,
