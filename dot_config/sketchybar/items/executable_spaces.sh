@@ -67,16 +67,10 @@ for mid in $(aerospace list-monitors | cut -c1); do
 done
 
 sketchybar --add item space_separator left \
-  --set space_separator icon="|" \
+  --set space_separator icon="" \
   icon.y_offset=2 \
   icon.padding_left=6 \
   label.drawing=off \
   background.drawing=off \
   script="$PLUGIN_DIR/space_windows.sh" \
   --subscribe space_separator aerospace_workspace_change front_app_switched space_windows_change aerospace_monitor_change aerospace_node_moved
-
-# Front app
-sketchybar --add item front_app left \
-  --set front_app icon.drawing=off \
-  script="$PLUGIN_DIR/front_app.sh" \
-  --subscribe front_app front_app_switched
