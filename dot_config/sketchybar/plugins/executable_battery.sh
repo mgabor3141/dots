@@ -3,8 +3,14 @@
 PERCENTAGE="$(pmset -g batt | grep -Eo "\d+%" | cut -d% -f1)"
 CHARGING="$(pmset -g batt | grep 'AC Power')"
 
-if [ "$PERCENTAGE" = "" ]; then
+[ -z "$PERCENTAGE" ] && exit 0
+
+# Hide battery item if above 75% and charging
+if [ "$PERCENTAGE" -gt 75 ] && [ -n "$CHARGING" ]; then
+  sketchybar --set "$NAME" drawing=off
   exit 0
+else
+  sketchybar --set "$NAME" drawing=on
 fi
 
 case "${PERCENTAGE}" in
@@ -19,7 +25,7 @@ case "${PERCENTAGE}" in
   *) ICON=""
 esac
 
-if [[ "$CHARGING" != "" ]]; then
+if [ -n "$CHARGING" ]; then
   ICON=""
 fi
 

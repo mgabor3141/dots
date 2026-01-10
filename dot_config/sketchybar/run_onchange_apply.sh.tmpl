@@ -1,0 +1,9 @@
+#!/bin/bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "**/*.sh")) }}
+#   {{ include . | sha256sum }}
+# {{ end }}
+
+launchctl stop io.github.felixkratz.SketchyBar
