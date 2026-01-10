@@ -2,9 +2,8 @@
 
 ## Manual setup steps
 
-In `System Preferences -> Keyboard -> Keyboard Shortcuts`
+Swap Cmd and Ctrl in
+`System Preferences -> Keyboard -> Keyboard Shortcuts -> Modifiers`
+on keyboards that need it
 
-- Swap Cmd and Ctrl in `-> Modifiers` on keyboards that need it
-- Make sure there are no collisions:
-  - Change Ctrl+Left/Right from workspace switcher (disabled is not enough)
-- Map Spotlight Search to Ctrl+Space
+Restart Hammerspoon after giving accessibility permissions to it
