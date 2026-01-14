@@ -6,7 +6,9 @@ set -Eeuo pipefail
 #   {{ include . | sha256sum }}
 # {{ end }}
 
-# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "*.kbd")) }}
-    echo -e "\t>>> Validating {{ . | base }}:"
-    kanata --check --cfg {{ . }}
+# {{ if eq .chezmoi.os "darwin" }}
+# Mac-specific keys are only valid on mac
+kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "macbook-ansi.kbd" }} # "
 # {{ end }}
+
+kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "razer.kbd" }} # "
