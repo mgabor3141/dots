@@ -102,9 +102,4 @@
             lctl ;; this triggers the on-press
             tab
         )
-
-  bmt  (tap-hold-press 0 $ht
-            bspc  ;; tap
-            rmet  ;; hold
-        )
 )

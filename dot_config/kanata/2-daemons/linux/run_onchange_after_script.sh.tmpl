@@ -6,8 +6,6 @@ set -Eeuo pipefail
 #   {{ include . | sha256sum }}
 # {{ end }}
 
-kanata --check --cfg {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "../../1-configs/razer.kbd" }}
-
 # Kanata service setup script adapted from
 #   https://github.com/jtroo/kanata/discussions/130#discussioncomment-12782201
 
