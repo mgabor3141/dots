@@ -5,6 +5,14 @@ CHARGING="$(pmset -g batt | grep 'AC Power')"
 
 [ -z "$PERCENTAGE" ] && exit 0
 
+# Default color (white)
+COLOR="0xffffffff"
+
+# Low battery turns red when not charging
+if [ "$PERCENTAGE" -lt 20 ] && [ -z "$CHARGING" ]; then
+  COLOR="0xffff5555"
+fi
+
 # Hide battery item if above 75% and charging
 if [ "$PERCENTAGE" -gt 75 ] && [ -n "$CHARGING" ]; then
   sketchybar --set "$NAME" drawing=off
@@ -31,4 +39,7 @@ fi
 
 # The item invoking this script (name $NAME) will get its icon and label
 # updated with the current battery status
-sketchybar --set "$NAME" icon="$ICON" label="${PERCENTAGE}%"
+sketchybar --set "$NAME" \
+  icon="$ICON" \
+  label="${PERCENTAGE}%" \
+  icon.color="$COLOR"
