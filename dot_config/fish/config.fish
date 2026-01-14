@@ -25,7 +25,7 @@ if test -f ~/.fish_profile
 end
 
 # Append common directories for executable files to $PATH
-fish_add_path ~/.local/bin /run/current-system/sw/bin /nix/var/nix/profiles/default/bin
+fish_add_path ~/.local/bin ~/.bun/bin /run/current-system/sw/bin /nix/var/nix/profiles/default/bin
 
 ## Functions
 # Functions needed for !! and !$ https://github.com/oh-my-fish/plugin-bang-bang

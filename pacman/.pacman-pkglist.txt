@@ -11,6 +11,7 @@ bluez-hid2hci
 bluez-utils
 btop
 btrfs-assistant
+bun
 cachyos-fish-config
 cachyos-gaming-applications
 cachyos-hooks
