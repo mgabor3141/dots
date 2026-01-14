@@ -25,8 +25,7 @@
   rse @rsecondary
 )
 
-;; Sleep key is not available on MacOS
-(platform (macos) (defalias sleep XX   ))
+(platform (macos) (defalias sleep C-M-S-q)) ;; Standard is C-M-q but that collides with Aerospace
 (platform (linux) (defalias sleep sleep))
 
 ;; Hungarian keys
@@ -83,6 +82,7 @@
 
 (defalias
   fn    (multi
+            fn
             (layer-toggle extend)
             (on-release release-virtualkey ctrl)
         )
