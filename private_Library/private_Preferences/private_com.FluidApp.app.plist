@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AXLastPromptAt</key>
+	<real>1768392185.4226699</real>
+	<key>AnalyticsAnonymousInstallID</key>
+	<string>23502965-711E-4B0F-AD07-24C0663EBB63</string>
+	<key>AnalyticsFirstOpenAt</key>
+	<real>1768392185.423012</real>
+	<key>AutoUpdateCheckEnabled</key>
+	<false/>
+	<key>AvailableModelsByProvider</key>
+	<dict/>
+	<key>CommandModeChatSessions</key>
+	<data>
+	W3sidXBkYXRlZEF0Ijo3OTAwODYyNTYuMzI0MDUyLCJ0aXRsZSI6IlN3aXRjaCB3aW5k
+	b3dzPyIsIm1lc3NhZ2VzIjpbeyJjb250ZW50IjoiU3dpdGNoIHdpbmRvd3M/IiwiaWQi
+	OiI5OTlBREZCNC02NEIwLTRGNTQtOTIxOC0wMkRCN0JEODM0RUYiLCJzdGVwVHlwZSI6
+	Im5vcm1hbCIsInJvbGUiOiJ1c2VyIiwidGltZXN0YW1wIjo3OTAwODYyNTYuMDgzMDk3
+	fSx7ImNvbnRlbnQiOiJFcnJvcjogSFRUUCA0MDE6IHtcbiAgICBcImVycm9yXCI6IHtc
+	biAgICAgICAgXCJtZXNzYWdlXCI6IFwiWW91IGRpZG4ndCBwcm92aWRlIGFuIEFQSSBr
+	ZXkuIFlvdSBuZWVkIHRvIHByb3ZpZGUgeW91ciBBUEkga2V5IGluIGFuIEF1dGhvcml6
+	YXRpb24gaGVhZGVyIHVzaW5nIEJlYXJlciBhdXRoIChpLmUuIEF1dGhvcml6YXRpb246
+	IEJlYXJlciBZT1VSX0tFWSksIG9yIGFzIHRoZSBwYXNzd29yZCBmaWVsZCAod2l0aCBi
+	bGFuayB1c2VybmFtZSkgaWYgeW91J3JlIGFjY2Vzc2luZyB0aGUgQVBJIGZyb20geW91
+	ciBicm93c2VyIGFuZCBhcmUgcHJvbXB0ZWQgZm9yIGEgdXNlcm5hbWUgYW5kIHBhc3N3
+	b3JkLiBZb3UgY2FuIG9idGFpbiBhbiBBUEkga2V5IGZyb20gaHR0cHM6XC9cL3BsYXRm
+	b3JtLm9wZW5haS5jb21cL2FjY291bnRcL2FwaS1rZXlzLlwiLFxuICAgICAgICBcInR5
+	cGVcIjogXCJpbnZhbGlkX3JlcXVlc3RfZXJyb3JcIixcbiAgICAgICAgXCJwYXJhbVwi
+	OiBudWxsLFxuICAgICAgICBcImNvZGVcIjogbnVsbFxuICAgIH1cbn1cbiIsImlkIjoi
+	QTAwNDhCMUMtMDNCQS00NjFCLTgxNEYtMEM3QUY5RUUxMTY4Iiwic3RlcFR5cGUiOiJm
+	YWlsdXJlIiwicm9sZSI6ImFzc2lzdGFudCIsInRpbWVzdGFtcCI6NzkwMDg2MjU2LjMy
+	Mzk1MX1dLCJjcmVhdGVkQXQiOjc5MDA4NDk4NS4yMzk2MSwiaWQiOiIxNUYxQjUxRi00
+	QTk3LTRGMzAtOTlBMS1CREE3QjM1N0RDNjQifV0=
+	</data>
+	<key>CommandModeCurrentChatID</key>
+	<string>15F1B51F-4A97-4F30-99A1-BDA7B357DC64</string>
+	<key>CommandModeHotkeyShortcut</key>
+	<data>
+	eyJtb2RpZmllckZsYWdzUmF3VmFsdWUiOjAsImtleUNvZGUiOjYyfQ==
+	</data>
+	<key>CommandModeSelectedModel</key>
+	<string>gpt-4.1</string>
+	<key>CommandModeShortcutEnabled</key>
+	<false/>
+	<key>FluidVoice_AccessibilityRestartPending</key>
+	<false/>
+	<key>FluidVoice_HasAutoRestartedForAccessibility</key>
+	<true/>
+	<key>HotkeyShortcutKey</key>
+	<data>
+	eyJtb2RpZmllckZsYWdzUmF3VmFsdWUiOjI2MjE0NCwia2V5Q29kZSI6Nn0=
+	</data>
+	<key>LastUpdateCheckDate</key>
+	<date>2026-01-14T12:03:09Z</date>
+	<key>LaunchAtStartup</key>
+	<true/>
+	<key>NSSplitView Subview Frames main-AppWindow-1, SidebarNavigationSplitView</key>
+	<array>
+		<string>0.000000, 0.000000, 258.000000, 1033.000000, NO, NO</string>
+		<string>0.000000, 0.000000, 1874.000000, 1033.000000, NO, NO</string>
+	</array>
+	<key>NSWindow Frame main-AppWindow-1</key>
+	<string>1919 -981 1874 1033 0 0 1920 1080 </string>
+	<key>OverlayPosition</key>
+	<string>bottom</string>
+	<key>PlaygroundUsed</key>
+	<true/>
+	<key>PressAndHoldMode</key>
+	<false/>
+	<key>RemoveFillerWordsEnabled</key>
+	<false/>
+	<key>RewriteModeSelectedModel</key>
+	<string>gpt-4.1</string>
+	<key>RewriteModeShortcutEnabled</key>
+	<false/>
+	<key>SaveTranscriptionHistory</key>
+	<false/>
+	<key>SelectedModelByProvider</key>
+	<dict/>
+	<key>SelectedSpeechModel</key>
+	<string>parakeet-tdt</string>
+	<key>ShareAnonymousAnalytics</key>
+	<false/>
+</dict>
+</plist>
