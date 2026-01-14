@@ -1,0 +1,5 @@
+["fluid.dmg"]
+    type = "file"
+    url = "https://github.com/altic-dev/FluidVoice/releases/download/v1.5.4/Fluid-oss-1.5.4.dmg"
+    checksum.sha256 = "74f36803df642ce92acde97ca17d221f42bc8c48f709a110f359f75bd126d02b"
+    stripComponents = 1
