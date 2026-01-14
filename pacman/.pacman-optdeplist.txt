@@ -20,8 +20,6 @@ pigz
 pulse-native-provider
 purpose
 python-html5lib
-python-pygments
-python-scipy
 python-truststore
 python-wxpython
 qt5-x11extras

@@ -1,12 +1,20 @@
 {
     "appLauncher": {
+        "autoPasteClipboard": false,
+        "clipboardWrapText": true,
         "customLaunchPrefix": "",
         "customLaunchPrefixEnabled": false,
         "enableClipPreview": true,
         "enableClipboardHistory": true,
         "iconMode": "tabler",
         "ignoreMouseInput": false,
-        "pinnedExecs": [
+        "pinnedApps": [
+            "steam",
+            "vesktop",
+            "spotify-launcher",
+            "org.kde.dolphin",
+            "kitty",
+            "dev.zed.Zed"
         ],
         "position": "center",
         "screenshotAnnotationTool": "",
@@ -19,7 +27,6 @@
     },
     "audio": {
         "cavaFrameRate": 30,
-        "externalMixer": "pwvucontrol || pavucontrol",
         "mprisBlacklist": [
         ],
         "preferredPlayer": "",
@@ -33,10 +40,9 @@
         "density": "comfortable",
         "exclusive": true,
         "floating": true,
-        "marginHorizontal": 0.8,
+        "marginHorizontal": 14,
         "marginVertical": 0,
         "monitors": [
-            "DP-1"
         ],
         "outerCorners": true,
         "position": "top",
@@ -45,19 +51,6 @@
         "useSeparateOpacity": true,
         "widgets": {
             "center": [
-                {
-                    "hideMode": "idle",
-                    "hideWhenIdle": false,
-                    "id": "MediaMini",
-                    "maxWidth": 400,
-                    "scrollingMode": "hover",
-                    "showAlbumArt": true,
-                    "showArtistFirst": true,
-                    "showProgressRing": true,
-                    "showVisualizer": false,
-                    "useFixedWidth": false,
-                    "visualizerType": "mirrored"
-                }
             ],
             "left": [
                 {
@@ -69,7 +62,7 @@
                     "characterCount": 1,
                     "colorizeIcons": false,
                     "enableScrollWheel": true,
-                    "followFocusedScreen": true,
+                    "followFocusedScreen": false,
                     "groupedBorderOpacity": 0.8,
                     "hideUnoccupied": true,
                     "iconScale": 0.9,
@@ -94,7 +87,12 @@
                 {
                     "hideWhenZero": false,
                     "id": "NotificationHistory",
-                    "showUnreadBadge": true
+                    "showUnreadBadge": false
+                },
+                {
+                    "displayMode": "alwaysHide",
+                    "id": "Volume",
+                    "middleClickCommand": "pwvucontrol || pavucontrol"
                 },
                 {
                     "displayMode": "onhover",
@@ -111,7 +109,7 @@
                 },
                 {
                     "customFont": "",
-                    "formatHorizontal": "HH:mm ddd, MMM dd",
+                    "formatHorizontal": "dddd, MMM dd – HH:mm",
                     "formatVertical": "HH mm - dd MM",
                     "id": "Clock",
                     "tooltipFormat": "HH:mm ddd, MMM dd",
@@ -157,7 +155,6 @@
     },
     "colorSchemes": {
         "darkMode": true,
-        "generateTemplatesForPredefined": true,
         "manualSunrise": "06:30",
         "manualSunset": "18:30",
         "matugenSchemeType": "scheme-rainbow",
@@ -205,9 +202,6 @@
             ],
             "right": [
                 {
-                    "id": "ScreenRecorder"
-                },
-                {
                     "id": "KeepAwake"
                 },
                 {
@@ -233,7 +227,7 @@
                         "useCustomFont": false,
                         "usePrimaryColor": false,
                         "x": 1888,
-                        "y": 32
+                        "y": 0
                     },
                     {
                         "hideMode": "idle",
@@ -252,8 +246,8 @@
                         "id": "Weather",
                         "scale": 1,
                         "showBackground": false,
-                        "x": 32,
-                        "y": 32
+                        "x": 0,
+                        "y": 0
                     }
                 ]
             }
@@ -275,6 +269,7 @@
             "zen"
         ],
         "pinnedStatic": true,
+        "position": "bottom",
         "size": 1.25
     },
     "general": {
@@ -296,6 +291,7 @@
         "shadowDirection": "bottom_right",
         "shadowOffsetX": 2,
         "shadowOffsetY": 3,
+        "showChangelogOnStartup": true,
         "showHibernateOnLockScreen": false,
         "showScreenCorners": true,
         "showSessionButtonsOnLockScreen": true
@@ -312,6 +308,8 @@
     "location": {
         "analogClockInCalendar": true,
         "firstDayOfWeek": 1,
+        "hideWeatherCityName": false,
+        "hideWeatherTimezone": false,
         "name": "Budapest",
         "showCalendarEvents": true,
         "showCalendarWeather": true,
@@ -348,7 +346,7 @@
         "monitors": [
         ],
         "normalUrgencyDuration": 8,
-        "overlayLayer": true,
+        "overlayLayer": false,
         "respectExpireTimeout": true,
         "saveToHistory": {
             "critical": true,
@@ -378,18 +376,6 @@
         "monitors": [
         ],
         "overlayLayer": true
-    },
-    "screenRecorder": {
-        "audioCodec": "opus",
-        "audioSource": "default_output",
-        "colorRange": "limited",
-        "copyToClipboard": false,
-        "directory": "/home/mg/Videos",
-        "frameRate": 60,
-        "quality": "very_high",
-        "showCursor": true,
-        "videoCodec": "h264",
-        "videoSource": "portal"
     },
     "sessionMenu": {
         "countdownDuration": 5000,
@@ -438,7 +424,7 @@
         "showHeader": false,
         "showNumberLabels": false
     },
-    "settingsVersion": 37,
+    "settingsVersion": 39,
     "systemMonitor": {
         "cpuCriticalThreshold": 90,
         "cpuPollingInterval": 3000,
@@ -488,18 +474,23 @@
         "walker": false,
         "wezterm": false,
         "yazi": false,
-        "zed": false
+        "zed": false,
+        "zenBrowser": false
     },
     "ui": {
+        "bluetoothDetailsViewMode": "grid",
+        "bluetoothHideUnnamedDevices": false,
         "boxBorderEnabled": false,
         "fontDefault": "Sans Serif",
         "fontDefaultScale": 1,
         "fontFixed": "monospace",
         "fontFixedScale": 1,
+        "networkPanelView": "wifi",
         "panelBackgroundOpacity": 0.93,
         "panelsAttachedToBar": false,
         "settingsPanelMode": "window",
-        "tooltipsEnabled": false
+        "tooltipsEnabled": false,
+        "wifiDetailsViewMode": "grid"
     },
     "wallpaper": {
         "directory": "/home/mg/Pictures/Wallpapers",

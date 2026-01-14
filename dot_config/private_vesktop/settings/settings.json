@@ -269,7 +269,9 @@
             "enabled": false
         },
         "MessageClickActions": {
-            "enabled": true
+            "enabled": false,
+            "requireModifier": false,
+            "enableDoubleClickToReply": true
         },
         "MessageLatency": {
             "enabled": false
@@ -566,7 +568,8 @@
             "enabled": true
         },
         "WebScreenShareFixes": {
-            "enabled": true
+            "enabled": true,
+            "experimentalAV1Support": false
         },
         "WhoReacted": {
             "enabled": true
@@ -596,6 +599,9 @@
         },
         "WebContextMenus": {
             "enabled": true
+        },
+        "MoreQuickReactions": {
+            "enabled": false
         }
     },
     "notifications": {
@@ -608,7 +614,7 @@
         "authenticated": false,
         "url": "https://api.vencord.dev/",
         "settingsSync": false,
-        "settingsSyncVersion": 1766742614007
+        "settingsSyncVersion": 1768383918334
     },
     "uiElements": {
         "chatBarButtons": {},
