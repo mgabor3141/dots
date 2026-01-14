@@ -31,6 +31,7 @@ cantarell-fonts
 capitaine-cursors
 chezmoi
 chromium
+claude-code
 coolercontrol
 cpupower
 direnv
@@ -47,7 +48,6 @@ ffmpegthumbnailer
 firefox
 font-manager
 fsarchiver
-github-cli
 glances
 haveged
 hdparm
@@ -94,6 +94,7 @@ parsec-bin
 partclone
 pavucontrol
 polkit-gnome
+protonup-qt
 pv
 python-pywal
 qt5ct
@@ -113,6 +114,7 @@ ttf-fira-code
 ttf-fira-sans
 ttf-hack
 ttf-opensans
+turbostat
 udiskie
 ufw
 unrar

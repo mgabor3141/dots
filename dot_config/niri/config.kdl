@@ -61,7 +61,6 @@ output "Dell Inc. DELL S2721D JRNFP43" {
 
     layout {
         always-center-single-column true
-        struts {}
     }
 }
 

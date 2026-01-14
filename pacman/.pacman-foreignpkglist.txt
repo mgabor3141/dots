@@ -1,6 +1,7 @@
 blackwidow-macro-git
 cursor-bin
 customizepkg-git
+hyprwhspr
 ianny
 it87-dkms-git
 kanata-bin
