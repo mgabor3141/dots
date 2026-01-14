@@ -10,6 +10,13 @@ hs.hotkey.bind({"ctrl"}, ".", function()
     hs.eventtap.keyStroke({"ctrl", "cmd"}, "space")
 end)
 
+hs.hotkey.bind({"ctrl", "cmd", "shift"}, "Q", function()
+    -- Delay the sleep so it's not immediately woken up by the keyup
+    hs.timer.doAfter(0.5, function()
+        hs.caffeinate.systemSleep()
+    end)
+end)
+
 KEY = hs.keycodes.map
 Log = hs.logger.new("KeyRemap", "debug")
 hs.logger.setGlobalLogLevel("debug")
