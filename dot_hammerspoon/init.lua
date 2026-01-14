@@ -6,6 +6,10 @@ hs.hotkey.bind({"ctrl"}, "X", function()
     hs.window.focusedWindow():close()
 end)
 
+hs.hotkey.bind({"ctrl"}, ".", function()
+    hs.eventtap.keyStroke({"ctrl", "cmd"}, "space")
+end)
+
 KEY = hs.keycodes.map
 Log = hs.logger.new("KeyRemap", "debug")
 hs.logger.setGlobalLogLevel("debug")
