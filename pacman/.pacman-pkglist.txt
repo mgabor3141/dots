@@ -6,6 +6,7 @@ alsa-firmware
 alsa-utils
 awesome-terminal-fonts
 base
+bitwarden
 blueman
 bluez-hid2hci
 bluez-utils
