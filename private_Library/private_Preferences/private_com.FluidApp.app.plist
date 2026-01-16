@@ -59,14 +59,20 @@
 	<key>NSSplitView Subview Frames main-AppWindow-1, SidebarNavigationSplitView</key>
 	<array>
 		<string>0.000000, 0.000000, 258.000000, 1033.000000, NO, NO</string>
-		<string>0.000000, 0.000000, 1874.000000, 1033.000000, NO, NO</string>
+		<string>0.000000, 0.000000, 1904.000000, 1033.000000, NO, NO</string>
 	</array>
 	<key>NSWindow Frame main-AppWindow-1</key>
-	<string>1919 -981 1874 1033 0 0 1920 1080 </string>
+	<string>8 9 1904 1033 0 0 1920 1080 </string>
 	<key>OverlayPosition</key>
 	<string>bottom</string>
+	<key>OverlaySize</key>
+	<string>large</string>
 	<key>PlaygroundUsed</key>
 	<true/>
+	<key>PreferredInputDeviceUID</key>
+	<string>AppleUSBAudioEngine:Focusrite:Scarlett 8i6 USB:F8D9XVT150B68B:1,2</string>
+	<key>PreferredOutputDeviceUID</key>
+	<string>AppleUSBAudioEngine:Focusrite:Scarlett 8i6 USB:F8D9XVT150B68B:1,2</string>
 	<key>PressAndHoldMode</key>
 	<false/>
 	<key>RemoveFillerWordsEnabled</key>
