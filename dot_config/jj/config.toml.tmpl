@@ -70,7 +70,7 @@ diff-args = ["--color=always", "--display=side-by-side-show-both", "--background
 
 [git]
 track-default-bookmark-on-clone = true
-private-commits = "description(glob:'private:*')"
+private-commits = "description(glob:'private:*') | trunk()..bookmarks(glob:'private/*')"
 
 [remotes.origin]
 auto-track-bookmarks = "glob:*/*"
