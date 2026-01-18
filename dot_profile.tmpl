@@ -1,13 +1,12 @@
 export EDITOR=nano
 export VISUAL="zed --wait"
 
-export SSH_AUTH_SOCK=$HOME/.bitwarden-ssh-agent.sock
-
 # export LESS="-FR -j3 --color=always"
 # export PAGER="less -FR -j3 --color=always"
 
 {{- if eq .chezmoi.os "linux" }}
 export BROWSER=zen-browser
+export SSH_AUTH_SOCK=$HOME/.bitwarden-ssh-agent.sock
 
 export QT_STYLE_OVERRIDE=kvantum
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
@@ -22,4 +21,6 @@ export PROTON_NO_WM_DECORATION=1
 {{- if eq .chezmoi.os "darwin" }}
 export PATH="/opt/homebrew/bin:$PATH"
 export XDG_CONFIG_HOME="$HOME/.config"
+
+export SSH_AUTH_SOCK=$HOME/Library/Containers/com.bitwarden.desktop/Data/.bitwarden-ssh-agent.sock
 {{- end }}
