@@ -4,5 +4,5 @@ set -Eeuo pipefail
 
 # {{ $dir := .chezmoi.targetFile | dir }}
 # {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "*.plist")) }}
-    plutil -convert xml1 {{ $dir }}/{{ . | base | replaceAllRegex "dot_" "."  | replaceAllRegex "^(\\w*_)*"  "" }}
+    plutil -convert xml1 {{ $dir }}/{{ . | base | replaceAllRegex "dot_" "."  | replaceAllRegex "^(\\w*_)*"  "" }} || true
 # {{ end }}
