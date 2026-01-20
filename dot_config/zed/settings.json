@@ -7,6 +7,18 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "agent_servers": {
+    "opencode": {
+      "type": "extension",
+      "favorite_models": [
+        "github-copilot/claude-sonnet-4.5",
+        "github-copilot/gpt-5.2-codex",
+        "github-copilot/claude-opus-4.5"
+      ],
+      "default_config_options": {},
+      "favorite_config_option_values": {}
+    }
+  },
   "git_panel": {
     "tree_view": true,
     "sort_by_path": true
