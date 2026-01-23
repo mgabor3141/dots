@@ -26,8 +26,12 @@
       "secondary-shift-r": ["task::Spawn", { "reveal_target": "dock" }],
       "secondary-v": "terminal::Paste",
 
-      "secondary-shift-backspace": ["terminal::SendText", "\u0015"], // ctrl-u: clear line
-      "secondary-shift-delete": ["terminal::SendText", "\u000b"], // ctrl-k: delete to end of line
+      "secondary-shift-backspace": ["terminal::SendText", "\u0015"], // ctrl-u: clear from cursor to beginning of line
+      "secondary-shift-delete": ["terminal::SendText", "\u000b"], // ctrl-k: clear from cursor to end of line
+
+      "secondary-p": ["terminal::SendText", "\u0010"], // ctrl-p
+      "secondary-t": ["terminal::SendText", "\u0014"], // ctrl-t
+      "secondary-x": ["terminal::SendText", "\u0018"], // ctrl-x
     },
   },
   {
