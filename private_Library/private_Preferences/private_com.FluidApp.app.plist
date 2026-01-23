@@ -44,6 +44,8 @@
 	<string>gpt-4.1</string>
 	<key>CommandModeShortcutEnabled</key>
 	<false/>
+	<key>EnableAIProcessing</key>
+	<true/>
 	<key>FluidVoice_AccessibilityRestartPending</key>
 	<false/>
 	<key>FluidVoice_HasAutoRestartedForAccessibility</key>
@@ -59,10 +61,12 @@
 	<key>NSSplitView Subview Frames main-AppWindow-1, SidebarNavigationSplitView</key>
 	<array>
 		<string>0.000000, 0.000000, 258.000000, 1033.000000, NO, NO</string>
-		<string>0.000000, 0.000000, 1904.000000, 1033.000000, NO, NO</string>
+		<string>0.000000, 0.000000, 1874.000000, 1033.000000, NO, NO</string>
 	</array>
+	<key>NSStatusItem Preferred Position Item-0</key>
+	<real>258</real>
 	<key>NSWindow Frame main-AppWindow-1</key>
-	<string>8 9 1904 1033 0 0 1920 1080 </string>
+	<string>38 9 1874 1033 0 0 1920 1080 </string>
 	<key>OverlayPosition</key>
 	<string>bottom</string>
 	<key>OverlaySize</key>
@@ -85,6 +89,8 @@
 	<false/>
 	<key>SelectedModelByProvider</key>
 	<dict/>
+	<key>SelectedProviderID</key>
+	<string>apple-intelligence</string>
 	<key>SelectedSpeechModel</key>
 	<string>parakeet-tdt</string>
 	<key>ShareAnonymousAnalytics</key>
