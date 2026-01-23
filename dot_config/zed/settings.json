@@ -44,7 +44,7 @@
   },
   "close_on_file_delete": true,
   "use_smartcase_search": true,
-  "redact_private_values": true,
+  "redact_private_values": false,
   "inline_code_actions": false,
   "use_system_prompts": false,
   "diagnostics_max_severity": "info",
@@ -82,6 +82,7 @@
     }
   },
   "terminal": {
+    "dock": "right",
     "font_size": 13,
     "font_family": "Fira Code",
     "font_weight": 450.0,
@@ -127,6 +128,7 @@
     }
   },
   "auto_indent_on_paste": true,
+  "tab_size": 2,
   "use_on_type_format": true,
   "ui_font_size": 16,
   "inlay_hints": {
@@ -208,6 +210,21 @@
     }
   },
   "lsp": {
+    "vtsls": {
+      "settings": {
+        "typescript": {
+          "updateImportsOnFileMove": {
+            "enabled": "always"
+          }
+        },
+        "javascript": {
+          "updateImportsOnFileMove": {
+            "enabled": "always"
+          }
+        }
+      },
+      "enable_lsp_tasks": true
+    },
     "eslint": {
       "settings": {
         "codeActionOnSave": {
