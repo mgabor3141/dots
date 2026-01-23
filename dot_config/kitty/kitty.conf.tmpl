@@ -2314,6 +2314,14 @@ map super+v paste_from_clipboard
 
 #::      map kitty_mod+y new_window less @selection
 
+#: Clear line shortcuts
+
+#::  Ctrl+U - clear from cursor to beginning of line
+map kitty_mod+backspace send_text all \u0015
+
+#::  Ctrl+K - clear from cursor to end of line
+map kitty_mod+delete send_text all \u000b
+
 #: }}}
 
 #: Scrolling {{{
