@@ -19,7 +19,7 @@ input {
     }
 
     disable-power-key-handling
-    // focus-follows-mouse max-scroll-amount="50%" // Automatically focus windows under the mouse pointer
+    focus-follows-mouse max-scroll-amount="0%" // Automatically focus windows under the mouse pointer
 }
 
 gestures {
@@ -54,7 +54,7 @@ output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538" {
 }
 
 output "Dell Inc. DELL S2721D JRNFP43" {
-    position x=-2194 y=-200
+    position x=-2194 y=0
     mode "2560x1440@74.971"
     variable-refresh-rate
     scale 1.25
