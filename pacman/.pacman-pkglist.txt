@@ -88,6 +88,7 @@ nvidia-container-toolkit
 nvidia-prime
 octopi
 ollama-cuda
+openai-codex
 opendesktop-fonts
 os-prober
 pamixer
