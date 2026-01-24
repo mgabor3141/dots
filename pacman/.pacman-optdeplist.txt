@@ -16,7 +16,6 @@ kompare
 konsole
 libappindicator
 liboggz
-matugen
 pigz
 pulse-native-provider
 purpose
