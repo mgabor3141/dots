@@ -306,6 +306,7 @@ binds {
         match app-id="zen" title=r#"(Gmail|Home Assistant|Zoho Mail .*|Messenger)\s— Zen Browser$"#
         match app-id="zen" title=r#"^Google Calendar - .* — Zen Browser$"#
         match app-id="dev.zed.Zed" title=r#"\.env$"#
+        match app-id="Bitwarden"
         match app-id="org.kde.dolphin"
         match app-id="discord"
         match app-id="vesktop"
