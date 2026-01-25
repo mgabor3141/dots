@@ -1,3 +1,5 @@
+// chezmoi:template:left-delimiter="/*#" right-delimiter="*/"
+// chezmoi:modify-template
 // Zed settings
 //
 // For information on how to configure Zed, see the Zed
@@ -7,17 +9,19 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
-  "agent_servers": {
-    "opencode": {
-      "type": "extension",
-      "favorite_models": [
-        "github-copilot/claude-sonnet-4.5",
-        "github-copilot/gpt-5.2-codex",
-        "github-copilot/claude-opus-4.5"
-      ],
-      "default_config_options": {},
-      "favorite_config_option_values": {}
-    }
+  /*#- .chezmoi.stdin | fromJsonc
+    | jq "{ ssh_connections, agent_servers }"
+    | first | toPrettyJson | trimPrefix "{" | replaceAllRegex "\\s*}\\s*$" "," */
+  "agent": {
+    /*#- .chezmoi.stdin | fromJsonc
+      | jq ".agent | { default_model, favorite_models }"
+      | first | toPrettyJson | trimPrefix "{" | replaceAllRegex "\\s*}\\s*$" "," */
+    "expand_terminal_card": false,
+    "expand_edit_card": false,
+    "play_sound_when_agent_done": true,
+    "always_allow_tool_actions": true,
+    "default_profile": "write",
+    "model_parameters": []
   },
   "git_panel": {
     "tree_view": true,
@@ -101,14 +105,6 @@
     }
   },
   "soft_wrap": "editor_width",
-  "agent": {
-    "expand_terminal_card": false,
-    "expand_edit_card": false,
-    "play_sound_when_agent_done": true,
-    "always_allow_tool_actions": true,
-    "default_profile": "write",
-    "model_parameters": []
-  },
   "buffer_font_size": 14.0,
   "theme": {
     "mode": "system",
@@ -237,9 +233,9 @@
         "json": {
           "schemas": [
             {
-              "fileMatch": ["*.jsonc", "*.json.tmpl"],
+              "fileMatch": ["**/zed/*settings.json*"],
               "schema": {
-                "allowTrailingCommas": true
+                "allowComments": true
               }
             }
           ]
