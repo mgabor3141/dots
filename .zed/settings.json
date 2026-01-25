@@ -21,7 +21,7 @@
         "json": {
           "schemas": [
             {
-              "fileMatch": ["**/zed/*settings.json*"],
+              "fileMatch": ["**/zed/*settings.json*", "**/zed/*keymap.json*"],
               "schema": {
                 "allowComments": true
               }
