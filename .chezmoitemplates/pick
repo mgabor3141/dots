@@ -1,0 +1,20 @@
+{{- /*
+pick: parse JSONC stdin, run jq, drop null-valued keys, and emit inner JSON with trailing comma.
+
+Args (dict):
+  - stdin: JSONC text (e.g. .chezmoi.stdin)
+  - jq: jq/gojq expression that yields an object (or something that becomes one)
+*/ -}}
+
+{{- $stdin := .stdin -}}
+{{- $userQuery := .jq -}}
+{{- $query := printf "(%s) | with_entries(select(.value != null))" $userQuery -}}
+
+{{- $results := ($stdin | fromJsonc | jq $query) -}}
+{{- if gt (len $results) 0 -}}
+  {{- ($results | first | toPrettyJson)
+      | trimPrefix "{"
+      | replaceAllRegex "\\s*}\\s*$" ","
+      | replaceAllRegex "^,$" ""
+  -}}
+{{- end -}}

@@ -9,23 +9,15 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
-  /*#- .chezmoi.stdin | fromJsonc
-    | jq `.agent
-      | { ssh_connections, agent_servers }
-      | with_entries(select(.value != null))`
-    | first | toPrettyJson
-    | trimPrefix "{"
-    | replaceAllRegex "\\s*}\\s*$" ","
-    | replaceAllRegex "^,$" "" */
+  /*#- includeTemplate "pick" (dict
+    "stdin" .chezmoi.stdin
+    "jq" `.agent | { ssh_connections, agent_servers }`
+  ) */
   "agent": {
-    /*#- .chezmoi.stdin | fromJsonc
-      | jq `.agent
-        | { default_model, favorite_models }
-        | with_entries(select(.value != null))`
-      | first | toPrettyJson
-      | trimPrefix "{"
-      | replaceAllRegex "\\s*}\\s*$" ","
-      | replaceAllRegex "^,$" "" */
+    /*#- includeTemplate "pick" (dict
+      "stdin" .chezmoi.stdin
+      "jq" `.agent | { default_model, favorite_models }`
+    ) */
     "expand_terminal_card": false,
     "expand_edit_card": false,
     "play_sound_when_agent_done": true,
