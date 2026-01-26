@@ -10,12 +10,22 @@
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
   /*#- .chezmoi.stdin | fromJsonc
-    | jq "{ ssh_connections, agent_servers }"
-    | first | toPrettyJson | trimPrefix "{" | replaceAllRegex "\\s*}\\s*$" "," */
+    | jq `.agent
+      | { ssh_connections, agent_servers }
+      | with_entries(select(.value != null))`
+    | first | toPrettyJson
+    | trimPrefix "{"
+    | replaceAllRegex "\\s*}\\s*$" ","
+    | replaceAllRegex "^,$" "" */
   "agent": {
     /*#- .chezmoi.stdin | fromJsonc
-      | jq ".agent | { default_model, favorite_models }"
-      | first | toPrettyJson | trimPrefix "{" | replaceAllRegex "\\s*}\\s*$" "," */
+      | jq `.agent
+        | { default_model, favorite_models }
+        | with_entries(select(.value != null))`
+      | first | toPrettyJson
+      | trimPrefix "{"
+      | replaceAllRegex "\\s*}\\s*$" ","
+      | replaceAllRegex "^,$" "" */
     "expand_terminal_card": false,
     "expand_edit_card": false,
     "play_sound_when_agent_done": true,
@@ -240,6 +250,11 @@
             }
           ]
         }
+      }
+    },
+    "biome": {
+      "settings": {
+        "require_config_file": true
       }
     }
   }
