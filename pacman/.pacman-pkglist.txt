@@ -49,6 +49,7 @@ ffmpegthumbnailer
 firefox
 font-manager
 fsarchiver
+git-lfs
 glances
 haveged
 hdparm
