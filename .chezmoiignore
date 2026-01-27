@@ -1,4 +1,5 @@
 **/README.md
+AGENTS.md
 
 {{- if ne .chezmoi.os "linux" }}
 # Folders named "linux" anywhere
