@@ -16,4 +16,4 @@ This is a dotfiles repository managed by chezmoi. It supports multiple platforms
 
 4. **Ignore files**: Prefer subfolder-specific `.chezmoiignore` files over the global `.chezmoiignore` file. This keeps ignore rules localized and easier to maintain.
 
-5. **Always check diffs first**: Before applying changes, run `chezmoi diff` to see what would be changed. Then use `chezmoi apply` to apply changes.
+5. **Always check diffs first**: Before applying changes, run `chezmoi diff` to see what would be changed. Then use `chezmoi apply` to apply changes. You do not need to verify that `chezmoi apply` successfully updated the target files - trust that it worked.
