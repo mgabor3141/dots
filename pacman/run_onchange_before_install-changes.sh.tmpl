@@ -20,9 +20,6 @@ prune() {
     sudo pacman -Rsu --confirm $(comm -23 <(sort "$1") <(sort "$2")) || true
 }
 
-echo ">>> Refreshing sync database"
-sudo pacman -Sy
-
 echo ">>> Installing packages (needed + optional deps)"
 sudo pacman -S --needed - < <(cat "$NEEDED" "$OPTDEPS")
 
