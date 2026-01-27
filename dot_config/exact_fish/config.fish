@@ -10,6 +10,15 @@ end
 # Enable transient prompt to hide directory path in scrollback
 set -g fish_transient_prompt 1
 
+# Mouse tracking toggle
+#   - Mouse ON: click to move cursor (Shift+click to select text)
+#   - Mouse OFF: normal text selection
+# Only works if fish_mouse_enable env var is set
+set -g __fish_mouse_enabled 0
+
+# Bind Alt+Shift+M to toggle mouse mode
+bind \e\em mouse-toggle
+
 # Format man pages
 set -x MANROFFOPT "-c"
 set -x MANPAGER "sh -c 'col -bx | bat -l man -p'"

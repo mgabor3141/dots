@@ -12,7 +12,7 @@ This is a dotfiles repository managed by chezmoi. It supports multiple platforms
 
 2. **Platform-specific files**: Files/folders specific to Linux or macOS are conditionally ignored via `.chezmoiignore` based on `chezmoi.os`. Check the ignore file before assuming something should exist.
 
-3. **Template files**: Files ending in `.tmpl` are chezmoi templates that get processed. Don't edit the target files directly - edit the source templates.
+3. **Template files**: Files ending in `.tmpl` are chezmoi templates that get processed. Don't edit the target files directly - edit the source templates. **IMPORTANT**: When searching for config files, always search for both the regular extension AND the `.tmpl` extension (e.g., search for both `keymap.json` and `keymap.json.tmpl`).
 
 4. **Ignore files**: Prefer subfolder-specific `.chezmoiignore` files over the global `.chezmoiignore` file. This keeps ignore rules localized and easier to maintain.
 

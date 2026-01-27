@@ -143,6 +143,9 @@
     "line_height": { "custom": 1.2 },
     "toolbar": {
       "breadcrumbs": false
+    },
+    "env": {
+      "fish_mouse_enable": "1"
     }
   },
   "soft_wrap": "editor_width",
