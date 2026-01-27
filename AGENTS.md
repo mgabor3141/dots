@@ -4,7 +4,9 @@
 
 ## Repository Overview
 
-This is a dotfiles repository managed by chezmoi. It supports multiple platforms (macOS/darwin and Linux) with conditional file management.
+This is a **public** dotfiles repository managed by chezmoi. It supports multiple platforms (macOS/darwin and Linux) with conditional file management.
+
+**Privacy:** Do not include personal information, machine names, serial numbers, or other identifying details in files. Keep documentation general and useful for others.
 
 ## Key Gotchas
 
