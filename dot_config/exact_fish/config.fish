@@ -7,6 +7,9 @@ function fish_greeting
     fastfetch
 end
 
+# Enable transient prompt to hide directory path in scrollback
+set -g fish_transient_prompt 1
+
 # Format man pages
 set -x MANROFFOPT "-c"
 set -x MANPAGER "sh -c 'col -bx | bat -l man -p'"

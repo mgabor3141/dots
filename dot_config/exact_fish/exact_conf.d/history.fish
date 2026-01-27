@@ -35,6 +35,12 @@ function __save_to_both_histories --on-event fish_postexec
 end
 
 function history-toggle --description "Toggle between per-directory and global history"
+    # Save the current command if it was typed in (not from history browsing)
+    set -l saved_command ""
+    if not commandline --search-mode
+        set saved_command (commandline)
+    end
+    
     if test $__history_global_mode -eq 0
         # Switch to global mode
         set -g __history_global_mode 1
@@ -47,6 +53,11 @@ function history-toggle --description "Toggle between per-directory and global h
     
     # Clear the command line to reset history search context
     commandline -f kill-whole-line
+    
+    # Restore the command if it was manually typed
+    if test -n "$saved_command"
+        commandline -- $saved_command
+    end
     
     # Repaint to update chevron color
     commandline -f repaint
