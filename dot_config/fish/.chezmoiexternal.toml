@@ -1,0 +1,25 @@
+# Fish shell plugins managed via chezmoi external
+
+# done - Command duration notifications
+# https://github.com/franciscolourenco/done
+["conf.d/done.fish"]
+    type = "file"
+    url = "https://raw.githubusercontent.com/franciscolourenco/done/998ad4f5fc9cee36c09840a7e635b56428e554f9/conf.d/done.fish"
+    checksum.sha256 = "402a83d98d815ff3972cac136d205391a61d6175cc3f8aff15bda018259678ba"
+
+# per-directory-history - Per-directory command history
+# https://github.com/shufo/per-directory-history
+["conf.d/per-directory-history.fish"]
+    type = "file"
+    url = "https://raw.githubusercontent.com/shufo/per-directory-history/77ce73992354e330502896a57a1a12af26fd592b/init.fish"
+    checksum.sha256 = "69399b9d17032b5991976bcd4a3dce69c3215cb83e961726b554b040502b6e2c"
+
+["functions/per-directory-history.fish"]
+    type = "file"
+    url = "https://raw.githubusercontent.com/shufo/per-directory-history/77ce73992354e330502896a57a1a12af26fd592b/functions/per-directory-history.fish"
+    checksum.sha256 = "942e0a9dc31d8d4a8c51377cb72709e16cfa206f66f162667e37dfd3661b3d4c"
+
+["completions/per-directory-history.fish"]
+    type = "file"
+    url = "https://raw.githubusercontent.com/shufo/per-directory-history/77ce73992354e330502896a57a1a12af26fd592b/completions/per-directory-history.fish"
+    checksum.sha256 = "17545c76c7b643b879b92c844321f2d4fd6dc0fafee209b5e1ff11cd1ce9663d"
