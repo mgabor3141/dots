@@ -25,6 +25,14 @@ function fish_prompt --description 'Write out the prompt'
                 set prompt_status $status_color "[" $last_status "]" $normal
         end
 
+        # Change chevron color based on history mode
+        # Cyan for global mode, cwd color for per-directory mode
+        if test $__history_global_mode -eq 1
+                set status_color (set_color cyan)
+        else
+                set status_color $cwd_color
+        end
+
         echo ""
 
         if set -q SSH_CONNECTION
