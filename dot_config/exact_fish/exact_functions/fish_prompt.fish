@@ -26,6 +26,12 @@ function fish_prompt --description 'Write out the prompt'
                 set chevron_color $cwd_color
         end
 
+        # Mouse indicator
+        set -l mouse_indicator ''
+        if set -q __fish_mouse_enabled; and test "$__fish_mouse_enabled" -eq 1
+                set mouse_indicator ' 🐁'
+        end
+
         echo ""
 
         # Transient prompt (in scrollback)
@@ -39,7 +45,7 @@ function fish_prompt --description 'Write out the prompt'
                         set_color normal
                 end
 
-                echo -s $cwd_color (prompt_pwd) $vcs_color (fish_vcs_prompt) $normal
+                echo -s $cwd_color (prompt_pwd) $vcs_color (fish_vcs_prompt) $normal $mouse_indicator
                 echo -n -s $chevron_color $suffix ' ' $normal
         end
 end
