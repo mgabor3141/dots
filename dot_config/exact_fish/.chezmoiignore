@@ -1,0 +1,7 @@
+# Fish shell runtime files
+fish_variables
+
+# Platform-specific: fnm (Fast Node Manager) configuration
+{{- if not .managed }}
+conf.d/fnm.fish
+{{- end }}
