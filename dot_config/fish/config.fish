@@ -1,6 +1,3 @@
-## Source from conf.d before our fish config
-source ~/.config/fish/conf.d/done.fish
-
 ## Set values
 ## Run fastfetch as welcome message
 function fish_greeting
