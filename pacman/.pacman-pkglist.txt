@@ -45,6 +45,7 @@ dust
 efitools
 ethtool
 evtest
+ex-vi-compat
 ffmpegthumbnailer
 firefox
 font-manager
@@ -121,7 +122,6 @@ turbostat
 udiskie
 ufw
 unrar
-vi
 vlc-plugins-all
 wayland-protocols
 xl2tpd
