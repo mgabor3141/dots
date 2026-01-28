@@ -43,6 +43,7 @@ dolphin-plugins
 duf
 dust
 efitools
+electron
 ethtool
 evtest
 ex-vi-compat
