@@ -3,7 +3,7 @@
     "minimizeToTray": true,
     "arRPC": true,
     "appBadge": false,
-    "splashColor": "rgb(203, 220, 232)",
+    "splashColor": "rgb(239, 239, 241)",
     "autoStartMinimized": true,
     "hardwareVideoAcceleration": false,
     "disableMinSize": true,
@@ -13,5 +13,5 @@
         "en"
     ],
     "enableSplashScreen": false,
-    "splashBackground": "rgb(28, 35, 42)"
+    "splashBackground": "rgb(18, 18, 20)"
 }

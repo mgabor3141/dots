@@ -15,4 +15,9 @@
     "command": "chezmoi update",
     "show_command": false,
   },
+  {
+    "label": "re-add",
+    "command": "chezmoi re-add",
+    "show_command": false,
+  },
 ]

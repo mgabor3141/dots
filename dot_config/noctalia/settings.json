@@ -66,14 +66,18 @@
                 {
                     "characterCount": 1,
                     "colorizeIcons": false,
+                    "emptyColor": "secondary",
                     "enableScrollWheel": true,
+                    "focusedColor": "primary",
                     "followFocusedScreen": false,
                     "groupedBorderOpacity": 0.8,
                     "hideUnoccupied": true,
                     "iconScale": 0.9,
                     "id": "Workspace",
                     "labelMode": "name",
+                    "occupiedColor": "secondary",
                     "showApplications": true,
+                    "showBadge": true,
                     "showLabelsOnlyWhenOccupied": true,
                     "unfocusedIconsOpacity": 0.75
                 }
@@ -87,6 +91,7 @@
                     "hidePassive": true,
                     "id": "Tray",
                     "pinned": [
+                        "tray-id"
                     ]
                 },
                 {
@@ -108,14 +113,14 @@
                     "id": "Brightness"
                 },
                 {
-                    "deviceNativePath": "",
-                    "displayMode": "onhover",
+                    "deviceNativePath": "/org/bluez/hci0/dev_F3_F7_0D_8B_86_14",
+                    "displayMode": "alwaysHide",
                     "hideIfIdle": false,
                     "hideIfNotDetected": true,
                     "id": "Battery",
                     "showNoctaliaPerformance": false,
                     "showPowerProfiles": false,
-                    "warningThreshold": 30
+                    "warningThreshold": 20
                 },
                 {
                     "customFont": "",
@@ -152,10 +157,6 @@
             {
                 "enabled": true,
                 "id": "calendar-month-card"
-            },
-            {
-                "enabled": true,
-                "id": "timer-card"
             },
             {
                 "enabled": true,
@@ -281,6 +282,7 @@
         "allowPanelsOnScreenWithoutBar": true,
         "animationDisabled": false,
         "animationSpeed": 1.25,
+        "autoStartAuth": false,
         "avatarImage": "/home/mg/.face",
         "boxRadiusRatio": 1,
         "compactLockScreen": true,
