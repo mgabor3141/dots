@@ -1,6 +1,12 @@
 [
   // Personal preferences
   {
+    "bindings": {
+      // Upgraded precedence
+      "secondary-p": "file_finder::Toggle",
+    },
+  },
+  {
     "context": "Editor",
     "bindings": {
       "secondary-[": "pane::GoBack",
