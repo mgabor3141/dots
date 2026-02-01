@@ -36,6 +36,7 @@ claude-code
 coolercontrol
 cpupower
 direnv
+discord
 dmraid
 docker
 docker-compose
@@ -43,7 +44,6 @@ dolphin-plugins
 duf
 dust
 efitools
-electron
 ethtool
 evtest
 ex-vi-compat
@@ -111,7 +111,6 @@ sof-firmware
 speedtest-cli
 spoofdpi
 spotify-launcher
-sunshine
 swayidle
 systemd-boot-manager
 tailscale
