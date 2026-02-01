@@ -6,7 +6,7 @@ email = "{{ .git.email }}"
 
 [ui]
 editor = ["zed", "--wait"]
-default-command = ["log", "--no-pager"]
+default-command = ["log", "--no-pager", "--reversed"]
 diff-formatter = "difft"
 merge-editor = "meld"
 pager = { command = [ "less", "-FR", "-j3" ] }
