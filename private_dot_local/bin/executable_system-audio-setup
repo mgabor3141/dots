@@ -1,0 +1,26 @@
+#!/bin/sh
+
+card="alsa_card.usb-Focusrite_Scarlett_8i6_USB_F8D9XVT150B68B-00"
+sink="alsa_output.usb-Focusrite_Scarlett_8i6_USB_F8D9XVT150B68B-00.analog-surround-21"
+
+i=0
+while [ "$i" -lt 30 ]; do
+  if /usr/bin/pactl set-card-profile "$card" output:analog-surround-21+input:multichannel-input; then
+    break
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+
+/usr/bin/pactl list modules short | /usr/bin/awk '
+  /module-null-sink/ && /sink_name=(system-audio|discord-audio)/ {print $1}
+  /module-loopback/ && /source=(system-audio|discord-audio)\.monitor/ {print $1}
+' | while read -r id; do
+  [ -n "$id" ] && /usr/bin/pactl unload-module "$id"
+done
+
+/usr/bin/pactl load-module module-null-sink sink_name=system-audio sink_properties=device.description=System-Audio-Streamable
+/usr/bin/pactl load-module module-loopback source=system-audio.monitor sink="$sink" source_channel_map=front-left,front-right sink_channel_map=front-left,front-right channels=2 latency_msec=1
+
+/usr/bin/pactl load-module module-null-sink sink_name=discord-audio sink_properties=device.description=Discord-Private
+/usr/bin/pactl load-module module-loopback source=discord-audio.monitor sink="$sink" source_channel_map=front-left,front-right sink_channel_map=front-left,front-right channels=2 latency_msec=1

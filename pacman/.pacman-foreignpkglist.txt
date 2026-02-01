@@ -8,7 +8,9 @@ kanata-bin
 llama.cpp-cuda
 nautilus-gnome-disks
 opencode-bin
+quickshell-git
 rustdesk-bin
+sunshine-git
 systemd-manager-tui-bin
 systemd-numlockontty
 vesktop-git

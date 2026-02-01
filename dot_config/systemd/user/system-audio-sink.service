@@ -1,0 +1,12 @@
+[Unit]
+Description=Create system-audio virtual sink and loopback
+After=pipewire.service wireplumber.service pipewire-pulse.service
+Requires=pipewire.service pipewire-pulse.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.local/bin/system-audio-setup
+
+[Install]
+WantedBy=default.target

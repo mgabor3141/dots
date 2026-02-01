@@ -8,6 +8,7 @@ flite
 glib2-devel
 gtk4-layer-shell
 inotify-tools
+jdk-openjdk
 kde-cli-tools
 kdegraphics-thumbnailers
 kdenetwork-filesharing
