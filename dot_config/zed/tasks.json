@@ -3,10 +3,10 @@
     "label": "jj modified",
     "command": "watchexec -rq --debounce '5s' --wrap-process 'none' 'tput reset && jj diff --from \"trunk()\" --summary --color always | env COLUMNS=$(tput cols) LINES=$(tput lines) cols'",
     "show_command": false,
-    "show_summary": false
+    "show_summary": false,
   },
   {
-    "label": "$ZED_CUSTOM_TYPESCRIPT_RUNNER run test $ZED_SYMBOL",
+    "label": "$ZED_CUSTOM_TYPESCRIPT_RUNNER run test \"$ZED_SYMBOL\"",
     "command": "$ZED_CUSTOM_TYPESCRIPT_RUNNER run test",
     "args": [
       "--runInBand",
@@ -15,10 +15,12 @@
       "--testNamePattern",
       "\"$ZED_SYMBOL\"",
       "--runTestsByPath",
-      "\"$ZED_FILE\""
+      "\"$ZED_FILE\"",
     ],
-    "cwd": "$ZED_DIRNAME",
-    "tags": ["ts-test", "js-test", "tsx-test"]
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "tags": ["ts-test", "js-test", "tsx-test"],
+    "show_command": true,
+    "show_summary": true
   },
   {
     "label": "jest $ZED_SYMBOL",
@@ -30,13 +32,13 @@
       "--testNamePattern",
       "\"$ZED_SYMBOL\"",
       "--runTestsByPath",
-      "\"$ZED_FILE\""
+      "\"$ZED_FILE\"",
     ],
     "cwd": "$ZED_DIRNAME",
-    "tags": ["ts-test", "js-test", "tsx-test"]
+    "tags": ["ts-test", "js-test", "tsx-test"],
   },
   {
     "label": "$ZED_CUSTOM_TYPESCRIPT_RUNNER install",
-    "command": "$ZED_CUSTOM_TYPESCRIPT_RUNNER install"
-  }
+    "command": "$ZED_CUSTOM_TYPESCRIPT_RUNNER install",
+  },
 ]
