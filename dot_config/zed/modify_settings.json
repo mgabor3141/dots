@@ -25,6 +25,7 @@
     "default_profile": "write",
     "model_parameters": []
   },
+  "bottom_dock_layout": "left_aligned",
   "calls": {
     "mute_on_join": true
   },
@@ -54,7 +55,10 @@
   "when_closing_with_no_tabs": "keep_window_open",
   "git_panel": {
     "tree_view": true,
-    "sort_by_path": true
+    "sort_by_path": true,
+    "scrollbar": {
+      "show": "never"
+    }
   },
   "base_keymap": "None",
   "helix_mode": false,
@@ -71,7 +75,10 @@
     "file_icons": true,
     "entry_spacing": "standard",
     "hide_gitignore": true,
-    "hide_root": true
+    "hide_root": true,
+    "scrollbar": {
+      "show": "never"
+    }
   },
   "resize_all_panels_in_dock": [],
   "seed_search_query_from_cursor": "selection",
@@ -177,7 +184,7 @@
     "enabled": true,
     "show_value_hints": true,
     "show_type_hints": false,
-    "show_parameter_hints": true,
+    "show_parameter_hints": false,
     "show_other_hints": false,
     "show_background": false,
     "edit_debounce_ms": 700,
