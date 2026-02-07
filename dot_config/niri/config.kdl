@@ -256,7 +256,7 @@ binds {
         }
 
         struts {
-            top -12
+            top 8
         }
     }
 
