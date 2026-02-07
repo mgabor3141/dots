@@ -40,7 +40,6 @@ discord
 dmraid
 docker
 docker-compose
-dolphin-plugins
 duf
 dust
 efitools
@@ -82,13 +81,13 @@ namcap
 nano-syntax-highlighting
 netctl
 nfs-utils
-niri
 nix
 noctalia-shell
 noto-color-emoji-fontconfig
 ntp
 nvidia-container-toolkit
 nvidia-prime
+obs-studio
 octopi
 ollama-cuda
 openai-codex
@@ -128,5 +127,6 @@ xl2tpd
 xorg-xinit
 xorg-xinput
 xorg-xkill
+xwayland-satellite
 zed
 zen-browser-bin
