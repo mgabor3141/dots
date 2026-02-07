@@ -12,4 +12,24 @@ xkb_symbols "keyfixes" {
     key <FK22>  {    [ F22       ]    };
     key <FK23>  {    [ F23       ]    };
     key <FK24>  {    [ F24       ]    };
+
+    // Hungarian accented characters via RightAlt (level3) and RightAlt+Shift (level4)
+    key <AC01> { type="FOUR_LEVEL_ALPHABETIC",     [ a,            A,          aacute,        Aacute        ] };
+    key <AD03> { type="FOUR_LEVEL_ALPHABETIC",     [ e,            E,          eacute,        Eacute        ] };
+    key <AD07> { type="FOUR_LEVEL_ALPHABETIC",     [ u,            U,          uacute,        Uacute        ] };
+    key <AD09> { type="FOUR_LEVEL_ALPHABETIC",     [ o,            O,          oacute,        Oacute        ] };
+    key <AD08> { type="FOUR_LEVEL_ALPHABETIC",     [ i,            I,          iacute,        Iacute        ] };
+    key <AE10> { type="FOUR_LEVEL_SEMIALPHABETIC", [ 0,            parenright, odiaeresis,    Odiaeresis    ] };
+    key <AE11> { type="FOUR_LEVEL_SEMIALPHABETIC", [ minus,        underscore, udiaeresis,    Udiaeresis    ] };
+    key <AD11> { type="FOUR_LEVEL_SEMIALPHABETIC", [ bracketleft,  braceleft,  odoubleacute,  Odoubleacute  ] };
+    key <AC10> { type="FOUR_LEVEL_SEMIALPHABETIC", [ semicolon,    colon,      eacute,        Eacute        ] };
+    key <AC11> { type="FOUR_LEVEL_SEMIALPHABETIC", [ apostrophe,   quotedbl,   aacute,        Aacute        ] };
+    key <BKSL> { type="FOUR_LEVEL_SEMIALPHABETIC", [ backslash,    bar,        udoubleacute,  Udoubleacute  ] };
+
+    // Extra symbols
+    key <AE04> { type="FOUR_LEVEL", [ 4,      dollar,  EuroSign  ] };
+    key <AC03> { type="FOUR_LEVEL", [ d,      D,       degree    ] };
+    key <AB07> { type="FOUR_LEVEL", [ m,      M,       mu        ] };
+    key <AB09> { type="FOUR_LEVEL", [ period, greater, ellipsis  ] };
 };
+
