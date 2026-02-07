@@ -10,7 +10,6 @@ nautilus-gnome-disks
 niri-git
 opencode-bin
 quickshell-git
-rustdesk-bin
 sunshine-git
 systemd-manager-tui-bin
 systemd-numlockontty

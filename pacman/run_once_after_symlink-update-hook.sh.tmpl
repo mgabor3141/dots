@@ -2,4 +2,4 @@
 
 sudo ln -s \
     {{ .chezmoi.homeDir }}/{{ .chezmoi.sourceFile | dir }}/update-package-files.hook \
-    /etc/pacman.d/hooks/update-package-files.hook
+    /etc/pacman.d/hooks/update-package-files.hook || true
