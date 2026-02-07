@@ -1,0 +1,45 @@
+#!/bin/sh
+# Forward Sunshine's audio sink to the Scarlett for local playback.
+#
+# Sunshine creates sink-sunshine-stereo and sets it as default.
+# Apps follow the default there, and Sunshine captures from it.
+# We add a loopback so audio also plays locally through the Scarlett.
+# On stop, we restore system-audio as the default.
+
+SCARLETT="alsa_output.usb-Focusrite_Scarlett_8i6_USB_F8D9XVT150B68B-00.analog-surround-21"
+PIDFILE="/tmp/sunshine-audio-fix.pid"
+MODFILE="/tmp/sunshine-audio-loopback.mod"
+
+case "$1" in
+  start)
+    # Wait for Sunshine sink, then create loopback for local audio
+    (
+      i=0
+      while [ "$i" -lt 60 ]; do
+        if pactl list sinks short 2>/dev/null | grep -q sink-sunshine-stereo; then
+          modid=$(pactl load-module module-loopback \
+            source=sink-sunshine-stereo.monitor \
+            sink="$SCARLETT" \
+            source_channel_map=front-left,front-right \
+            sink_channel_map=front-left,front-right \
+            channels=2 latency_msec=1)
+          echo "$modid" > "$MODFILE"
+          exit 0
+        fi
+        i=$((i + 1))
+        sleep 0.5
+      done
+    ) &
+    echo $! > "$PIDFILE"
+    ;;
+  stop)
+    kill "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null
+    rm -f "$PIDFILE"
+    # Unload the loopback we created
+    modid="$(cat "$MODFILE" 2>/dev/null)"
+    [ -n "$modid" ] && pactl unload-module "$modid" 2>/dev/null
+    rm -f "$MODFILE"
+    # Restore system-audio as default
+    pactl set-default-sink system-audio
+    ;;
+esac

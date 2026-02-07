@@ -24,3 +24,9 @@ done
 
 /usr/bin/pactl load-module module-null-sink sink_name=discord-audio sink_properties=device.description=Discord-Private
 /usr/bin/pactl load-module module-loopback source=discord-audio.monitor sink="$sink" source_channel_map=front-left,front-right sink_channel_map=front-left,front-right channels=2 latency_msec=1
+
+# Set system-audio as the default sink so all streams route through it
+/usr/bin/pactl set-default-sink system-audio
+
+# Lower system-audio volume so Discord is relatively louder (no clipping risk)
+/usr/bin/pactl set-sink-volume system-audio 80%
