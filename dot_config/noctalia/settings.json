@@ -16,9 +16,9 @@
             "steam",
             "vesktop",
             "spotify-launcher",
-            "org.kde.dolphin",
             "kitty",
-            "dev.zed.Zed"
+            "dev.zed.Zed",
+            "org.gnome.Nautilus"
         ],
         "position": "center",
         "screenshotAnnotationTool": "",

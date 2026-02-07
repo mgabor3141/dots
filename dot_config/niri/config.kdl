@@ -309,6 +309,8 @@ binds {
         match app-id="dev.zed.Zed" title=r#"\.env$"#
         match app-id="Bitwarden"
         match app-id="org.kde.dolphin"
+        match app-id="org.gnome.Nautilus"
+        match app-id="xdg-desktop-portal-gtk"
         match app-id="discord"
         match app-id="vesktop"
         match app-id="qt-sudo"
@@ -358,20 +360,6 @@ binds {
             active-color "#f38ba8"
             inactive-color "#7d0d2d"
         }
-    }
-
-// ────────────── Environment Variables ──────────────
-// https://github.com/YaLTeR/niri/wiki/Configuration:-Miscellaneous#environment
-
-    environment {
-        DISPLAY ":1"
-        ELECTRON_OZONE_PLATFORM_HINT "auto"
-        QT_QPA_PLATFORM "wayland"
-        QT_QPA_PLATFORMTHEME "qt6ct"
-        QS_ICON_THEME "breeze-dark"
-        QT_WAYLAND_DISABLE_WINDOWDECORATION "1"
-        XDG_SESSION_TYPE "wayland"
-        XDG_CURRENT_DESKTOP "niri"
     }
 
     hotkey-overlay {

@@ -63,7 +63,6 @@ intel-ucode
 jfsutils
 jujutsu
 kitty
-kvantum-qt5
 kvantum-theme-nordic-git
 lazygit
 libva-nvidia-driver
