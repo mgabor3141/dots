@@ -5,7 +5,7 @@
     "appBadge": false,
     "splashColor": "rgb(239, 239, 241)",
     "autoStartMinimized": true,
-    "hardwareVideoAcceleration": false,
+    "hardwareVideoAcceleration": true,
     "disableMinSize": true,
     "clickTrayToShowHide": true,
     "spellCheckLanguages": [
