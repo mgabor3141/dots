@@ -124,15 +124,15 @@ binds {
     Mod+UP                             { focus-window-or-workspace-up; }
     Mod+DOWN                           { focus-window-or-workspace-down; }
 
-    Mod+Ctrl+LEFT                      { move-column-left-or-to-monitor-left; }
-    Mod+Ctrl+RIGHT                     { move-column-right-or-to-monitor-right; }
-    // Mod+Ctrl+UP                        { move-window-up; }
-    // Mod+Ctrl+DOWN                      { move-window-down; }
+    Mod+Shift+LEFT                      { move-column-left-or-to-monitor-left; }
+    Mod+Shift+RIGHT                     { move-column-right-or-to-monitor-right; }
+    // Mod+Shift+UP                        { move-window-up; }
+    // Mod+Shift+DOWN                      { move-window-down; }
 
     Mod+HOME                           { focus-column-first; }
     Mod+END                            { focus-column-last; }
-    Mod+Ctrl+HOME                      { move-column-to-first; }
-    Mod+Ctrl+END                       { move-column-to-last; }
+    Mod+Shift+HOME                      { move-column-to-first; }
+    Mod+Shift+END                       { move-column-to-last; }
 
     Mod+PAGE_UP                        { focus-monitor-left; }
     Mod+PAGE_DOWN                      { focus-monitor-right; }
@@ -155,14 +155,14 @@ binds {
     Mod+D                              { focus-workspace "D"; }
     Mod+F                              { focus-workspace "F"; }
 
-    Mod+Ctrl+Q                         { move-column-to-workspace "Q" focus=false; }
-    Mod+Ctrl+W                         { move-column-to-workspace "W" focus=false; }
-    Mod+Ctrl+E                         { move-column-to-workspace "E" focus=false; }
-    Mod+Ctrl+R                         { move-column-to-workspace "R" focus=false; }
-    Mod+Ctrl+A                         { move-column-to-workspace "A" focus=false; }
-    Mod+Ctrl+S                         { move-column-to-workspace "S" focus=false; }
-    Mod+Ctrl+D                         { move-column-to-workspace "D" focus=false; }
-    Mod+Ctrl+F                         { move-column-to-workspace "F" focus=false; }
+    Mod+Shift+Q                         { move-column-to-workspace "Q" focus=false; }
+    Mod+Shift+W                         { move-column-to-workspace "W" focus=false; }
+    Mod+Shift+E                         { move-column-to-workspace "E" focus=false; }
+    Mod+Shift+R                         { move-column-to-workspace "R" focus=false; }
+    Mod+Shift+A                         { move-column-to-workspace "A" focus=false; }
+    Mod+Shift+S                         { move-column-to-workspace "S" focus=false; }
+    Mod+Shift+D                         { move-column-to-workspace "D" focus=false; }
+    Mod+Shift+F                         { move-column-to-workspace "F" focus=false; }
 
     Mod+CTRL+UP                        { move-column-to-workspace-up; }
     Mod+CTRL+DOWN                      { move-column-to-workspace-down; }
@@ -182,7 +182,7 @@ binds {
     // ─── Modes ───
     Mod+G                              { toggle-window-floating; }
     // Mod+T                              { maximize-column; }
-    Mod+Ctrl+T                         { fullscreen-window; }
+    Mod+Shift+T                         { fullscreen-window; }
     Mod+B                              { toggle-column-tabbed-display; }
 
     // ─── Screenshots ───
@@ -193,7 +193,7 @@ binds {
     // ─── Emergency Escape Key ───
     // Use this when a fullscreen app blocks your keybinds.
     // It disables any active keyboard shortcut inhibitor, restoring control.
-    Mod+Ctrl+ESCAPE                    allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+    Mod+Shift+ESCAPE                    allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
 
     // ─── Exit / Power ───
     CTRL+ALT+DELETE                              { quit; } // Also quits Niri
