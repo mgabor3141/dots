@@ -10,7 +10,7 @@ input {
             // layout "us"
             file "~/.config/xkb/keymap.xkb"
         }
-        // numlock // Enable numlock on startup
+        numlock // Enable numlock on startup
     }
 
     touchpad {
