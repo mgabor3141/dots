@@ -16,6 +16,7 @@ AGENTS.md
 .config/noctalia
 .config/org.coolercontrol.CoolerControl
 .config/pipewire
+.config/sunshine
 .config/systemd
 .config/qt5ct
 .config/waybar*
