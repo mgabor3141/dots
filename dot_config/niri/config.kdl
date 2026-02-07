@@ -93,8 +93,6 @@ workspace "R" {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Key-Bindings
 
 binds {
-    Mod+Shift+Escape                   { show-hotkey-overlay; }
-
     // ─── Applications ───
     Mod+SPACE                          hotkey-overlay-title="Open Launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
 
