@@ -2,6 +2,7 @@ accountsservice
 adobe-source-han-sans-cn-fonts
 adobe-source-han-sans-jp-fonts
 adobe-source-han-sans-kr-fonts
+adw-gtk-theme
 alsa-firmware
 alsa-utils
 awesome-terminal-fonts
@@ -62,6 +63,7 @@ intel-ucode
 jfsutils
 jujutsu
 kitty
+kvantum-qt5
 kvantum-theme-nordic-git
 lazygit
 libva-nvidia-driver
@@ -97,11 +99,11 @@ pamixer
 parsec-bin
 partclone
 pavucontrol
-polkit-gnome
 protonup-qt
 pv
 python-pywal
 qt5ct
+qt6ct
 rebuild-detector
 reflector
 sddm

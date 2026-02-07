@@ -24,7 +24,6 @@ purpose
 python-html5lib
 python-truststore
 python-wxpython
-qt5-x11extras
 rrdtool
 rustup
 speech-dispatcher
