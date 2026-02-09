@@ -1,6 +1,7 @@
 #!/bin/bash
 
 source "$HOME/.config/aerospace/workspaces.conf"
+source "$CONFIG_DIR/label_styles.sh"
 
 # Check if workspace is a numbered workspace (for code editors)
 is_numbered_workspace() {
@@ -90,13 +91,7 @@ update_workspace_label() {
     label_type="${result%%:*}"
     label="${result#*:}"
     
-    if [ "$label_type" = "text" ]; then
-      # Use text font for project names
-      sketchybar --set space.$workspace drawing=on label="$label" label.font="Hack Nerd Font:Regular:13.0"
-    else
-      # Use icon font
-      sketchybar --set space.$workspace drawing=on label="$label" label.font="sketchybar-app-font:Regular:13.0"
-    fi
+    apply_label_style "space.$workspace" "$label" "$label_type"
   else
     label=$(build_letter_label "$workspace")
     if [ -z "$label" ]; then
@@ -104,7 +99,7 @@ update_workspace_label() {
       sketchybar --set space.$workspace drawing=off display=1
       return
     fi
-    sketchybar --set space.$workspace drawing=on label="$label" label.font="sketchybar-app-font:Regular:13.0"
+    apply_label_style "space.$workspace" "$label" "icon"
   fi
 }
 
