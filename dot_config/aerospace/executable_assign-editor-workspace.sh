@@ -1,8 +1,7 @@
 #!/bin/bash
 
+source "$HOME/.config/aerospace/workspaces.conf"
 STATE_FILE="$HOME/.config/aerospace/editor-workspaces.json"
-# Numbered workspaces for editors - must match aerospace.toml and sketchybar spaces.sh
-WORKSPACES="51 62 73 84 95"
 
 # Ensure state file exists
 [ -f "$STATE_FILE" ] || echo '{}' > "$STATE_FILE"
@@ -45,7 +44,7 @@ else
   OCCUPIED=$(aerospace list-workspaces --monitor all --empty no)
   TARGET="95"  # Default fallback
 
-  for ws in $WORKSPACES; do
+  for ws in $NUMBERED_WORKSPACES; do
     if ! echo "$OCCUPIED" | grep -q "^${ws}$"; then
       TARGET="$ws"
       break
