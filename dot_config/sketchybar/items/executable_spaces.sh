@@ -49,22 +49,44 @@ for sid in $ALL_WORKSPACES; do
     script="$CONFIG_DIR/plugins/aerospace.sh $sid"
 done
 
-# Load Icons on startup
+# Helper to check if workspace is numbered (for code editors)
+is_numbered_workspace() {
+  [[ " $NUMBERED_WORKSPACES " == *" $1 "* ]]
+}
+
+# Load labels on startup
 for mid in $(aerospace list-monitors | cut -c1); do
   for sid in $(aerospace list-workspaces --monitor $mid --empty no); do
-  apps=$(aerospace list-windows --workspace "$sid" | awk -F'|' '{gsub(/^ *| *$/, "", $2); print $2}')
+    sketchybar --set space.$sid drawing=on
 
-  sketchybar --set space.$sid drawing=on
-
-  icon_strip=" "
-  if [ "${apps}" != "" ]; then
-    while read -r app; do
-      icon_strip+=" $($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
-    done <<<"${apps}"
-  else
-    icon_strip=""
-  fi
-  sketchybar --set space.$sid label="$icon_strip"
+    if is_numbered_workspace "$sid"; then
+      # For numbered workspaces: show project name if Zed, otherwise icons
+      zed_title=$(aerospace list-windows --workspace "$sid" 2>/dev/null | awk -F'|' '$2 ~ /Zed/ {gsub(/^ *| *$/, "", $3); print $3; exit}')
+      
+      if [ -n "$zed_title" ]; then
+        label=$("$CONFIG_DIR/plugins/zed_project_label.sh" "$zed_title")
+        sketchybar --set space.$sid label="$label" label.font="Hack Nerd Font:Regular:13.0"
+      else
+        apps=$(aerospace list-windows --workspace "$sid" | awk -F'|' '{gsub(/^ *| *$/, "", $2); print $2}')
+        icon_strip=" "
+        if [ -n "$apps" ]; then
+          while read -r app; do
+            icon_strip+=" $($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
+          done <<<"$apps"
+        fi
+        sketchybar --set space.$sid label="$icon_strip" label.font="sketchybar-app-font:Regular:13.0"
+      fi
+    else
+      # For letter workspaces: always show icons
+      apps=$(aerospace list-windows --workspace "$sid" | awk -F'|' '{gsub(/^ *| *$/, "", $2); print $2}')
+      icon_strip=" "
+      if [ -n "$apps" ]; then
+        while read -r app; do
+          icon_strip+=" $($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
+        done <<<"$apps"
+      fi
+      sketchybar --set space.$sid label="$icon_strip"
+    fi
   done
 done
 
