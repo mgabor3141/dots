@@ -50,4 +50,8 @@ for word in "${words[@]}"; do
   fi
 done
 
-echo "$candidate"
+# Aliases for display
+case "$candidate" in
+  chezmoi) echo "dots" ;;
+  *)       echo "$candidate" ;;
+esac
