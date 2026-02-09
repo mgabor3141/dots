@@ -36,7 +36,7 @@
   tab  q    w    e    r    t    y    u    i    o    p    [    ]    \
   @cps a    s    d    f    g    h    j    k    l    ;    '    ret
   lsft z    x    c    v    b    n    m    ,    .    /    rsft up
-  lmet @fnc lalt @wm       spc            rmet @fnc      left down rght
+  @fnc lalt @wm  lmet      spc            rmet @fnc      left down rght
 )
 
 (deflayer extend
