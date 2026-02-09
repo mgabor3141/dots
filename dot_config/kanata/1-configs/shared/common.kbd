@@ -11,18 +11,15 @@
 (platform (macos)
   (defalias
     lsecondary lmeta
-    rsecondary rmeta
   )
 )
 (platform (linux)
   (defalias
     lsecondary lctrl
-    rsecondary rctrl
   )
 )
 (defalias
   lse @lsecondary
-  rse @rsecondary
 )
 
 (platform (macos) (defalias sleep C-M-S-q)) ;; Standard is C-M-q but that collides with Aerospace
@@ -86,13 +83,12 @@
             (on-release release-virtualkey ctrl)
         )
 
-  cps   (multi
-            (tap-hold-press 0 $ht
-                esc
-                @lse
-            )
-            (on-release release-virtualkey ctrl)
-        )
+  ;; Sticky shift: tap = one-shot shift (next key only), hold = normal shift
+  lss   (one-shot-press $ht lsft)
+  rss   (one-shot-press $ht rsft)
+
+  ;; Left shift key: tap = Esc, hold = Alt
+  lsf   (tap-hold-press 0 $ht esc lalt)
 
   ;; ctrl-tab, with ctrl held after
   ctb   (multi
