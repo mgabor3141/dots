@@ -9,6 +9,7 @@
     "label": "apply",
     "command": "chezmoi apply",
     "show_command": false,
+    "hide": "on_success",
   },
   {
     "label": "update",
