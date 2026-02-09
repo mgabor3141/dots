@@ -14,7 +14,7 @@ sketchybar --add event aerospace_monitor_change
 sketchybar --add event aerospace_node_moved
 
 source "$HOME/.config/aerospace/workspaces.conf"
-source "$CONFIG_DIR/label_styles.sh"
+source "$CONFIG_DIR/space_styles.sh"
 
 for sid in $ALL_WORKSPACES; do
   monitor=$(aerospace list-windows --workspace "$sid" --format "%{monitor-appkit-nsscreen-screens-id}")
@@ -31,20 +31,21 @@ for sid in $ALL_WORKSPACES; do
         echo "${v:-1}"
     )" \
     drawing=off \
-    padding_right=0 \
+    padding_left=$SPACE_PADDING_LEFT_ICON \
+    padding_right=$SPACE_PADDING_RIGHT_ICON \
     icon="${sid:1}" \
-    label.padding_right=12 \
-    label.padding_left=0 \
-    icon.font.size=17 \
-    icon.padding_left=7 \
-    icon.padding_right=0 \
+    label.padding_right=$LABEL_ICON_PADDING_RIGHT \
+    label.padding_left=$LABEL_ICON_PADDING_LEFT \
+    icon.font.size=$SPACE_ICON_FONT_SIZE \
+    icon.padding_left=$SPACE_ICON_PADDING_LEFT \
+    icon.padding_right=$SPACE_ICON_PADDING_RIGHT_ICON \
     background.drawing=on \
-    label.font="sketchybar-app-font:Regular:13.0" \
+    label.font="$LABEL_ICON_FONT" \
     background.color="$TRANSPARENT" \
     icon.color="$ACCENT_COLOR" \
     label.color="$ACCENT_COLOR" \
-    background.corner_radius=4 \
-    background.height=19 \
+    background.corner_radius=$SPACE_BG_CORNER_RADIUS \
+    background.height=$SPACE_BG_HEIGHT \
     label.drawing=on \
     click_script="aerospace workspace $sid" \
     script="$CONFIG_DIR/plugins/aerospace.sh $sid"
@@ -93,8 +94,8 @@ done
 
 sketchybar --add item space_separator left \
   --set space_separator icon="" \
-  icon.y_offset=2 \
-  icon.padding_left=6 \
+  icon.y_offset=$SEPARATOR_ICON_Y_OFFSET \
+  icon.padding_left=$SEPARATOR_ICON_PADDING_LEFT \
   label.drawing=off \
   background.drawing=off \
   script="$PLUGIN_DIR/space_windows.sh" \
