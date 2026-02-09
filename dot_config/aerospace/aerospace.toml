@@ -49,6 +49,11 @@ top = [
 preset = "qwerty"
 
 [mode.main.binding]
+# Workspace bindings
+# NOTE: If adding/changing workspaces, also update:
+#   - ~/.config/sketchybar/items/spaces.sh (ALL_WORKSPACES)
+#   - ~/.config/aerospace/assign-editor-workspace.sh (WORKSPACES)
+#   - ~/.config/aerospace/update-editor-mapping.sh (case statement)
 ctrl-a = "workspace 1A"
 ctrl-w = "workspace 2W"
 ctrl-r = "workspace 3R"

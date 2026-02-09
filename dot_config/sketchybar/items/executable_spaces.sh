@@ -13,7 +13,12 @@ sketchybar --add event aerospace_workspace_change
 sketchybar --add event aerospace_monitor_change
 sketchybar --add event aerospace_node_moved
 
-for sid in $(aerospace list-workspaces --all); do
+# All possible workspaces - must match aerospace.toml bindings
+# Letter workspaces (sorted first): 1A, 2W, 3R, 4T
+# Numbered workspaces (for editors): 51, 62, 73, 84, 95
+ALL_WORKSPACES="1A 2W 3R 4T 51 62 73 84 95"
+
+for sid in $ALL_WORKSPACES; do
   monitor=$(aerospace list-windows --workspace "$sid" --format "%{monitor-appkit-nsscreen-screens-id}")
 
   if [ -z "$monitor" ]; then

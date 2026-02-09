@@ -4,7 +4,7 @@
 TARGET_WS="$1"
 STATE_FILE="$HOME/.config/aerospace/editor-workspaces.json"
 
-# Only track numbered workspaces
+# Only track numbered workspaces - must match aerospace.toml and sketchybar spaces.sh
 case "$TARGET_WS" in
   51|62|73|84|95) ;;
   *) exit 0 ;;

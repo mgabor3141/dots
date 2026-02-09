@@ -1,6 +1,7 @@
 #!/bin/bash
 
 STATE_FILE="$HOME/.config/aerospace/editor-workspaces.json"
+# Numbered workspaces for editors - must match aerospace.toml and sketchybar spaces.sh
 WORKSPACES="51 62 73 84 95"
 
 # Ensure state file exists
