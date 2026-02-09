@@ -64,20 +64,23 @@ output "Dell Inc. DELL S2721D JRNFP43" {
     }
 }
 
+workspace "1" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "2" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "3" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "4" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "5" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
 workspace "A" {
     open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "S" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "D" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "F" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "Q" {
-    open-on-output "Dell Inc. DELL S2721D JRNFP43"
 }
 workspace "W" {
     open-on-output "Dell Inc. DELL S2721D JRNFP43"
@@ -86,6 +89,9 @@ workspace "E" {
     open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
 }
 workspace "R" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "T" {
     open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
 }
 
@@ -99,38 +105,44 @@ binds {
     // ─── Audio Controls ───
     // Example volume keys mappings for PipeWire & WirePlumber.
     // The allow-when-locked=true property makes them work even when the session is locked.
-    // XF86AudioRaiseVolume                allow-when-locked=true { spawn-sh "pactl set-volume @DEFAULT_AUDIO_SINK@ 0.1+"; }
-    // XF86AudioLowerVolume                allow-when-locked=true { spawn-sh "pactl set-volume @DEFAULT_AUDIO_SINK@ 0.1-"; }
-    XF86AudioMute                       allow-when-locked=true { spawn-sh "pactl set-sink-mute @DEFAULT_SINK@ toggle"; }
-    XF86AudioMicMute                    allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
-    XF86AudioNext                       allow-when-locked=true { spawn-sh "playerctl next"; }
-    XF86AudioPause                      allow-when-locked=true { spawn-sh "playerctl play-pause"; }
-    XF86AudioPlay                       allow-when-locked=true { spawn-sh "playerctl play-pause"; }
-    XF86AudioStop                       allow-when-locked=true { spawn-sh "playerctl play-pause"; }
-    XF86AudioPrev                       allow-when-locked=true { spawn-sh "playerctl previous"; }
+    // XF86AudioRaiseVolume               allow-when-locked=true { spawn-sh "pactl set-volume @DEFAULT_AUDIO_SINK@ 0.1+"; }
+    // XF86AudioLowerVolume               allow-when-locked=true { spawn-sh "pactl set-volume @DEFAULT_AUDIO_SINK@ 0.1-"; }
+    XF86AudioMute                      allow-when-locked=true { spawn-sh "pactl set-sink-mute @DEFAULT_SINK@ toggle"; }
+    XF86AudioMicMute                   allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
+    XF86AudioNext                      allow-when-locked=true { spawn-sh "playerctl next"; }
+    XF86AudioPause                     allow-when-locked=true { spawn-sh "playerctl play-pause"; }
+    XF86AudioPlay                      allow-when-locked=true { spawn-sh "playerctl play-pause"; }
+    XF86AudioStop                      allow-when-locked=true { spawn-sh "playerctl play-pause"; }
+    XF86AudioPrev                      allow-when-locked=true { spawn-sh "playerctl previous"; }
 
-    F13                                 allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
+    F13                                allow-when-locked=true { spawn "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
+
+    // ─── Brightness Controls ───
+    XF86MonBrightnessUp                 allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call brightness increase"; }
+    XF86MonBrightnessDown               allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call brightness decrease"; }
 
     // ─── Window Movement and Focus ───
-    Mod+X                              repeat=false { close-window; }
+    Mod+Z                              repeat=false { close-window; }
 
-    Mod+LEFT                           { focus-column-or-monitor-left; }
-    Mod+C                              { focus-column-or-monitor-left; }
-    Mod+RIGHT                          { focus-column-or-monitor-right; }
-    Mod+V                              { focus-column-or-monitor-right; }
+    Mod+LEFT                           { focus-column-left; }
+    Mod+RIGHT                          { focus-column-right; }
+    Mod+Shift+LEFT                     { focus-monitor-left; }
+    Mod+Shift+RIGHT                    { focus-monitor-right; }
+
+    Mod+Alt+LEFT                       { move-column-left; }
+    Mod+Alt+RIGHT                      { move-column-right; }
+    Mod+Alt+Shift+LEFT                 { move-column-to-monitor-left; }
+    Mod+Alt+Shift+RIGHT                { move-column-to-monitor-right; }
 
     Mod+UP                             { focus-window-or-workspace-up; }
     Mod+DOWN                           { focus-window-or-workspace-down; }
-
-    Mod+Shift+LEFT                      { move-column-left-or-to-monitor-left; }
-    Mod+Shift+RIGHT                     { move-column-right-or-to-monitor-right; }
-    // Mod+Shift+UP                        { move-window-up; }
-    // Mod+Shift+DOWN                      { move-window-down; }
+    Mod+Alt+UP                         { move-window-up; }
+    Mod+Alt+DOWN                       { move-window-down; }
 
     Mod+HOME                           { focus-column-first; }
     Mod+END                            { focus-column-last; }
-    Mod+Shift+HOME                      { move-column-to-first; }
-    Mod+Shift+END                       { move-column-to-last; }
+    Mod+Alt+HOME                       { move-column-to-first; }
+    Mod+Alt+END                        { move-column-to-last; }
 
     Mod+PAGE_UP                        { focus-monitor-left; }
     Mod+PAGE_DOWN                      { focus-monitor-right; }
@@ -144,59 +156,73 @@ binds {
     Mod+CTRL+WHEELSCROLLUP             { move-column-left; }
     Mod+CTRL+WHEELSCROLLDOWN           { move-column-right; }
 
-    Mod+Q                              { focus-workspace "Q"; }
-    Mod+W                              { focus-workspace "W"; }
-    Mod+E                              { focus-workspace "E"; }
-    Mod+R                              { focus-workspace "R"; }
-    Mod+A                              { focus-workspace "A"; }
-    Mod+S                              { focus-workspace "S"; }
-    Mod+D                              { focus-workspace "D"; }
-    Mod+F                              { focus-workspace "F"; }
 
-    Mod+Shift+Q                         { move-column-to-workspace "Q" focus=false; }
-    Mod+Shift+W                         { move-column-to-workspace "W" focus=false; }
-    Mod+Shift+E                         { move-column-to-workspace "E" focus=false; }
-    Mod+Shift+R                         { move-column-to-workspace "R" focus=false; }
-    Mod+Shift+A                         { move-column-to-workspace "A" focus=false; }
-    Mod+Shift+S                         { move-column-to-workspace "S" focus=false; }
-    Mod+Shift+D                         { move-column-to-workspace "D" focus=false; }
-    Mod+Shift+F                         { move-column-to-workspace "F" focus=false; }
+    Mod+1                              { focus-workspace "1"; }
+    Mod+2                              { focus-workspace "2"; }
+    Mod+3                              { focus-workspace "3"; }
+    Mod+4                              { focus-workspace "4"; }
+    Mod+5                              { focus-workspace "5"; }
+    // Mod+Q                              { focus-workspace "Q"; }
+    Mod+W                              { focus-workspace "W"; }
+    // Mod+E                              { focus-workspace "E"; }
+    Mod+R                              { focus-workspace "R"; }
+    Mod+T                              { focus-workspace "T"; }
+    Mod+A                              { focus-workspace "A"; }
+    // Mod+S                              { focus-workspace "S"; }
+    // Mod+D                              { focus-workspace "D"; }
+    // Mod+F                              { focus-workspace "F"; }
+
+    Mod+Alt+1                          { move-column-to-workspace "1"; }
+    Mod+Alt+2                          { move-column-to-workspace "2"; }
+    Mod+Alt+3                          { move-column-to-workspace "3"; }
+    Mod+Alt+4                          { move-column-to-workspace "4"; }
+    Mod+Alt+5                          { move-column-to-workspace "5"; }
+    // Mod+Alt+Q                          { move-column-to-workspace "Q"; }
+    Mod+Alt+W                          { move-column-to-workspace "W"; }
+    // Mod+Alt+E                          { move-column-to-workspace "E"; }
+    Mod+Alt+R                          { move-column-to-workspace "R"; }
+    Mod+Alt+T                          { move-column-to-workspace "T"; }
+    Mod+Alt+A                          { move-column-to-workspace "A"; }
+    // Mod+Alt+S                          { move-column-to-workspace "S"; }
+    // Mod+Alt+D                          { move-column-to-workspace "D"; }
+    // Mod+Alt+F                          { move-column-to-workspace "F"; }
 
     Mod+CTRL+UP                        { move-column-to-workspace-up; }
     Mod+CTRL+DOWN                      { move-column-to-workspace-down; }
 
-    Mod+F20                            { focus-workspace-previous; }
+    Mod+F20                            { spawn-sh "niri msg action close-overview && niri msg action focus-workspace-previous"; }
 
     // ─── Layout Controls ───
-    // Mod+CTRL+F                         { expand-column-to-available-width; }
-    // Mod+C                              { center-column; }
-    // Mod+CTRL+C                         { center-visible-columns; }
-    // Mod+MINUS                          { set-column-width "-10%"; }
-    // Mod+EQUAL                          { set-column-width "+10%"; }
-    // Mod+SHIFT+MINUS                    { set-window-height "-10%"; }
-    // Mod+SHIFT+EQUAL                    { set-window-height "+10%"; }
-    Mod+T                              { switch-preset-column-width; }
+    // Mod+CTRL+F                          { expand-column-to-available-width; }
+    // Mod+C                               { center-column; }
+    // Mod+CTRL+C                          { center-visible-columns; }
+    // Mod+MINUS                           { set-column-width "-10%"; }
+    // Mod+EQUAL                           { set-column-width "+10%"; }
+    // Mod+Alt+MINUS                       { set-window-height "-10%"; }
+    // Mod+Alt+EQUAL                       { set-window-height "+10%"; }
+    Mod+C                               { switch-preset-column-width-back; }
+    Mod+Alt+C                           { expand-column-to-available-width; }
+    Mod+V                               { switch-preset-column-width; }
+    Mod+Alt+V                           { fullscreen-window; }
 
     // ─── Modes ───
-    Mod+G                              { toggle-window-floating; }
-    // Mod+T                              { maximize-column; }
-    Mod+Shift+T                         { fullscreen-window; }
+    Mod+X                              { toggle-window-floating; }
     Mod+B                              { toggle-column-tabbed-display; }
+    Mod+Escape                         repeat=false { toggle-overview; }
 
     // ─── Screenshots ───
-    CTRL+SHIFT+1                                 { screenshot; }
-    CTRL+SHIFT+2                                 { screenshot-screen; }
-    CTRL+SHIFT+3                                 { screenshot-window; }
+    CTRL+SHIFT+1                       { screenshot; }
+    CTRL+SHIFT+2                       { screenshot-screen; }
+    CTRL+SHIFT+3                       { screenshot-window; }
 
     // ─── Emergency Escape Key ───
     // Use this when a fullscreen app blocks your keybinds.
     // It disables any active keyboard shortcut inhibitor, restoring control.
-    Mod+Shift+ESCAPE                    allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+    Mod+Ctrl+ESCAPE                    allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
 
     // ─── Exit / Power ───
-    CTRL+ALT+DELETE                              { quit; } // Also quits Niri
+    CTRL+ALT+DELETE                    { quit; } // Also quits Niri
     Mod+P                              { power-off-monitors; } // Turn off screens (useful for OLED or privacy)
-    Mod+O                              repeat=false { toggle-overview; }
 }
 
 // ────────────── Startup Applications ──────────────
@@ -369,8 +395,6 @@ binds {
         honor-xdg-activation-with-invalid-serial
     }
 
-// Custom window workspaces and positions
-
     window-rule {
         match is-floating=true
         focus-ring {
@@ -378,9 +402,14 @@ binds {
         }
     }
 
+// Custom window workspaces and positions
+
     window-rule {
         match app-id="zen" at-startup=true
         open-on-workspace "A"
+        default-column-width {
+            proportion 0.75
+        }
     }
 
     window-rule {
@@ -402,25 +431,32 @@ binds {
 
     window-rule {
         match app-id="steam"
-        open-on-workspace "D"
+        exclude title=r#"^notificationtoasts_\d+_desktop$"#
+        open-on-workspace "5"
         open-focused true
     }
 
     window-rule {
+        match app-id="steam" title=r#"^notificationtoasts_\d+_desktop$"#
+        default-floating-position x=10 y=10 relative-to="bottom-right"
+    }
+
+    window-rule {
         match app-id="spotify"
-        open-on-workspace "Q"
+        open-on-workspace "W"
         open-focused true
         default-column-width {
-            proportion 0.42
+            fixed 800
         }
     }
 
     window-rule {
         match app-id="vesktop"
-        open-on-workspace "Q"
+        match app-id="discord"
+        open-on-workspace "W"
         open-focused true
         default-column-width {
-            proportion 0.58
+            fixed 1200
         }
     }
 
