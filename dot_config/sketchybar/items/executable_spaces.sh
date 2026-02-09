@@ -14,6 +14,7 @@ sketchybar --add event aerospace_monitor_change
 sketchybar --add event aerospace_node_moved
 
 source "$HOME/.config/aerospace/workspaces.conf"
+source "$CONFIG_DIR/label_styles.sh"
 
 for sid in $ALL_WORKSPACES; do
   monitor=$(aerospace list-windows --workspace "$sid" --format "%{monitor-appkit-nsscreen-screens-id}")
@@ -65,7 +66,7 @@ for mid in $(aerospace list-monitors | cut -c1); do
       
       if [ -n "$zed_title" ]; then
         label=$("$CONFIG_DIR/plugins/zed_project_label.sh" "$zed_title")
-        sketchybar --set space.$sid label="$label" label.font="Hack Nerd Font:Regular:13.0"
+        apply_label_style "space.$sid" "$label" "text"
       else
         apps=$(aerospace list-windows --workspace "$sid" | awk -F'|' '{gsub(/^ *| *$/, "", $2); print $2}')
         icon_strip=" "
@@ -74,7 +75,7 @@ for mid in $(aerospace list-monitors | cut -c1); do
             icon_strip+=" $($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
           done <<<"$apps"
         fi
-        sketchybar --set space.$sid label="$icon_strip" label.font="sketchybar-app-font:Regular:13.0"
+        apply_label_style "space.$sid" "$icon_strip" "icon"
       fi
     else
       # For letter workspaces: always show icons
@@ -85,7 +86,7 @@ for mid in $(aerospace list-monitors | cut -c1); do
           icon_strip+=" $($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
         done <<<"$apps"
       fi
-      sketchybar --set space.$sid label="$icon_strip"
+      apply_label_style "space.$sid" "$icon_strip" "icon"
     fi
   done
 done
