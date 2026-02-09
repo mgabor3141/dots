@@ -1,14 +1,14 @@
 #!/bin/bash
 # Usage: update-editor-mapping.sh <target-workspace>
 
+source "$HOME/.config/aerospace/workspaces.conf"
 TARGET_WS="$1"
 STATE_FILE="$HOME/.config/aerospace/editor-workspaces.json"
 
-# Only track numbered workspaces - must match aerospace.toml and sketchybar spaces.sh
-case "$TARGET_WS" in
-  51|62|73|84|95) ;;
-  *) exit 0 ;;
-esac
+# Only track numbered workspaces
+if ! echo "$NUMBERED_WORKSPACES" | grep -qw "$TARGET_WS"; then
+  exit 0
+fi
 
 # Get focused window info
 WINDOW_INFO=$(aerospace list-windows --focused --format '%{app-bundle-id}|%{window-title}')
