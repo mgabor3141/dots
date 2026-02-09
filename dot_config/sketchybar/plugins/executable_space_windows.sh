@@ -1,7 +1,7 @@
 #!/bin/bash
 
 source "$HOME/.config/aerospace/workspaces.conf"
-source "$CONFIG_DIR/label_styles.sh"
+source "$CONFIG_DIR/space_styles.sh"
 
 # Check if workspace is a numbered workspace (for code editors)
 is_numbered_workspace() {
