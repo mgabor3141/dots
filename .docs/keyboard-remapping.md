@@ -4,19 +4,22 @@ Cross-platform keyboard remapping setup that provides consistent keybindings acr
 
 ## Core Concept: `secondary` Modifier
 
-The linchpin is a `secondary` modifier abstraction, defined in Kanata and echoed in Zed:
+The `secondary` modifier abstraction normalizes the "main shortcut" key across platforms:
 
 - **Linux**: `secondary` = `Ctrl` (native)
 - **macOS**: `secondary` = `Cmd` (what macOS users expect)
 
-The same physical key triggers copy/paste/save/etc. on both platforms, with each OS receiving its native modifier.
+Kanata defines this at the hardware level for the Razer keyboard (mapping Left Ctrl to Cmd on macOS). Application keybind templates (Zed, Kitty, etc.) use the same concept to generate platform-appropriate shortcuts.
 
 ## Layer 1: Hardware Level -- Kanata
 
 Kanata intercepts raw keyboard input on both platforms (`dot_config/kanata/`).
 
 **Key remappings:**
-- **CapsLock**: tap = Esc, hold = Secondary (Cmd on mac, Ctrl on Linux)
+- **CapsLock**: sticky shift (one-shot: tap activates shift for next key only, hold works as normal shift)
+- **Left Shift**: tap = Esc, hold = Alt
+- **Right Shift**: sticky shift (same as CapsLock)
+- **Left Ctrl** (Razer only): Secondary (Cmd on macOS, Ctrl on Linux)
 - **Fn/Extend layer** (dedicated key): ESDF arrows, Home/End, PgUp/PgDn, Hungarian accented characters, media keys
 - **Window Manager key**: hold = `Ctrl` on macOS (Aerospace) / `Super` on Linux (Niri); tap = `F20` (previous workspace)
 - **Chords**: `= + Backspace` = Delete, `Fn + Ctrl` = F13
@@ -29,7 +32,9 @@ Kanata intercepts raw keyboard input on both platforms (`dot_config/kanata/`).
 
 ### Hammerspoon (macOS only)
 
-Hammerspoon (`dot_hammerspoon/init.lua`) operates after Kanata via an eventtap and fixes macOS-specific navigation behavior:
+Hammerspoon (`exact_dot_hammerspoon/`) operates after Kanata via eventtaps and handles macOS-specific behavior:
+
+**Key remapping** (`remap.lua`):
 
 | Input | Output | Purpose |
 |---|---|---|
@@ -38,7 +43,9 @@ Hammerspoon (`dot_hammerspoon/init.lua`) operates after Kanata via an eventtap a
 | Alt+Left/Right | Alt+F18/F19 | Frees Alt+Arrow for app-level rebinding |
 | Home/End | Cmd+Left/Right | macOS line start/end |
 
-Also provides global hotkeys: `Ctrl+Z` close window, `Ctrl+X` toggle float/tile, `Ctrl+.` emoji picker, sleep.
+**Ctrl+Tab / Cmd+Tab swap** (`tabswap.lua`): Swaps these two shortcuts with full modifier hold support so the app switcher / tab switcher UIs stay open while the physical modifier is held.
+
+**Global hotkeys** (`hotkeys.lua`): `Ctrl+Z` close window, `Ctrl+X` toggle float/tile, `Ctrl+.` emoji picker, sleep.
 
 ### XKB (Linux only)
 
@@ -84,13 +91,13 @@ All follow the same pattern with platform-aware chezmoi templates:
 Physical Key -> Kanata (HID) -> Hammerspoon/XKB (OS) -> App Keybinds
 ```
 
-**macOS example** (CapsLock-hold + C):
-1. Kanata: CapsLock-hold -> Cmd
+**macOS example** (Ctrl+C with Razer):
+1. Kanata: Left Ctrl -> Cmd (via `@lse` secondary)
 2. Hammerspoon: passes Cmd+C through
 3. Zed: `secondary+c` (= `cmd+c`) = copy
 
 **Linux example** (same physical action):
-1. Kanata: CapsLock-hold -> Ctrl
+1. Kanata: Left Ctrl -> Ctrl (identity)
 2. XKB: passes Ctrl+C through
 3. Zed: `ctrl+c` = copy
 

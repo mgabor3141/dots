@@ -33,12 +33,15 @@
 (deflayermap (base)
   brk @sleep
 
-  caps @cps
+  caps @lss
+
+  lsft @lsf
+  rsft @rss
 
   f17  @fn
-  lctl @lse
-  lmet lalt
-  lalt @wm
+  lalt @lse
+  lmet @wm
+  lctl @fn
   f24  @fn
 )
 
