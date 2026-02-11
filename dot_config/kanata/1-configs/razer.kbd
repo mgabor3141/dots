@@ -45,11 +45,4 @@
   f24  @fn
 )
 
-(deflayer extend
-        _         _    _    _    _    _    _    _    _    _    _    _    _       _    _    _
-  _     @í   _    _    _    _    _    _    _    _    _    @ö   @ü   @ó   _    ;; ins  home pgup
-  _     _    _    _    up   _    _    _    _    _    _    _    @ő   @ú   @ű   ;; del  end  pgdn
-  _     _    _    left down rght _    _    _    _    _    @é   @á   _
-  _     _    _    _    _    _    _    _    _    _    _    _    _              ;;      up
-  XX    lctl _    _              _                   _    _    _    _         ;; left down rght
-)
+(deflayermap (fn))

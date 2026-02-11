@@ -25,34 +25,6 @@
 (platform (macos) (defalias sleep C-M-S-q)) ;; Standard is C-M-q but that collides with Aerospace
 (platform (linux) (defalias sleep sleep))
 
-;; Hungarian keys
-(platform (macos)
-  (defalias
-    í     A-Numpad1    ;; Option + NumpadN bound via QWERTY.keylayout
-    ö     A-Numpad2
-    ü     A-Numpad3
-    ó     A-Numpad4
-    ő     A-Numpad5
-    ú     A-Numpad6
-    ű     A-Numpad7
-    é     A-Numpad8
-    á     A-Numpad9
-  )
-)
-(platform (linux)
-  (defalias
-    í     (unicode í)    ;; TODO: Fix unicode text entry on Linux
-    ö     (unicode ö)
-    ü     (unicode ü)
-    ó     (unicode ó)
-    ő     (unicode ő)
-    ú     (unicode ú)
-    ű     (unicode ű)
-    é     (unicode é)
-    á     (unicode á)
-  )
-)
-
 ;; MacOS specific remaps, intended to standardize key positions between platforms
 (platform (macos)
   (defoverrides
@@ -102,16 +74,8 @@
         )
 )
 
-;; This allows binding Ctrl+(Shift+)Tab to other keys with Ctrl held down
-(defvirtualkeys
-  ctrl lctl
-)
-
 (defalias
-  fn    (multi
-            (layer-toggle extend)
-            (on-release release-virtualkey ctrl)
-        )
+  fn    (layer-toggle fn)
 
   ;; Sticky shift: tap = one-shot shift (next key only), hold = normal shift
   lss   (one-shot-press $ht lsft)
@@ -119,12 +83,4 @@
 
   ;; Left shift key: tap = Esc, hold = Alt
   lsf   (tap-hold-press 0 $ht esc lalt)
-
-  ;; ctrl-tab, with ctrl held after
-  ctb   (multi
-            (release-key lmet)
-            (hold-for-duration 2000 ctrl)
-            lctl ;; this triggers the on-press
-            tab
-        )
 )
