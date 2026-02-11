@@ -15,6 +15,7 @@
 (defsrc)
 
 (deflayermap (base)
+  tab @tab
   rmet @wm-modifier
   lctl @lsecondary
 )
