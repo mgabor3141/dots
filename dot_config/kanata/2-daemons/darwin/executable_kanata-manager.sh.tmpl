@@ -3,204 +3,44 @@ set -eu
 
 KANATA_BIN="/opt/homebrew/bin/kanata"
 CONFIG_DIR="{{ .chezmoi.destDir }}/.config/kanata/1-configs"
-LOG_PATTERN="${KANATA_LOG_PATTERN:-"doesn't match any connected device|Couldn't register device|exclusive access and device already open|not permitted"}"
-POLL_INTERVAL="${KANATA_POLL_INTERVAL:-2}"
-MAX_RESTARTS=5
-WINDOW_SECONDS=10
 
-RUNNING_CONFIGS=""
-CONFIG_PIDS=""
-CONFIG_DEVICES=""
-RESTART_LOG=""
-
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
-
-map_device() {
-    name="$1"
-    vid="$2"
-    pid="$3"
-    case "$name" in
-        "Apple Internal Keyboard / Trackpad") echo "macbook-ansi.kbd" ;;
-        "Razer BlackWidow Ultimate") echo "razer.kbd" ;;
-        *) echo "" ;;
-    esac
-}
+CONFIGS="macbook-ansi.kbd razer.kbd go60.kbd"
 
 YELLOW='\033[0;33m'
 GREEN='\033[0;32m'
+CYAN='\033[0;36m'
 RESET='\033[0m'
 config_color() {
-    cfg="$1"
-    case "$cfg" in
+    case "$1" in
         macbook-ansi.kbd) echo "$YELLOW" ;;
         razer.kbd) echo "$GREEN" ;;
+        go60.kbd) echo "$CYAN" ;;
         *) echo "$RESET" ;;
     esac
 }
 
-list_devices() {
-    "$KANATA_BIN" --list 2>/dev/null | awk '
-    /^0x/ {
-        hash=$1; vid=$2; pid=$3;
-        if (NF>=4) { name=substr($0,index($0,$4)) } else { name="" }
-        print hash "|" vid "|" pid "|" name
-    }'
-}
-
-sanitize_name() { echo "$1" | tr ' /' '__' | tr -cd 'A-Za-z0-9_-'; }
-
-record_restart() {
-    cfg="$1"
-    now=$(date +%s)
-    new_log=""
-    found=0
-    for entry in $RESTART_LOG; do
-        c=${entry%%:*}; tslist=${entry#*:}
-        if [ "$c" = "$cfg" ]; then
-            tslist="$tslist $now"
-            set -- $tslist
-            shift_count=$(($# - MAX_RESTARTS))
-            [ $shift_count -gt 0 ] && set -- "${@:$((shift_count+1))}"
-            tslist=$(echo "$@" | tr ' ' ',')
-            found=1
-        fi
-        new_log="$new_log $c:$tslist"
-    done
-    [ $found -eq 0 ] && new_log="$RESTART_LOG $cfg:$now"
-    RESTART_LOG="$new_log"
-}
-
-check_restart_loop() {
-    cfg="$1"
-    now=$(date +%s)
-    for entry in $RESTART_LOG; do
-        c=${entry%%:*}; tslist=${entry#*:}
-        [ "$c" != "$cfg" ] && continue
-        count=0
-        IFS=','; set -- $tslist; unset IFS
-        for ts in "$@"; do
-            [ $((now - ts)) -le $WINDOW_SECONDS ] && count=$((count+1))
-        done
-        [ $count -ge $MAX_RESTARTS ] && return 0 || return 1
-    done
-    return 1
-}
-
-handle_restart_loop() {
-    log "Restart loop detected! Stopping all processes and cleaning up..."
-    for cfg in $RUNNING_CONFIGS; do stop_kanata "$cfg"; done
-    exit 1
-}
-
-start_kanata() {
-    cfg="$1"
-    device="$2"
-
-    [ -z "$cfg" ] && return
-    [ -n "$(echo $RUNNING_CONFIGS | grep -w "$cfg")" ] && return # already running
-
-    cfg_path="${CONFIG_DIR}/${cfg}"
-    mkdir -p "$CONFIG_DIR"
-
-    color=$(config_color "$cfg")
-    echo "${color}[$cfg manager]${RESET} Kanata starting... (device: $device)"
-    PIPE="$(mktemp -u)"; mkfifo "$PIPE"
-
-    "$KANATA_BIN" --cfg "$cfg_path" >"$PIPE" 2>&1 &
-    pid=$!
-
-    RUNNING_CONFIGS="$RUNNING_CONFIGS $cfg"
-    CONFIG_PIDS="$CONFIG_PIDS $pid"
-    CONFIG_DEVICES="$CONFIG_DEVICES $devices"
-
-    # Log monitor
-    ( while IFS= read -r line; do
-        color=$(config_color "$cfg")
-        echo "${color}[$cfg]${RESET} $line"
-        if echo "$line" | grep -E -q "$LOG_PATTERN"; then
-            # Warnings are expected for Go60 config
-            [ "$cfg" != "go60.kbd" ] || continue
-
-            log "Log pattern matched for $cfg, restarting"
-            record_restart "$cfg"
-            check_restart_loop "$cfg" && handle_restart_loop
-            stop_kanata "$cfg"
-            start_kanata "$cfg" "$devices"
-        fi
-    done <"$PIPE" ) &
-}
-
-stop_kanata() {
-    cfg="$1"
-    i=1
-    for c in $RUNNING_CONFIGS; do
-        [ "$c" = "$cfg" ] || { i=$((i+1)); continue; }
-        set -- $CONFIG_PIDS; pid=$(eval echo \$$i)
-        set -- $CONFIG_DEVICES; devices=$(eval echo \$$i)
-
-        color=$(config_color "$cfg")
-        echo "${color}[$cfg manager]${RESET} Kanata stopping... (device: $devices, pid: $pid)"
-        kill -TERM "$pid" 2>/dev/null || true; sleep 1
-        kill -KILL "$pid" 2>/dev/null || true
-
-        RUNNING_CONFIGS=$(echo "$RUNNING_CONFIGS" | tr ' ' '\n' | grep -v "^$cfg$" | tr '\n' ' ')
-        CONFIG_PIDS=$(echo "$CONFIG_PIDS" | tr ' ' '\n' | grep -v "^$pid$" | tr '\n' ' ')
-        CONFIG_DEVICES=$(echo "$CONFIG_DEVICES" | tr ' ' '\n' | grep -v "^$devices$" | tr '\n' ' ')
-        break
-    done
-}
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 log "Starting kanata-manager"
-
 pkill kanata 2>/dev/null || true
+sleep 1
 
-while true; do
-    # Build mapping: config -> list of device hashes
-    CONFIG_MAP=""
-    while IFS= read -r device_info; do
-        device=$(echo "$device_info" | cut -d'|' -f1)
-        vid=$(echo "$device_info" | cut -d'|' -f2)
-        pid=$(echo "$device_info" | cut -d'|' -f3)
-        name=$(echo "$device_info" | cut -d'|' -f4-)
-        cfg=$(map_device "$name" "$vid" "$pid")
+PIDS=""
 
-        # Strip leading 0x from device hash
-        device_nohex=${device#0x}
+for cfg in $CONFIGS; do
+    cfg_path="${CONFIG_DIR}/${cfg}"
+    color=$(config_color "$cfg")
 
-        [ -n "$cfg" ] && CONFIG_MAP="$CONFIG_MAP $cfg:$device_nohex"
-    done <<EOF
-$(list_devices)
-EOF
-
-    # Start missing configs (either not running or crashed)
-    for entry in $CONFIG_MAP; do
-        cfg=${entry%%:*}
-        devices=${entry#*:}
-
-        # Check if this config is running and PID is alive
-        alive=0
-        i=1
-        for c in $RUNNING_CONFIGS; do
-            [ "$c" = "$cfg" ] || { i=$((i+1)); continue; }
-            set -- $CONFIG_PIDS
-            pid=$(eval echo \$$i)
-            if kill -0 "$pid" 2>/dev/null; then
-                alive=1
-            fi
-            break
-        done
-
-        [ $alive -eq 0 ] && start_kanata "$cfg" "$devices"
-    done
-
-    # Stop configs with no active devices
-    for cfg in $RUNNING_CONFIGS; do
-        active=0
-        for entry in $CONFIG_MAP; do
-            [ "${entry%%:*}" = "$cfg" ] && active=1 && break
-        done
-        [ $active -eq 0 ] && stop_kanata "$cfg"
-    done
-
-    sleep "$POLL_INTERVAL"
+    log "Starting $cfg"
+    "$KANATA_BIN" --cfg "$cfg_path" 2>&1 | while IFS= read -r line; do
+        echo "${color}[$cfg]${RESET} $line"
+    done &
+    PIDS="$PIDS $!"
 done
+
+log "All configs started. PIDs:$PIDS"
+
+# Wait for any child to exit
+wait
+log "A kanata process exited unexpectedly. Cleaning up..."
+kill $PIDS 2>/dev/null || true
