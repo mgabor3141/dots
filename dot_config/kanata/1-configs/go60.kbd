@@ -1,8 +1,9 @@
 (defcfg
-  ;; Go60 appears as unnamed device, use hash to identify
-  ;; Check `kanata --list` if hash changes
+  ;; Go60 has no product_key so `kanata --list` shows only its hash.
+  ;; But Karabiner DriverKit changes hashes, while preserving device names.
+  ;; The name "Go60" is visible at the IOKit level, so match by name.
   macos-dev-names-include (
-    "0x95743CD71524B774"
+    "Go60"
   )
 
   process-unmapped-keys yes
@@ -14,8 +15,8 @@
 (defsrc)
 
 (deflayermap (base)
-  lmet @wm
-  lctl lmet
+  rmet @wm-modifier
+  lctl @lsecondary
 )
 
 (deflayermap (fn))

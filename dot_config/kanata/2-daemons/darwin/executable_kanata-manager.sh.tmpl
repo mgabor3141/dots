@@ -3,12 +3,12 @@ set -eu
 
 KANATA_BIN="/opt/homebrew/bin/kanata"
 CONFIG_DIR="{{ .chezmoi.destDir }}/.config/kanata/1-configs"
-
 CONFIGS="macbook-ansi.kbd razer.kbd go60.kbd"
 
 YELLOW='\033[0;33m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
+RED='\033[0;31m'
 RESET='\033[0m'
 config_color() {
     case "$1" in
@@ -21,26 +21,51 @@ config_color() {
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+check_permissions() {
+    # After startup, check if all instances failed to open their target device.
+    # This indicates macOS Input Monitoring permission is missing for kanata.
+    sleep 8  # Wait for all instances to initialize
+
+    logfile="$1"
+    if [ ! -f "$logfile" ]; then return; fi
+
+    # Count configs that reached "Starting kanata proper" (successful device grab)
+    started=$(grep -c "Starting kanata proper" "$logfile" 2>/dev/null || echo 0)
+    if [ "$started" -eq 0 ]; then
+        log "${RED}ERROR: No kanata instance managed to grab a device.${RESET}"
+        log "${RED}macOS Input Monitoring permission is likely missing for kanata.${RESET}"
+        log "${RED}Opening System Settings > Privacy & Security > Input Monitoring...${RESET}"
+        open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent" 2>/dev/null || true
+    fi
+}
+
+# --- Main ---
 log "Starting kanata-manager"
-pkill kanata 2>/dev/null || true
+pkill -x kanata 2>/dev/null || true
 sleep 1
 
 PIDS=""
+LOGFILE=$(mktemp)
 
 for cfg in $CONFIGS; do
-    cfg_path="${CONFIG_DIR}/${cfg}"
     color=$(config_color "$cfg")
-
     log "Starting $cfg"
-    "$KANATA_BIN" --cfg "$cfg_path" 2>&1 | while IFS= read -r line; do
-        echo "${color}[$cfg]${RESET} $line"
-    done &
+    "$KANATA_BIN" --cfg "${CONFIG_DIR}/${cfg}" 2>&1 \
+        | tee -a "$LOGFILE" \
+        | while IFS= read -r line; do
+            echo "${color}[${cfg}]${RESET} $line"
+          done &
     PIDS="$PIDS $!"
+    sleep 1
 done
 
 log "All configs started. PIDs:$PIDS"
 
+# Background permission check
+check_permissions "$LOGFILE" &
+
 # Wait for any child to exit
 wait
-log "A kanata process exited unexpectedly. Cleaning up..."
+log "A kanata process exited. Cleaning up..."
+rm -f "$LOGFILE"
 kill $PIDS 2>/dev/null || true
