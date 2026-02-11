@@ -15,13 +15,13 @@
 			<modifier keys="caps" />
 		</keyMapSelect>
 		<keyMapSelect mapIndex="3">
-			<modifier keys="anyOption" />
+			<modifier keys="rightOption" />
 		</keyMapSelect>
 		<keyMapSelect mapIndex="4">
-			<modifier keys="anyShift caps? anyOption" />
+			<modifier keys="anyShift caps? rightOption" />
 		</keyMapSelect>
 		<keyMapSelect mapIndex="5">
-			<modifier keys="caps anyOption" />
+			<modifier keys="caps rightOption" />
 		</keyMapSelect>
 		<keyMapSelect mapIndex="6">
 			<modifier keys="command anyShift? caps? anyOption? anyControl?" />
@@ -392,7 +392,19 @@
 			<key code="126" output="&#x1E;" />
 		</keyMap>
 		<keyMap index="3">
-			<!-- gap, 0-35 -->
+			<!-- Hungarian accented characters matching XKB mysymbols layout -->
+			<key code="0" output="á" />    <!-- a → á -->
+			<key code="14" output="é" />   <!-- e → é -->
+			<key code="27" output="ü" />   <!-- - → ü -->
+			<key code="29" output="ö" />   <!-- 0 → ö -->
+			<key code="31" output="ó" />   <!-- o → ó -->
+			<key code="32" output="ú" />   <!-- u → ú -->
+			<key code="33" output="ő" />   <!-- [ → ő -->
+			<key code="34" output="í" />   <!-- i → í -->
+			<key code="39" output="á" />   <!-- ' → á (duplicate) -->
+			<key code="41" output="é" />   <!-- ; → é (duplicate) -->
+			<key code="42" output="ű" />   <!-- \ → ű -->
+			<!-- gap -->
 			<key code="36" output="&#xD;" />
 			<!-- gap, 37-47 -->
 			<key code="48" output="&#x9;" />
@@ -455,7 +467,19 @@
 			<key code="126" output="&#x1E;" />
 		</keyMap>
 		<keyMap index="4">
-			<!-- gap, 0-35 -->
+			<!-- Hungarian uppercase accented characters -->
+			<key code="0" output="Á" />    <!-- A → Á -->
+			<key code="14" output="É" />   <!-- E → É -->
+			<key code="27" output="Ü" />   <!-- - → Ü -->
+			<key code="29" output="Ö" />   <!-- 0 → Ö -->
+			<key code="31" output="Ó" />   <!-- O → Ó -->
+			<key code="32" output="Ú" />   <!-- U → Ú -->
+			<key code="33" output="Ő" />   <!-- [ → Ő -->
+			<key code="34" output="Í" />   <!-- I → Í -->
+			<key code="39" output="Á" />   <!-- ' → Á (duplicate) -->
+			<key code="41" output="É" />   <!-- ; → É (duplicate) -->
+			<key code="42" output="Ű" />   <!-- \ → Ű -->
+			<!-- gap -->
 			<key code="36" output="&#xD;" />
 			<!-- gap, 37-47 -->
 			<key code="48" output="&#x9;" />
@@ -518,7 +542,19 @@
 			<key code="126" output="&#x1E;" />
 		</keyMap>
 		<keyMap index="5">
-			<!-- gap, 0-35 -->
+			<!-- Hungarian uppercase accented characters (caps lock) -->
+			<key code="0" output="Á" />
+			<key code="14" output="É" />
+			<key code="27" output="Ü" />
+			<key code="29" output="Ö" />
+			<key code="31" output="Ó" />
+			<key code="32" output="Ú" />
+			<key code="33" output="Ő" />
+			<key code="34" output="Í" />
+			<key code="39" output="Á" />
+			<key code="41" output="É" />
+			<key code="42" output="Ű" />
+			<!-- gap -->
 			<key code="36" output="&#xD;" />
 			<!-- gap, 37-47 -->
 			<key code="48" output="&#x9;" />

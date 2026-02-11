@@ -1,5 +1,7 @@
-;; Equals key and Backspase key together => Delete key
+;; f13 = global mute hotkey (bound in the OS)
+;; On Razer, f13 is a physical key (left macro column)
+
+;; Equals key and Backspace key together => Delete key
 (defchordsv2
     (= bspc)  del $ct all-released ()
-    (fn lctl) f13 $ct all-released ()
 )

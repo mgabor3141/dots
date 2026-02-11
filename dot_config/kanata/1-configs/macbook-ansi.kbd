@@ -39,11 +39,11 @@
   @fnc del  @wm  lmet      spc            rmet @fnc      left down rght
 )
 
-(deflayer extend
+(deflayer fn
   lrld brdn brup mctl sls  dtn  dnd  prev pp   next mute vold volu
-  @í   _    _    _    _    _    _    _    _    _    @ö   @ü   @ó   _
-  _    _    _    up   @ctb _    _    _    _    _    _    @ő   @ú   @ű
-  _    _    left down rght pgup _    _    _    _    @é   @á   _
-  _    _    _    _    pgdn _    _    _    _    _    _    _    _
-  _    _    _    _         _              _    _         home _    end
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _         _              _    _         _    _    _
 )
