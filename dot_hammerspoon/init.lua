@@ -6,10 +6,6 @@ hs.hotkey.bind({"ctrl"}, "Z", function()
     hs.window.focusedWindow():close()
 end)
 
-hs.hotkey.bind({"ctrl"}, "X", function()
-    hs.execute("/opt/homebrew/bin/aerospace layout floating tiling", true)
-end)
-
 hs.hotkey.bind({"ctrl"}, ".", function()
     hs.eventtap.keyStroke({"ctrl", "cmd"}, "space")
 end)
