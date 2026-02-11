@@ -30,6 +30,7 @@ done
 #   {{ include . | sha256sum }}
 # {{ end }}
 
+# {{ output "kanata" "--version" | trim }}
 # {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "executable_kanata-manager.sh.tmpl" | include | sha256sum }}
 # {{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "io.github.jtroo.kanata.manager.plist.tmpl" | include | sha256sum }}
 install_service io.github.jtroo.kanata.manager
