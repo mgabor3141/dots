@@ -105,11 +105,4 @@
 
 (defalias
   fn    (layer-toggle fn)
-
-  ;; Sticky shift: tap = one-shot shift (next key only), hold = normal shift
-  lss   (one-shot-press $ht lsft)
-  rss   (one-shot-press $ht rsft)
-
-  ;; Left shift key: tap = Esc, hold = Alt
-  lsf   (tap-hold-press 0 $ht esc lalt)
 )
