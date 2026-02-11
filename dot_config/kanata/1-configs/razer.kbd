@@ -35,10 +35,7 @@
 
   tab @tab
 
-  caps @lss
-
-  lsft @lsf
-  rsft @rss
+  caps esc
 
   f17  @fn
   lalt @lse
