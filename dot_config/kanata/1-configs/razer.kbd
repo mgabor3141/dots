@@ -33,6 +33,8 @@
 (deflayermap (base)
   brk @sleep
 
+  tab @tab
+
   caps @lss
 
   lsft @lsf

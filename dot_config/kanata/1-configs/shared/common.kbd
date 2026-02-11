@@ -7,15 +7,31 @@
   ct $concurrent-timeout
 )
 
-;; Secondary is Meta (Cmd) on MacOS, Ctrl otherwise
+;; Secondary modifier: Cmd on macOS, Ctrl on Linux (used for app shortcuts like Copy, Paste)
+;; WM modifier: Ctrl on macOS, Meta on Linux (used for window manager keybinds)
+;;
+;; On macOS, nop0/nop1 are held as markers so @tab can detect which semantic
+;; modifier is active (regardless of which physical key triggers it).
+;; Virtual keys v-ctrl/v-cmd are used by @tab to hold the un-swapped modifier.
+;; The on-release clauses ensure virtual keys get cleaned up.
+(platform (macos)
+  (defvirtualkeys
+    v-ctrl lctl
+    v-cmd  lmet
+  )
+)
 (platform (macos)
   (defalias
-    lsecondary lmeta
+    lsecondary (multi lmet nop0
+                  (on-release release-virtualkey v-ctrl))
+    wm-modifier (multi lctl nop1
+                  (on-release release-virtualkey v-cmd))
   )
 )
 (platform (linux)
   (defalias
     lsecondary lctrl
+    wm-modifier lmet
   )
 )
 (defalias
@@ -55,16 +71,6 @@
   )
 )
 
-(platform (macos)
-  (defalias
-    wm-modifier lctl
-  )
-)
-(platform (linux)
-  (defalias
-    wm-modifier lmet
-  )
-)
 ;; Send special key when wm is tapped (bound to previous workspace)
 (defalias
   wm    (multi @wm-modifier
@@ -72,6 +78,29 @@
               F20 XX
           )
         )
+)
+
+;; Un-swap Ctrl/Cmd specifically for Tab so app/tab switchers work correctly.
+;; @lsecondary outputs Cmd (lmet) on macOS, but Ctrl+Tab should stay Ctrl+Tab.
+;; @wm-modifier outputs Ctrl (lctl) on macOS, but Cmd+Tab should stay Cmd+Tab.
+;; Uses nop0/nop1 markers to detect which semantic modifier is held, then swaps
+;; to the correct modifier via virtual keys that stay held for the switcher UI.
+(platform (macos)
+  (defalias
+    tab (switch
+      ;; @lsecondary held (nop0 marker) → un-swap: release Cmd, hold Ctrl, send Tab
+      ((and nop0 (not (input virtual v-ctrl)) (not (input virtual v-cmd))))
+        (multi (release-key lmet) (on-press press-vkey v-ctrl) lctl tab) break
+      ;; @wm-modifier held (nop1 marker) → un-swap: release Ctrl, hold Cmd, send Tab
+      ((and nop1 (not (input virtual v-ctrl)) (not (input virtual v-cmd))))
+        (multi (release-key lctl) (on-press press-vkey v-cmd) lmet tab) break
+      ;; Default: plain tab (unmodified, or subsequent presses with virtual key held)
+      () tab break
+    )
+  )
+)
+(platform (linux)
+  (defalias tab tab)
 )
 
 (defalias
