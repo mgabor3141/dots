@@ -53,6 +53,36 @@
   )
 )
 
+;; MacOS specific remaps, intended to standardize key positions between platforms
+(platform (macos)
+  (defoverrides
+    ;; Cmd + left/right/backspace/delete mapped to MacOS equivalents (word navigation)
+    (lmet left)      (lalt left)
+    (lmet right)     (lalt right)
+    (lmet bspc)      (lalt bspc)
+    (lmet del)       (lalt del)
+    ;; -- Exceptions: Cmd+Shift+bspc/del should not be remapped --
+    (lmet lsft del)  (lmet lsft del)
+    (lmet lsft bspc) (lmet lsft bspc)
+
+    ;; Alt + left/right mapped to F keys so that they're still available to bind to
+    (lalt left)        (lalt f18)
+    (lalt right)       (lalt f19)
+    ;; -- Exceptions: Alt+Cmd/Ctrl+left/right should not be remapped --
+    (lalt lmet left)   (lalt lmet left)
+    (lalt lctl left)   (lalt lctl left)
+    (lalt lmet right)  (lalt lmet right)
+    (lalt lctl right)  (lalt lctl right)
+
+    ;; Home and End key equivalents
+    (home)      (lmet left)
+    (end)       (lmet right)
+    ;; -- Exceptions --
+    (lmet home) (lmet home)
+    (lmet end)  (lmet end)
+  )
+)
+
 (platform (macos)
   (defalias
     wm-modifier lctl
