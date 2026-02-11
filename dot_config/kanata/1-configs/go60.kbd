@@ -1,0 +1,21 @@
+(defcfg
+  ;; Go60 appears as unnamed device, use hash to identify
+  ;; Check `kanata --list` if hash changes
+  macos-dev-names-include (
+    "0x95743CD71524B774"
+  )
+
+  process-unmapped-keys yes
+  log-layer-changes no
+)
+
+(include shared/common.kbd)
+
+(defsrc)
+
+(deflayermap (base)
+  lmet @wm
+  lctl lmet
+)
+
+(deflayermap (extend))
