@@ -105,4 +105,5 @@
 
 (defalias
   fn    (layer-toggle fn)
+  dct   C-S-A-M-d ;; Dictation toggle
 )

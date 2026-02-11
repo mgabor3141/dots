@@ -2,6 +2,9 @@
 ;; On Razer, f13 is a physical key (left macro column)
 
 ;; Equals key and Backspace key together => Delete key
+;; Both modifier keys together => Dictation toggle (Hyper+D, caught by Hammerspoon)
+;; Works on both MacBook (lalt=WM, lmet=secondary) and Razer (lmet=WM, lalt=secondary)
 (defchordsv2
-    (= bspc)  del $ct all-released ()
+    (= bspc)     del       $ct all-released ()
+    (lalt lmet)  @dct      $ct all-released ()
 )

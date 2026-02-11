@@ -36,11 +36,11 @@
   @tab q    w    e    r    t    y    u    i    o    p    [    ]    \
   esc  a    s    d    f    g    h    j    k    l    ;    '    ret
   lsft z    x    c    v    b    n    m    ,    .    /    rsft up
-  @fnc del  @wm  lmet      spc            rmet @fnc      left down rght
+  lalt @fnc @wm  lmet      spc            rmet @fnc      left down rght
 )
 
 (deflayer fn
-  lrld brdn brup mctl sls  dtn  dnd  prev pp   next mute vold volu
+  lrld brdn brup mctl sls  @dct dnd  prev pp   next mute vold volu
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
   _    _    _    _    _    _    _    _    _    _    _    _    _
