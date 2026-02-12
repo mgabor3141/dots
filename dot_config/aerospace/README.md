@@ -10,7 +10,6 @@ There are two categories of workspaces, defined in `workspaces.conf`:
 |-----------|--------|---------|
 | `1A` | `ctrl-a` | Browsers (Zen, Chrome) |
 | `2W` | `ctrl-w` | Chat (Discord, Slack, Messenger) |
-| `3R` | `ctrl-r` | General |
 | `4T` | `ctrl-t` | General |
 | `51` | `ctrl-1` | Editor (dynamic) |
 | `62` | `ctrl-2` | Editor (dynamic) |
@@ -26,6 +25,8 @@ The naming convention uses a two-character format where the first character cont
 
 - `ctrl-<key>` switches to a workspace
 - `ctrl-shift-<key>` moves the focused window to a workspace (with focus follow)
+- `ctrl-r` switches to the most recently used numbered workspace
+- `ctrl-shift-r` moves the focused window to the most recently used numbered workspace
 - `ctrl-left/right` or `ctrl-s/f` to focus left/right within a workspace
 - `ctrl-up/down` or `ctrl-e/d` to focus up/down, wrapping to prev/next workspace
 - `ctrl-shift-<direction>` to move windows
@@ -103,5 +104,7 @@ Picture-in-Picture and Google Meet windows are set to float and follow you to wh
 | `workspaces.conf` | Shared workspace definitions sourced by scripts |
 | `assign-editor-workspace.sh` | Auto-assigns Zed windows to numbered workspaces (read-only) |
 | `update-editor-mapping.sh` | Saves workspace mapping on manual move (write) |
+| `track-numbered-ws.sh` | Tracks numbered workspace MRU order in `/tmp` on each workspace switch |
+| `last-numbered-ws.sh` | Resolves MRU numbered workspace and switches/moves to it |
 | `pip-move.sh` | Moves PiP/Meet windows to follow focused workspace |
 | `editor-workspaces.json` | Runtime state file (not tracked by chezmoi) |
