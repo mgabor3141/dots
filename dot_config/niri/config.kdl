@@ -210,9 +210,9 @@ binds {
     // Mod+Alt+MINUS                       { set-window-height "-10%"; }
     // Mod+Alt+EQUAL                       { set-window-height "+10%"; }
     Mod+C                               { switch-preset-column-width-back; }
-    Mod+Alt+C                           { expand-column-to-available-width; }
+    Mod+Shift+C                         { expand-column-to-available-width; }
     Mod+V                               { switch-preset-column-width; }
-    Mod+Alt+V                           { fullscreen-window; }
+    Mod+Shift+V                         { fullscreen-window; }
 
     // ─── Modes ───
     Mod+X                              { toggle-window-floating; }
@@ -289,7 +289,10 @@ binds {
         }
 
         struts {
-            top 8
+            top 0
+            bottom 16
+            left 16
+            right 16
         }
     }
 
