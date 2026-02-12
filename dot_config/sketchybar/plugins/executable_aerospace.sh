@@ -29,17 +29,3 @@ if [ "$SENDER" == "mouse.exited" ]; then
     background.color="$TRANSPARENT"
   exit 0
 fi
-
-if [ "$1" = "$FOCUSED_WORKSPACE" ]; then
-  sketchybar --set $NAME \
-  background.color=$ACCENT_COLOR \
-  background.drawing=on \
-  label.color="$BACKGROUND" \
-  icon.color="$BACKGROUND"
-else
-  sketchybar --set $NAME \
-  background.color=$TRANSPARENT \
-  background.drawing=off \
-  label.color="$ACCENT_COLOR" \
-  icon.color="$ACCENT_COLOR"
-fi
