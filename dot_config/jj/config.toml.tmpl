@@ -39,8 +39,8 @@ revsets-use-glob-by-default=true
 
 [aliases]
 gp = ["git", "push", "--tracked"]
-gc = ["git", "push", "--change", "@"]
 gf = ["git", "fetch"]
+yeet = ["git", "push", "--change", "(@ ~ empty()) | parents(@ & empty())"]
 
 # Convenient shorthands.
 d = ["diff"]
@@ -76,4 +76,4 @@ private-commits = "description(glob:'private:*') | trunk()..bookmarks(glob:'priv
 auto-track-bookmarks = "glob:*/*"
 
 [templates]
-git_push_bookmark = '''"feat/" ++ description.lower().trim().replace(regex:'\W+', "-").remove_prefix('-').remove_suffix('-')'''
+git_push_bookmark = '''"mgabor/" ++ description.first_line().lower().trim().replace(regex:'\W+', "-").remove_prefix('-').remove_suffix('-').replace(regex:'((?:[^-]+-){5}).*', "$1").remove_suffix('-')'''

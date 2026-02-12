@@ -1,0 +1,15 @@
+#!/bin/sh
+output=$(jj yeet "$@" 2>&1)
+rc=$?
+printf '%s\n' "$output"
+
+url=$(printf '%s\n' "$output" | grep -oE 'https?://[^ ]+' | head -1)
+if [ -n "$url" ]; then
+    if command -v open >/dev/null 2>&1; then
+        open "$url"
+    elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$url"
+    fi
+fi
+
+exit $rc
