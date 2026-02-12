@@ -47,7 +47,7 @@
         "capsuleColorKey": "none",
         "capsuleOpacity": 0.75,
         "density": "comfortable",
-        "displayMode": "non_exclusive",
+        "displayMode": "always_visible",
         "floating": true,
         "frameRadius": 12,
         "frameThickness": 8,
