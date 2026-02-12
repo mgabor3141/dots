@@ -14,11 +14,11 @@
         "ignoreMouseInput": false,
         "pinnedApps": [
             "steam",
-            "vesktop",
             "spotify-launcher",
             "kitty",
             "dev.zed.Zed",
-            "org.gnome.Nautilus"
+            "org.gnome.Nautilus",
+            "discord"
         ],
         "position": "center",
         "screenshotAnnotationTool": "",
