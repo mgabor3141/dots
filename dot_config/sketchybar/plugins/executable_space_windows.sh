@@ -9,7 +9,8 @@ source "$CONFIG_DIR/colors.sh"
 #
 # Workspace switching doesn't change labels — only which workspace
 # is highlighted. We receive FOCUSED_WORKSPACE and PREV_WORKSPACE
-# from the event, so zero aerospace CLI calls are needed.
+# from the event, so only one lightweight aerospace CLI call is
+# needed (to check if the previous workspace is empty).
 #
 # The front_app_switched event that follows ~200ms later will do
 # a full label refresh if anything changed.
@@ -20,16 +21,15 @@ if [ "$SENDER" = "aerospace_workspace_change" ]; then
   # Unfocus previous workspace
   if [ -n "$PREV_WORKSPACE" ]; then
     # Check if previous workspace should be hidden (empty workspace
-    # that was only visible because it was focused). Query sketchybar
-    # for its label — empty label means no windows.
-    PREV_LABEL=$(sketchybar --query "space.$PREV_WORKSPACE" \
-      | grep -A1 '"label"' | grep '"value"' \
-      | sed 's/.*"value": "//;s/",*$//')
+    # that was only visible because it was focused). Query aerospace
+    # directly — the sketchybar label can be stale when windows are
+    # being moved between workspaces (e.g. Zed auto-assignment).
+    PREV_WINDOW_COUNT=$(aerospace list-windows --workspace "$PREV_WORKSPACE" --count 2>/dev/null)
 
-    if [ -z "$PREV_LABEL" ]; then
-      # Empty workspace — hide it
+    if [ "${PREV_WINDOW_COUNT:-0}" -eq 0 ]; then
+      # Empty workspace — hide it and clear any stale label
       BATCH_ARGS+=(--set "space.$PREV_WORKSPACE"
-        drawing=off
+        drawing=off label=""
         background.color="$TRANSPARENT"
         background.drawing=off
         label.color="$ACCENT_COLOR"
