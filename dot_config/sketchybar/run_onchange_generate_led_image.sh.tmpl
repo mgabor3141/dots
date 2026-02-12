@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-target="$HOME/.config/sketchybar/images"
+target="{{ joinPath (.chezmoi.targetFile | dir) "images" }}"
 mkdir -p "$target"
 
 magick -size 900x30 xc:none \
