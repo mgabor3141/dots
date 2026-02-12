@@ -1,0 +1,4 @@
+#!/bin/bash
+{{ if eq .chezmoi.os "darwin" -}}
+brew services start sketchybar
+{{ end -}}
