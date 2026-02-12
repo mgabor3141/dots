@@ -3,6 +3,7 @@ set -eu
 
 KANATA="/opt/homebrew/bin/kanata"
 CONFIG_DIR="{{ .chezmoi.destDir }}/.config/kanata/1-configs"
+POLL_INTERVAL=3
 
 YELLOW='\033[0;33m'
 GREEN='\033[0;32m'
@@ -19,17 +20,71 @@ config_color() {
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-log "Starting kanata-manager"
-pkill -x kanata 2>/dev/null || true
+# Map config filenames to the device name used in macos-dev-names-include.
+# hidutil list is used to check if the device is connected.
+device_name() {
+    case "$1" in
+        macbook-ansi.kbd) echo "Apple Internal Keyboard / Trackpad" ;;
+        razer.kbd) echo "Razer BlackWidow Ultimate" ;;
+        go60.kbd) echo "Go60" ;;
+    esac
+}
 
-for cfg in macbook-ansi.kbd razer.kbd go60.kbd; do
+device_connected() {
+    hidutil list --matching '{}' 2>/dev/null | grep -qF "$1"
+}
+
+# Track running kanata instances: cfg -> PID
+# POSIX sh doesn't have associative arrays, so use files in a temp dir.
+STATE_DIR=$(mktemp -d)
+trap 'rm -rf "$STATE_DIR"' EXIT
+
+pid_file()  { echo "$STATE_DIR/$1.pid"; }
+is_running() {
+    pf=$(pid_file "$1")
+    [ -f "$pf" ] && kill -0 "$(cat "$pf")" 2>/dev/null
+}
+
+start_kanata() {
+    cfg="$1"
     color=$(config_color "$cfg")
     log "Starting $cfg"
     "$KANATA" --cfg "${CONFIG_DIR}/${cfg}" 2>&1 \
         | while IFS= read -r line; do
             echo "${color}[${cfg}]${RESET} $line"
           done &
-done
+    echo "$!" > "$(pid_file "$cfg")"
+}
 
-wait
-log "A kanata process exited"
+stop_kanata() {
+    cfg="$1"
+    pf=$(pid_file "$cfg")
+    [ -f "$pf" ] || return 0
+    pid=$(cat "$pf")
+    color=$(config_color "$cfg")
+    log "Stopping $cfg (pid $pid)"
+    kill "$pid" 2>/dev/null || true
+    rm -f "$pf"
+}
+
+# --- Main ---
+log "Starting kanata-manager"
+pkill -x kanata 2>/dev/null || true
+
+CONFIGS="macbook-ansi.kbd razer.kbd go60.kbd"
+
+while true; do
+    for cfg in $CONFIGS; do
+        dev=$(device_name "$cfg")
+        connected=$(device_connected "$dev" && echo 1 || echo 0)
+        running=$(is_running "$cfg" && echo 1 || echo 0)
+
+        if [ "$connected" = "1" ] && [ "$running" = "0" ]; then
+            start_kanata "$cfg"
+        elif [ "$connected" = "0" ] && [ "$running" = "1" ]; then
+            stop_kanata "$cfg"
+        fi
+    done
+
+    sleep "$POLL_INTERVAL"
+done
