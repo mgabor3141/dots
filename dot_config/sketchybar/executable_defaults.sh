@@ -18,5 +18,3 @@ default=(
 )
 
 sketchybar --default "${default[@]}"
-
-sketchybar --add event aerospace_mode_change

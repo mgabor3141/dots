@@ -4,12 +4,6 @@ source "$HOME/.config/aerospace/workspaces.conf"
 source "$CONFIG_DIR/space_styles.sh"
 source "$CONFIG_DIR/colors.sh"
 
-# Handle monitor change (no label work needed)
-if [ "$SENDER" = "aerospace_monitor_change" ]; then
-  sketchybar --set space."$FOCUSED_WORKSPACE" display="$TARGET_MONITOR"
-  exit 0
-fi
-
 # ---------------------------------------------------------------
 # Fast path: aerospace_workspace_change
 #
