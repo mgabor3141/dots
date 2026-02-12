@@ -2,140 +2,156 @@
 
 source "$HOME/.config/aerospace/workspaces.conf"
 source "$CONFIG_DIR/space_styles.sh"
+# Source only the icon_map function definition (not the invocation at the end)
+eval "$(sed -n '/^### START-OF-ICON-MAP/,/^### END-OF-ICON-MAP/p' "$CONFIG_DIR/plugins/icon_map_fn.sh")"
 
-# Check if workspace is a numbered workspace (for code editors)
-is_numbered_workspace() {
-  local ws="$1"
-  [[ " $NUMBERED_WORKSPACES " == *" $ws "* ]]
-}
-
-# Get Zed project label from window title
-get_zed_label() {
-  local title="$1"
-  "$CONFIG_DIR/plugins/zed_project_label.sh" "$title"
-}
-
-# Build label for a numbered workspace
-# Shows project name if Zed present, otherwise icons
-build_numbered_label() {
-  local workspace="$1"
-  local windows
-  local zed_title=""
-  local has_zed=false
-  
-  windows=$(aerospace list-windows --workspace "$workspace" 2>/dev/null)
-  
-  # Check for Zed window and get its title
-  while IFS='|' read -r id app title; do
-    app=$(echo "$app" | xargs)  # trim whitespace
-    title=$(echo "$title" | xargs)
-    if [ "$app" = "Zed" ]; then
-      has_zed=true
-      zed_title="$title"
-      break
-    fi
-  done <<< "$windows"
-  
-  if [ "$has_zed" = true ] && [ -n "$zed_title" ]; then
-    # Return project name and signal to use text font
-    echo "text:$(get_zed_label "$zed_title")"
-  elif [ -n "$windows" ]; then
-    # Return icons
-    local icon_strip=" "
-    while IFS='|' read -r id app title; do
-      app=$(echo "$app" | xargs)
-      if [ -n "$app" ]; then
-        icon_strip+=" $($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
-      fi
-    done <<< "$windows"
-    echo "icon:$icon_strip"
-  else
-    echo ""
-  fi
-}
-
-# Build label for a letter workspace (always icons)
-build_letter_label() {
-  local workspace="$1"
-  local windows
-  local icon_strip=" "
-  
-  windows=$(aerospace list-windows --workspace "$workspace" 2>/dev/null | awk -F'|' '{gsub(/^ *| *$/, "", $2); print $2}')
-  
-  if [ -n "$windows" ]; then
-    while read -r app; do
-      if [ -n "$app" ]; then
-        icon_strip+=" $($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
-      fi
-    done <<< "$windows"
-    echo "$icon_strip"
-  else
-    echo ""
-  fi
-}
-
-# Update a workspace's label in sketchybar
-update_workspace_label() {
-  local workspace="$1"
-  local focused="$2"
-  local result label label_type
-
-  if is_numbered_workspace "$workspace"; then
-    result=$(build_numbered_label "$workspace")
-    if [ -z "$result" ]; then
-      # Empty workspace: show if focused, hide otherwise
-      if [ "$workspace" = "$focused" ]; then
-        sketchybar --set space.$workspace drawing=on label=""
-      else
-        aerospace move-workspace-to-monitor --workspace "$workspace" 1 2>/dev/null
-        sketchybar --set space.$workspace drawing=off display=1
-      fi
-      return
-    fi
-
-    label_type="${result%%:*}"
-    label="${result#*:}"
-
-    apply_label_style "space.$workspace" "$label" "$label_type"
-  else
-    label=$(build_letter_label "$workspace")
-    if [ -z "$label" ]; then
-      # Empty workspace: show if focused, hide otherwise
-      if [ "$workspace" = "$focused" ]; then
-        sketchybar --set space.$workspace drawing=on label=""
-      else
-        aerospace move-workspace-to-monitor --workspace "$workspace" 1 2>/dev/null
-        sketchybar --set space.$workspace drawing=off display=1
-      fi
-      return
-    fi
-    apply_label_style "space.$workspace" "$label" "icon"
-  fi
-}
-
-# Refresh all workspaces
-update_all_workspaces() {
-  local focused
-  focused="${FOCUSED_WORKSPACE:-$(aerospace list-workspaces --focused)}"
-
-  for ws in $ALL_WORKSPACES; do
-    update_workspace_label "$ws" "$focused"
-  done
-}
-
-# Handle monitor change
+# Handle monitor change (no label work needed)
 if [ "$SENDER" = "aerospace_monitor_change" ]; then
   sketchybar --set space."$FOCUSED_WORKSPACE" display="$TARGET_MONITOR"
   exit 0
 fi
 
-# Workspace switch: only update the two affected workspaces (latency-sensitive)
-if [ "$SENDER" = "aerospace_workspace_change" ]; then
-  update_workspace_label "$PREV_WORKSPACE" "$FOCUSED_WORKSPACE"
-  update_workspace_label "$FOCUSED_WORKSPACE" "$FOCUSED_WORKSPACE"
-  exit 0
-fi
+# --- Fetch all window data once ---
+ALL_WINDOWS=$(aerospace list-windows --all --format "%{workspace}|%{app-name}|%{window-title}" 2>/dev/null)
 
-# Everything else (node_moved, front_app_switched, space_windows_change, etc.):
-# full refresh to catch all changes (closed windows, moved windows, etc.)
-update_all_workspaces
+# Parse windows into per-workspace associative arrays
+declare -A WS_APPS      # workspace -> "app1\napp2\n..."
+declare -A WS_ZED_TITLE # workspace -> first Zed window title (numbered ws only)
+
+while IFS='|' read -r ws app title; do
+  [ -z "$ws" ] && continue
+  ws=$(echo "$ws" | xargs)
+  app=$(echo "$app" | xargs)
+  title=$(echo "$title" | xargs)
+
+  WS_APPS[$ws]+="$app"$'\n'
+
+  # Track Zed title for numbered workspaces (first one wins)
+  if [ -z "${WS_ZED_TITLE[$ws]+x}" ] && [ "$app" = "Zed" ]; then
+    WS_ZED_TITLE[$ws]="$title"
+  fi
+done <<< "$ALL_WINDOWS"
+
+# --- Zed project label computation (inlined from zed_project_label.sh) ---
+# Collect all unique Zed project names for shortest-unique-prefix computation
+ALL_ZED_PROJECTS=""
+for ws in "${!WS_ZED_TITLE[@]}"; do
+  title="${WS_ZED_TITLE[$ws]}"
+  project="${title%% — *}"
+  if [ -n "$project" ]; then
+    ALL_ZED_PROJECTS+="$project"$'\n'
+  fi
+done
+ALL_ZED_PROJECTS=$(echo "$ALL_ZED_PROJECTS" | sort -u)
+
+compute_zed_label() {
+  local window_title="$1"
+  if [ -z "$window_title" ]; then
+    echo ":zed:"
+    return
+  fi
+
+  local project_name="${window_title%% — *}"
+  IFS='-' read -ra words <<< "$project_name"
+  local candidate=""
+
+  for word in "${words[@]}"; do
+    if [ -z "$candidate" ]; then
+      candidate="$word"
+    else
+      candidate="$candidate-$word"
+    fi
+
+    local is_unique=true
+    while IFS= read -r other; do
+      [ -z "$other" ] && continue
+      if [ "$other" != "$project_name" ]; then
+        if [ "$other" = "$candidate" ] || [[ "$other" == "$candidate-"* ]]; then
+          is_unique=false
+          break
+        fi
+      fi
+    done <<< "$ALL_ZED_PROJECTS"
+
+    if [ "$is_unique" = true ]; then
+      break
+    fi
+  done
+
+  case "$candidate" in
+    chezmoi) echo "dots" ;;
+    *)       echo "$candidate" ;;
+  esac
+}
+
+# --- Determine focused workspace ---
+is_numbered_workspace() {
+  [[ " $NUMBERED_WORKSPACES " == *" $1 "* ]]
+}
+
+FOCUSED="${FOCUSED_WORKSPACE:-$(aerospace list-workspaces --focused)}"
+
+# --- Build sketchybar batch command ---
+BATCH_ARGS=()
+
+for ws in $ALL_WORKSPACES; do
+  apps="${WS_APPS[$ws]}"
+  # Strip trailing newline and check if empty
+  apps="${apps%$'\n'}"
+
+  if [ -z "$apps" ]; then
+    # Empty workspace
+    if [ "$ws" = "$FOCUSED" ]; then
+      BATCH_ARGS+=(--set "space.$ws" drawing=on label="")
+    else
+      aerospace move-workspace-to-monitor --workspace "$ws" 1 2>/dev/null
+      BATCH_ARGS+=(--set "space.$ws" drawing=off display=1)
+    fi
+    continue
+  fi
+
+  if is_numbered_workspace "$ws"; then
+    zed_title="${WS_ZED_TITLE[$ws]}"
+    if [ -n "$zed_title" ]; then
+      # Zed workspace: text label with project name
+      label=$(compute_zed_label "$zed_title")
+      BATCH_ARGS+=(--set "space.$ws"
+        drawing=on
+        "label=$label"
+        label.font="$LABEL_TEXT_FONT"
+        label.padding_left=$LABEL_TEXT_PADDING_LEFT
+        label.padding_right=$LABEL_TEXT_PADDING_RIGHT
+        label.y_offset=$LABEL_TEXT_Y_OFFSET
+        icon.padding_right=$SPACE_ICON_PADDING_RIGHT_TEXT
+        padding_left=$SPACE_PADDING_LEFT_TEXT
+        padding_right=$SPACE_PADDING_RIGHT_TEXT
+      )
+      continue
+    fi
+  fi
+
+  # Icon label: map each app to its icon
+  local_icon_strip=" "
+  while IFS= read -r app; do
+    [ -z "$app" ] && continue
+    icon_map "$app"
+    local_icon_strip+=" $icon_result"
+  done <<< "$apps"
+
+  BATCH_ARGS+=(--set "space.$ws"
+    drawing=on
+    "label=$local_icon_strip"
+    label.font="$LABEL_ICON_FONT"
+    label.padding_left=$LABEL_ICON_PADDING_LEFT
+    label.padding_right=$LABEL_ICON_PADDING_RIGHT
+    label.y_offset=$LABEL_ICON_Y_OFFSET
+    icon.padding_right=$SPACE_ICON_PADDING_RIGHT_ICON
+    padding_left=$SPACE_PADDING_LEFT_ICON
+    padding_right=$SPACE_PADDING_RIGHT_ICON
+  )
+done
+
+# Single sketchybar IPC call for all workspace updates
+if [ ${#BATCH_ARGS[@]} -gt 0 ]; then
+  sketchybar "${BATCH_ARGS[@]}"
+fi
