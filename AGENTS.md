@@ -14,6 +14,7 @@ This is a **public** dotfiles repository managed by chezmoi. It supports multipl
 3. **Template files**: Files ending in `.tmpl` are chezmoi templates that get processed. Don't edit the target files directly - edit the source templates. **IMPORTANT**: When searching for config files, always search for both the regular extension AND the `.tmpl` extension (e.g., search for both `keymap.json` and `keymap.json.tmpl`).
 4. **Ignore files**: Prefer subfolder-specific `.chezmoiignore` files over the global `.chezmoiignore` file. This keeps ignore rules localized and easier to maintain.
 5. **Always check diffs first**: Before applying changes, run `chezmoi diff` to see what would be changed. Then use `chezmoi apply` to apply changes. You do not need to verify that `chezmoi apply` successfully updated the target files - trust that it worked.
+6. **macOS `/bin/bash` is Bash 3.2**: It lacks features like associative arrays (`declare -A`), which silently break. Scripts needing Bash 4+ features must use `#!/usr/bin/env bash` (not `#!/bin/bash`) so they pick up the Homebrew-installed Bash 5. On Linux this is not an issue since the system bash is already 5+.
 ## Sub-project READMEs
 - dot_config/kanata/README.md
 - dot_config/zed/README.md
