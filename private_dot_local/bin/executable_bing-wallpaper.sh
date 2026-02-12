@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bing-wallpaper.sh by mgabor
 # Dependencies:
-#   curl jq imagemagick
+#   curl jq imagemagick-full (needs freetype/fontconfig for text rendering)
 #
 # On macos it needs flock as well
 #
@@ -82,8 +82,8 @@ update_once() {
   # === Pretty caption overlay (IMv7) ============================================
   # Config: scale & fonts (change to taste or export in env)
   CAPTION_SCALE="${BING_WALLPAPER_CAPTION_SCALE:-1.0}"   # 0.7 small … 1.0 default … 1.3 big
-  CAPTION_FONT_MAIN="${BING_WALLPAPER_FONT_MAIN:-DejaVu-Serif}"
-  CAPTION_FONT_BOLD="${BING_WALLPAPER_FONT_BOLD:-DejaVu-Sans}"
+  CAPTION_FONT_MAIN="${BING_WALLPAPER_FONT_MAIN:-Inter-Light}"
+  CAPTION_FONT_BOLD="${BING_WALLPAPER_FONT_BOLD:-Inter-Medium}"
 
   annotated="${outfile%.*}-annotated.jpg"
 
