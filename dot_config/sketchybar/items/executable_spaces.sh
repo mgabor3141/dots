@@ -51,47 +51,6 @@ for sid in $ALL_WORKSPACES; do
     script="$CONFIG_DIR/plugins/aerospace.sh $sid"
 done
 
-# Helper to check if workspace is numbered (for code editors)
-is_numbered_workspace() {
-  [[ " $NUMBERED_WORKSPACES " == *" $1 "* ]]
-}
-
-# Load labels on startup
-for mid in $(aerospace list-monitors | cut -c1); do
-  for sid in $(aerospace list-workspaces --monitor $mid --empty no); do
-    sketchybar --set space.$sid drawing=on
-
-    if is_numbered_workspace "$sid"; then
-      # For numbered workspaces: show project name if Zed, otherwise icons
-      zed_title=$(aerospace list-windows --workspace "$sid" 2>/dev/null | awk -F'|' '$2 ~ /Zed/ {gsub(/^ *| *$/, "", $3); print $3; exit}')
-      
-      if [ -n "$zed_title" ]; then
-        label=$("$CONFIG_DIR/plugins/zed_project_label.sh" "$zed_title")
-        apply_label_style "space.$sid" "$label" "text"
-      else
-        apps=$(aerospace list-windows --workspace "$sid" | awk -F'|' '{gsub(/^ *| *$/, "", $2); print $2}')
-        icon_strip=" "
-        if [ -n "$apps" ]; then
-          while read -r app; do
-            icon_strip+=" $($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
-          done <<<"$apps"
-        fi
-        apply_label_style "space.$sid" "$icon_strip" "icon"
-      fi
-    else
-      # For letter workspaces: always show icons
-      apps=$(aerospace list-windows --workspace "$sid" | awk -F'|' '{gsub(/^ *| *$/, "", $2); print $2}')
-      icon_strip=" "
-      if [ -n "$apps" ]; then
-        while read -r app; do
-          icon_strip+=" $($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
-        done <<<"$apps"
-      fi
-      apply_label_style "space.$sid" "$icon_strip" "icon"
-    fi
-  done
-done
-
 sketchybar --add item space_separator left \
   --set space_separator icon="" \
   icon.y_offset=$SEPARATOR_ICON_Y_OFFSET \
@@ -100,3 +59,6 @@ sketchybar --add item space_separator left \
   background.drawing=off \
   script="$PLUGIN_DIR/space_windows.sh" \
   --subscribe space_separator aerospace_workspace_change front_app_switched space_windows_change aerospace_monitor_change aerospace_node_moved
+
+# Load labels on startup using the same logic as the plugin
+"$PLUGIN_DIR/space_windows.sh"
