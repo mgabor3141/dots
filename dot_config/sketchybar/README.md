@@ -58,3 +58,28 @@ Key decisions that keep things fast:
 - All sketchybar updates are batched into a single IPC call
 - Whitespace trimming uses bash builtins, not subshells
 - `#!/usr/bin/env bash` is required (not `#!/bin/bash`) — macOS `/bin/bash` is Bash 3.2 which silently breaks `declare -A`
+
+### Benchmarking Findings
+
+Measured on an M-series Mac. These costs informed the optimization decisions:
+
+| Operation | Cost |
+|---|---|
+| Any `aerospace` CLI call | ~17ms |
+| Any `sketchybar` IPC call (regardless of payload size) | ~11-15ms |
+| `source` a config file | ~6ms |
+| `echo "$x" \| xargs` (single call) | ~10ms |
+| `read -r x <<< "$x"` (bash builtin trim) | negligible |
+
+The biggest single win was replacing `echo | xargs` whitespace trimming with `read -r` in the parse loop. With ~15 windows and 3 fields each, that was ~45 subshell forks adding ~110ms. The builtin approach costs effectively nothing.
+
+Since sketchybar IPC cost is constant regardless of payload, batching all `--set` calls into one invocation saves ~(N-1)*13ms where N is the number of workspaces.
+
+Before optimization, a single workspace switch triggered 11 script invocations (9x `aerospace.sh` + 2x `space_windows.sh`) making 11 aerospace CLI calls and 11 sketchybar IPC calls, totaling ~600ms. After: 1 fast path call (~19ms) + 1 full refresh (~65ms).
+
+To re-benchmark with zero overhead, use Bash 5's `EPOCHREALTIME` builtin:
+
+```bash
+PS4='+${EPOCHREALTIME} ' bash -x ~/.config/sketchybar/plugins/space_windows.sh 2>/tmp/xtrace.log
+```
+
