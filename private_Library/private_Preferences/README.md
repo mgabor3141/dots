@@ -10,6 +10,78 @@ macOS stores preferences as binary plists. The `modify_` scripts receive the cur
 
 `chezmoi diff` shows readable XML diffs instead of "Binary files differ" thanks to the `textconv` config in `.chezmoi.toml.tmpl`.
 
+## Finding the right key to set
+
+When you want to manage a new preference, you need to figure out which plist key controls it. The general methodology:
+
+### 1. Find the plist domain
+
+Most apps store preferences at `~/Library/Preferences/<bundle-id>.plist`. If you know the app name but not the bundle ID:
+
+```bash
+# Search by app name
+defaults domains | tr ',' '\n' | grep -i fluid
+# → com.FluidApp.app
+```
+
+### 2. Inspect the plist as XML
+
+macOS plists are binary. Convert to readable XML:
+
+```bash
+plutil -convert xml1 -o - ~/Library/Preferences/com.FluidApp.app.plist
+```
+
+Pipe through `less` or redirect to a file to browse. In Zed, you can open the XML output directly:
+
+```bash
+plutil -convert xml1 -o /tmp/fluid.xml ~/Library/Preferences/com.FluidApp.app.plist
+zed /tmp/fluid.xml
+```
+
+Zed treats `.plist` files as XML natively. Within this repo, `.zed/settings.json` also maps `*.plist.tmpl` to XML and `modify_*.plist` to Shell Script so syntax highlighting works correctly for both.
+
+### 3. Identify the key by diffing
+
+If you can't tell which key controls a setting by reading the XML, toggle the setting in the app and diff:
+
+```bash
+# Snapshot before
+plutil -convert xml1 -o /tmp/before.xml ~/Library/Preferences/com.FluidApp.app.plist
+
+# Change the setting in the app's UI
+
+# Snapshot after
+plutil -convert xml1 -o /tmp/after.xml ~/Library/Preferences/com.FluidApp.app.plist
+
+# Diff
+diff /tmp/before.xml /tmp/after.xml
+```
+
+### 4. Handle `<data>` blobs
+
+Some keys (especially hotkeys and complex structures) are stored as base64-encoded `<data>` values. Decode them to see the actual content:
+
+```bash
+# Copy the base64 string from the XML and decode it
+echo 'eyJrZXlDb2RlIjoyLCJtb2RpZmllckZsYWdzUmF3VmFsdWUiOjE4MzUwMDh9' | base64 -d
+# → {"keyCode":2,"modifierFlagsRawValue":1835008}
+```
+
+These are often JSON. The `keyCode` values correspond to macOS virtual key codes and `modifierFlagsRawValue` is a bitmask of modifier keys. Since these are device/preference-specific binary blobs, they're usually best left unmanaged (as the Fluid plist does with `HotkeyShortcutKey` and `CommandModeHotkeyShortcut`).
+
+### 5. Quick key lookup with `defaults`
+
+For simple values, `defaults read` is faster than converting the whole file:
+
+```bash
+# Read a specific key
+defaults read com.FluidApp.app HotkeyShortcutKey
+
+# Read all keys (less structured than XML but quick)
+defaults read com.FluidApp.app
+```
+
 ## Adding a new plist
 
 1. Create `modify_private_<domain>.plist` (add `private_` prefix for `~/Library/` path encoding):
@@ -40,6 +112,7 @@ plist_finalize
 | `set_real` | `set_real Key 0.5` | PlistBuddy upsert |
 | `set_string` | `set_string Key value` | PlistBuddy upsert — simple values only |
 | `pl_set_string` | `pl_set_string Key '"quoted"'` | plutil-based — handles literal quotes |
+| `set_data_json` | `set_data_json Key '{"k":1}'` | JSON string → base64 `<data>` — readable in source |
 | `pb` | `pb -c "Add :Key type val"` | Raw PlistBuddy (stdout redirected to stderr) |
 | `$tmp` | `plutil -insert Key -json '[]' "$tmp"` | Temp file path for direct plutil calls |
 | `plist_finalize` | `plist_finalize` | Call at end — converts to binary, outputs to stdout |

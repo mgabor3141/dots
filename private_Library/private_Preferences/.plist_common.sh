@@ -9,6 +9,7 @@
 #   set_real       — upsert a real/float key
 #   set_string     — upsert a string key (simple values only)
 #   pl_set_string  — upsert a string key via plutil (handles tricky quoting)
+#   set_data_json  — upsert a data key from a JSON string (base64-encoded at apply time)
 #   plist_finalize — convert back to binary and write to stdout (call at end)
 
 set -euo pipefail
@@ -44,6 +45,15 @@ set_string()  { pb -c "Set :$1 $2"  2>/dev/null || pb -c "Add :$1 string $2"; }
 pl_set_string() {
     plutil -replace "$1" -string "$2" "$tmp" 2>/dev/null ||
         plutil -insert "$1" -string "$2" "$tmp"
+}
+
+# Upsert a <data> key from a JSON string. The JSON is base64-encoded at apply
+# time, so the source file stays human-readable.
+set_data_json() {
+    local b64
+    b64=$(printf '%s' "$2" | base64)
+    plutil -replace "$1" -data "$b64" "$tmp" 2>/dev/null ||
+        plutil -insert "$1" -data "$b64" "$tmp"
 }
 
 # Call at end of script to convert back to binary and output
