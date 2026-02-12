@@ -23,7 +23,7 @@ The bar shows aerospace workspaces on the left. Each workspace item (`space.<id>
 
 Defined in `~/.config/aerospace/workspaces.conf` (shared with aerospace scripts):
 
-- **Letter workspaces**: `1A`, `2W`, `3R`, `4T` — general purpose, labels show app icons from `sketchybar-app-font`
+- **Letter workspaces**: `1A`, `2W`, `4T` — general purpose, labels show app icons from `sketchybar-app-font`
 - **Numbered workspaces**: `51`, `62`, `73`, `84`, `95` — for code editors (Zed), labels show shortest unique prefix of project name as text
 
 Empty workspaces are hidden unless focused.
