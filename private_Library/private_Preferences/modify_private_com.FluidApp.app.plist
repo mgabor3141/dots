@@ -10,7 +10,6 @@ set_bool   AutoUpdateCheckEnabled              false
 set_bool   EnableAIProcessing                  true
 set_bool   LaunchAtStartup                     true
 set_bool   ShareAnonymousAnalytics             false
-set_bool   PlaygroundUsed                      true
 
 # --- Voice ---
 set_string SelectedProviderID                  apple-intelligence
@@ -29,15 +28,12 @@ set_bool   CommandModeShortcutEnabled           false
 set_string RewriteModeSelectedModel             gpt-4.1
 set_bool   RewriteModeShortcutEnabled           false
 
-# --- Accessibility ---
-set_bool   FluidVoice_AccessibilityRestartPending        false
-set_bool   FluidVoice_HasAutoRestartedForAccessibility   true
-
 # Left untouched (device/session-specific):
 # AXLastPromptAt, AnalyticsAnonymousInstallID, AnalyticsFirstOpenAt
 # AvailableModelsByProvider, SelectedModelByProvider
 # CommandModeChatSessions, CommandModeCurrentChatID
 # CommandModeHotkeyShortcut, HotkeyShortcutKey (binary hotkey data)
+# FluidVoice_Accessibility*, PlaygroundUsed (internal state flags)
 # LastUpdateCheckDate
 # NSSplitView/NSStatusItem/NSWindow Frame (window geometry)
 # PreferredInputDeviceUID, PreferredOutputDeviceUID (audio device serials)

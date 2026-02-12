@@ -12,22 +12,17 @@ set_int    NSTableViewDefaultSizeMode  2
 set_bool   AppleMiniaturizeOnDoubleClick false
 
 # --- Locale & Language ---
-set_string AKLastLocale                "en_US@rg=huzzzz"
 set_string AppleLocale                 "en_US@rg=huzzzz"
-set_int    AppleLanguagesSchemaVersion 5400
 set_string AppleMeasurementUnits       Centimeters
 set_int    AppleMetricUnits            1
 set_string AppleTemperatureUnit        Celsius
 
 # AppleLanguages array
-pb -c "Delete :AppleLanguages" 2>/dev/null || true
-pb -c "Add :AppleLanguages array"
-pb -c "Add :AppleLanguages:0 string en-US"
-pb -c "Add :AppleLanguages:1 string hu-HU"
+plutil -remove AppleLanguages "$tmp" 2>/dev/null || true
+plutil -insert AppleLanguages -json '["en-US","hu-HU"]' "$tmp"
 
 # --- Keyboard & Text ---
-set_bool   ApplePressAndHoldEnabled    true
-set_bool   com.apple.keyboard.fnState  true
+set_bool   ApplePressAndHoldEnabled    false
 set_bool   NSAutomaticCapitalizationEnabled    true
 set_bool   NSAutomaticPeriodSubstitutionEnabled false
 
@@ -35,19 +30,13 @@ set_bool   NSAutomaticPeriodSubstitutionEnabled false
 pl_set_string KB_DoubleQuoteOption '"abc"'
 pl_set_string KB_SingleQuoteOption "'abc'"
 
-# Spelling language
-pb -c "Delete :KB_SpellingLanguage" 2>/dev/null || true
-pb -c "Add :KB_SpellingLanguage dict"
-pb -c "Add :KB_SpellingLanguage:KB_SpellingLanguageIsAutomatic bool true"
+# Spelling language: auto-detect
+plutil -remove KB_SpellingLanguage "$tmp" 2>/dev/null || true
+plutil -insert KB_SpellingLanguage -json '{"KB_SpellingLanguageIsAutomatic":true}' "$tmp"
 
-# Smart quotes: straight quotes only (use plutil JSON for clean quoting)
+# Smart quotes: straight quotes only
 plutil -remove NSUserQuotesArray "$tmp" 2>/dev/null || true
 plutil -insert NSUserQuotesArray -json '["\u0022","\u0022","\u0027","\u0027"]' "$tmp"
-
-# Text replacements
-pb -c "Delete :NSUserDictionaryReplacementItems" 2>/dev/null || true
-plutil -insert NSUserDictionaryReplacementItems \
-    -json '[{"on":1,"replace":"omw","with":"On my way!"}]' "$tmp"
 
 # --- Mouse & Trackpad ---
 set_bool   com.apple.mouse.linear     true
@@ -72,27 +61,8 @@ set_real   com.apple.springing.delay   0.5
 set_bool   NSVisualBidiSelectionEnabled true
 
 # Preferred web search engine
-pb -c "Delete :NSPreferredWebServices" 2>/dev/null || true
+plutil -remove NSPreferredWebServices "$tmp" 2>/dev/null || true
 plutil -insert NSPreferredWebServices -json \
     '{"NSWebServicesProviderWebSearch":{"NSDefaultDisplayName":"Google","NSProviderIdentifier":"com.google.www"}}' "$tmp"
-
-# --- Misc ---
-set_bool   shouldShowRSVPDataDetectors false
-set_int    AKLastIDMSEnvironment       0
-
-# --- Linguistic data assets ---
-set_real   NSLinguisticDataAssetsRequestLastInterval 86400
-
-pb -c "Delete :NSLinguisticDataAssetsRequested" 2>/dev/null || true
-plutil -insert NSLinguisticDataAssetsRequested -json \
-    '["en","en_US","hu","hu_HU","mul","mul_Latn","fi","de","tr","pl"]' "$tmp"
-
-pb -c "Delete :NSLinguisticDataAssetsRequestedByChecker" 2>/dev/null || true
-plutil -insert NSLinguisticDataAssetsRequestedByChecker -json \
-    '["en","hu","fi","de","tr","pl"]' "$tmp"
-
-# Left untouched (system-managed):
-# NSLinguisticDataAssetsRequestTime, NSSpellChecker*TransitionComplete
-# _AKBAACertMarkerKey, com.apple.gms.availability.*, com.apple.finder.SyncExtensions
 
 plist_finalize

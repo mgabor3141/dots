@@ -9,36 +9,17 @@ set_string AppleCurrentKeyboardLayoutInputSourceID 'org.unknown.keylayout.QWERTY
 # Fn key behavior: 0 = do nothing (let Kanata handle it)
 set_int    AppleFnUsageType 0
 
-# Enabled input sources: character palette, dictation, press-and-hold, QWERTY layout
-pb -c "Delete :AppleEnabledInputSources" 2>/dev/null || true
-pb -c "Add :AppleEnabledInputSources array"
-# 0: Character Palette
-pb -c "Add :AppleEnabledInputSources:0 dict"
-pb -c "Add :AppleEnabledInputSources:0:'Bundle ID' string com.apple.CharacterPaletteIM"
-pb -c "Add :AppleEnabledInputSources:0:InputSourceKind string 'Non Keyboard Input Method'"
-# 1: Dictation (Apple Intelligence)
-pb -c "Add :AppleEnabledInputSources:1 dict"
-pb -c "Add :AppleEnabledInputSources:1:'Bundle ID' string com.apple.inputmethod.ironwood"
-pb -c "Add :AppleEnabledInputSources:1:InputSourceKind string 'Non Keyboard Input Method'"
-# 2: Press and Hold
-pb -c "Add :AppleEnabledInputSources:2 dict"
-pb -c "Add :AppleEnabledInputSources:2:'Bundle ID' string com.apple.PressAndHold"
-pb -c "Add :AppleEnabledInputSources:2:InputSourceKind string 'Non Keyboard Input Method'"
-# 3: QWERTY keyboard layout
-pb -c "Add :AppleEnabledInputSources:3 dict"
-pb -c "Add :AppleEnabledInputSources:3:InputSourceKind string 'Keyboard Layout'"
-pb -c "Add :AppleEnabledInputSources:3:'KeyboardLayout ID' integer -3141"
-pb -c "Add :AppleEnabledInputSources:3:'KeyboardLayout Name' string QWERTY"
+# Enabled input sources: character palette (emoji picker) + QWERTY layout
+plutil -remove AppleEnabledInputSources "$tmp" 2>/dev/null || true
+plutil -insert AppleEnabledInputSources -json '[
+    {"Bundle ID": "com.apple.CharacterPaletteIM", "InputSourceKind": "Non Keyboard Input Method"},
+    {"InputSourceKind": "Keyboard Layout", "KeyboardLayout ID": -3141, "KeyboardLayout Name": "QWERTY"}
+]' "$tmp"
 
-# Selected input sources: QWERTY layout + Press and Hold
-pb -c "Delete :AppleSelectedInputSources" 2>/dev/null || true
-pb -c "Add :AppleSelectedInputSources array"
-pb -c "Add :AppleSelectedInputSources:0 dict"
-pb -c "Add :AppleSelectedInputSources:0:InputSourceKind string 'Keyboard Layout'"
-pb -c "Add :AppleSelectedInputSources:0:'KeyboardLayout ID' integer -3141"
-pb -c "Add :AppleSelectedInputSources:0:'KeyboardLayout Name' string QWERTY"
-pb -c "Add :AppleSelectedInputSources:1 dict"
-pb -c "Add :AppleSelectedInputSources:1:'Bundle ID' string com.apple.PressAndHold"
-pb -c "Add :AppleSelectedInputSources:1:InputSourceKind string 'Non Keyboard Input Method'"
+# Selected input source: QWERTY layout
+plutil -remove AppleSelectedInputSources "$tmp" 2>/dev/null || true
+plutil -insert AppleSelectedInputSources -json '[
+    {"InputSourceKind": "Keyboard Layout", "KeyboardLayout ID": -3141, "KeyboardLayout Name": "QWERTY"}
+]' "$tmp"
 
 plist_finalize
