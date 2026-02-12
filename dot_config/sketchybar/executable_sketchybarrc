@@ -10,5 +10,6 @@ source "$CONFIG_DIR/defaults.sh"
 source "$ITEM_DIR/spaces.sh"
 source "$ITEM_DIR/calendar.sh"
 source "$ITEM_DIR/battery.sh"
+source "$ITEM_DIR/meeting.sh"
 
 sketchybar --update

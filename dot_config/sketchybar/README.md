@@ -97,3 +97,13 @@ Other approaches considered and rejected:
 - **Self-aligning sleep in the plugin script**: sketchybar kills scripts after 60 seconds, so a 58-second sleep could be terminated before updating.
 - **Dynamic `update_freq` adjustment**: unclear whether changing `update_freq` resets the internal timer mid-cycle.
 - **launchd calendar intervals**: requires 60 `StartCalendarInterval` entries for per-minute wall-clock firing; overkill.
+
+## Meeting Countdown
+
+The `meeting` item shows time until the next calendar event when it's within 30 minutes, hidden otherwise. It subscribes to `clock_tick` so it updates every minute.
+
+Uses `icalBuddy` (Homebrew) to query the macOS Calendar store, excluding all-day events. The work calendar is synced via an ICS subscription in Calendar.app (File > New Calendar Subscription), which handles background fetching and RRULE expansion. This avoids storing any calendar credentials or URLs in the dotfiles repo -- everything lives in the system calendar database.
+
+The ICS URL comes from a Google Apps Script that creates a read-only copy of the work calendar, working around corporate MDM restrictions that block direct Google account access from non-Chrome apps.
+
+The countdown turns red when the meeting is within 5 minutes. One minute before start, a `terminal-notifier` notification fires (once per meeting, guarded by `.meeting_alerted`). Hovering shows the meeting title in a popup pill; clicking the item or the notification opens Google Calendar in Chrome, reusing an existing tab if one is found (`helpers/open_gcal.sh`).
