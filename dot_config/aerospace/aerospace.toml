@@ -52,7 +52,8 @@ preset = "qwerty"
 # Workspace bindings
 # NOTE: If adding/changing workspaces, also update ~/.config/aerospace/workspaces.conf
 ctrl-a = "workspace 1A"
-ctrl-w = "workspace 2W"
+ctrl-q = "workspace 2Q"
+ctrl-w = "workspace 3W"
 ctrl-r = "exec-and-forget ~/.config/aerospace/last-numbered-ws.sh switch"
 ctrl-t = "workspace 4T"
 ctrl-1 = "workspace 51"
@@ -62,7 +63,8 @@ ctrl-4 = "workspace 84"
 ctrl-5 = "workspace 95"
 
 ctrl-shift-a = "move-node-to-workspace --focus-follows-window 1A"
-ctrl-shift-w = "move-node-to-workspace --focus-follows-window 2W"
+ctrl-shift-q = "move-node-to-workspace --focus-follows-window 2Q"
+ctrl-shift-w = "move-node-to-workspace --focus-follows-window 3W"
 ctrl-shift-r = "exec-and-forget ~/.config/aerospace/last-numbered-ws.sh move"
 ctrl-shift-t = "move-node-to-workspace --focus-follows-window 4T"
 ctrl-shift-1 = ["move-node-to-workspace --focus-follows-window 51", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 51"]
@@ -93,6 +95,8 @@ ctrl-shift-d     = "move-node-to-workspace --focus-follows-window next"
 
 ctrl-x = "layout floating tiling"
 ctrl-b = "layout h_tiles h_accordion"
+ctrl-c = "mode main" # no-op: swallow key so it doesn't pass through to app
+ctrl-v = "mode main" # no-op: swallow key so it doesn't pass through to app
 
 [[on-window-detected]]
 if.app-id = "com.apple.finder"
@@ -140,12 +144,12 @@ run = "move-node-to-workspace 62 --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.hnc.Discord"
-run = "move-node-to-workspace 2W --focus-follows-window"
+run = "move-node-to-workspace 3W --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.tinyspeck.slackmacgap"
-run = "move-node-to-workspace 2W --focus-follows-window"
+run = "move-node-to-workspace 3W --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.facebook.archon"
-run = "move-node-to-workspace 2W --focus-follows-window"
+run = "move-node-to-workspace 3W --focus-follows-window"
