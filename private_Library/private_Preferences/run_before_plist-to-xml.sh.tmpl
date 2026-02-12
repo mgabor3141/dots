@@ -1,8 +1,0 @@
-#!/bin/bash
-trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
-set -Eeuo pipefail
-
-# {{ $dir := .chezmoi.targetFile | dir }}
-# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) "*.plist")) }}
-    plutil -convert xml1 {{ $dir }}/{{ . | base | replaceAllRegex "dot_" "."  | replaceAllRegex "^(\\w*_)*"  "" }} || true
-# {{ end }}

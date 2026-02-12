@@ -7,3 +7,12 @@ managed = {{ promptBoolOnce . "managed" "managed device" }}
 [data.git]
 name = "{{ promptStringOnce . "git.name" "git name" }}"
 email = "{{ promptStringOnce . "git.email" "git email" }}"
+
+{{ if eq .chezmoi.os "darwin" -}}
+
+[[textconv]]
+pattern = "**/*.plist"
+command = "plutil"
+args = ["-convert", "xml1", "-o", "-", "-"]
+
+{{- end -}}

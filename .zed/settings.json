@@ -3,17 +3,17 @@
     "JSON": ["**/*.json.tmpl"],
     "JSONC": ["**/*.jsonc.tmpl"],
     "TOML": ["**/*.toml.tmpl"],
-    "Shell Script": ["**/dot_*profile.tmpl", "**/*.sh.tmpl"],
-    "XML": ["**/*.plist", "**/*.plist.tmpl"]
-  },
-  "auto_install_extensions": {
-    "xml": true,
-    "lua": true
+    "Shell Script": [
+      "**/dot_*profile.tmpl",
+      "**/*.sh.tmpl",
+      "**/modify_*.plist",
+    ],
+    "XML": ["**/*.plist.tmpl"],
   },
   "languages": {
     "XML": {
-      "format_on_save": "off"
-    }
+      "format_on_save": "off",
+    },
   },
   "lsp": {
     "json-language-server": {
@@ -23,12 +23,12 @@
             {
               "fileMatch": ["**/zed/*settings.json*", "**/zed/*keymap.json*"],
               "schema": {
-                "allowComments": true
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
+                "allowComments": true,
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
 }

@@ -1,0 +1,45 @@
+#!/bin/bash
+# Selectively configure FluidApp preferences.
+# Only sets portable preferences — device-specific values (audio UIDs, window
+# geometry, chat history, timestamps) are left untouched.
+# shellcheck source=.plist_common.sh
+source "$CHEZMOI_SOURCE_DIR/private_Library/private_Preferences/.plist_common.sh"
+
+# --- General ---
+set_bool   AutoUpdateCheckEnabled              false
+set_bool   EnableAIProcessing                  true
+set_bool   LaunchAtStartup                     true
+set_bool   ShareAnonymousAnalytics             false
+set_bool   PlaygroundUsed                      true
+
+# --- Voice ---
+set_string SelectedProviderID                  apple-intelligence
+set_string SelectedSpeechModel                 parakeet-tdt
+set_bool   PressAndHoldMode                    false
+set_bool   RemoveFillerWordsEnabled            false
+set_bool   SaveTranscriptionHistory            false
+
+# --- Overlay ---
+set_string OverlayPosition                     bottom
+set_string OverlaySize                         large
+
+# --- AI command/rewrite modes ---
+set_string CommandModeSelectedModel             gpt-4.1
+set_bool   CommandModeShortcutEnabled           false
+set_string RewriteModeSelectedModel             gpt-4.1
+set_bool   RewriteModeShortcutEnabled           false
+
+# --- Accessibility ---
+set_bool   FluidVoice_AccessibilityRestartPending        false
+set_bool   FluidVoice_HasAutoRestartedForAccessibility   true
+
+# Left untouched (device/session-specific):
+# AXLastPromptAt, AnalyticsAnonymousInstallID, AnalyticsFirstOpenAt
+# AvailableModelsByProvider, SelectedModelByProvider
+# CommandModeChatSessions, CommandModeCurrentChatID
+# CommandModeHotkeyShortcut, HotkeyShortcutKey (binary hotkey data)
+# LastUpdateCheckDate
+# NSSplitView/NSStatusItem/NSWindow Frame (window geometry)
+# PreferredInputDeviceUID, PreferredOutputDeviceUID (audio device serials)
+
+plist_finalize
