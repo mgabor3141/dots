@@ -20,7 +20,7 @@ WINDOW_TITLE=$(echo "$WINDOW_INFO" | cut -d'|' -f2-)
 
 # Extract project name
 PROJECT=$(echo "$WINDOW_TITLE" | sed 's/ — .*//')
-[ "$PROJECT" = "Zed" ] && exit 0
+[ "$PROJECT" = "Zed" ] || [ "$PROJECT" = "empty project" ] && exit 0
 
 # Ensure state file exists
 [ -f "$STATE_FILE" ] || echo '{}' > "$STATE_FILE"
