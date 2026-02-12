@@ -83,3 +83,17 @@ To re-benchmark with zero overhead, use Bash 5's `EPOCHREALTIME` builtin:
 PS4='+${EPOCHREALTIME} ' bash -x ~/.config/sketchybar/plugins/space_windows.sh 2>/tmp/xtrace.log
 ```
 
+## Clock Daemon
+
+The clock and calendar items are driven by a background daemon (`helpers/clock_daemon.sh`) instead of `update_freq` polling.
+
+sketchybar's `update_freq` is interval-based, not wall-clock-aligned: `update_freq=60` fires 60 seconds after startup, so the clock could be off by up to 59 seconds from the actual minute boundary. The naive fix (`update_freq=1`) is accurate but forks a shell + runs `date` + makes an IPC call 60 times per minute for a value that changes once.
+
+The daemon sleeps until the next `:00` seconds boundary, then fires a custom `clock_tick` event. Both `clock` and `calendar` items subscribe to this event (and `system_woke` for sleep/wake recovery). Cost: 2 operations/minute vs 60 — a 30x reduction.
+
+The items also keep `update_freq=60` as a fallback. If the daemon dies (nothing supervises it), the interval-based polling kicks in -- slightly drifted but never frozen. When the daemon is healthy, `clock_tick` events fire on the minute boundary and override the timer.
+
+Other approaches considered and rejected:
+- **Self-aligning sleep in the plugin script**: sketchybar kills scripts after 60 seconds, so a 58-second sleep could be terminated before updating.
+- **Dynamic `update_freq` adjustment**: unclear whether changing `update_freq` resets the internal timer mid-cycle.
+- **launchd calendar intervals**: requires 60 `StartCalendarInterval` entries for per-minute wall-clock firing; overkill.
