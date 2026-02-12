@@ -40,7 +40,9 @@ revsets-use-glob-by-default=true
 [aliases]
 gp = ["git", "push", "--tracked"]
 gf = ["git", "fetch"]
-yeet = ["git", "push", "--change", "(@ ~ empty()) | parents(@ & empty())"]
+
+# Push the current change (or parent if empty) as a new bookmark.
+push-new = ["git", "push", "--change", "(@ ~ empty()) | parents(@ & empty())"]
 
 # Convenient shorthands.
 d = ["diff"]
