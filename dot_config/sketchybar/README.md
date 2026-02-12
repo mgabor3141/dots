@@ -38,12 +38,10 @@ All workspace label and highlight logic lives in `plugins/space_windows.sh`, att
 
 `space_windows.sh` has two code paths — this is the core design decision for performance:
 
-- **Fast path** (`aerospace_workspace_change`): Only updates highlight colors for the focused and previous workspace. Zero aerospace CLI calls. If the previous workspace is empty (detected by querying sketchybar for its current label — the fast path has no window data), it hides it. ~19ms.
+- **Fast path** (`aerospace_workspace_change`): Only updates highlight colors for the focused and previous workspace. One aerospace CLI call (to check if the previous workspace is empty). ~19ms.
 - **Full refresh** (all other events): Queries all windows with a single `aerospace list-windows --all`, rebuilds all labels, sets all highlights. One batched sketchybar IPC call. ~65ms.
 
-The fast path works because workspace switching doesn't change labels — only which workspace is highlighted. The `front_app_switched` event that follows ~200ms later triggers a full refresh if anything actually changed (e.g., a window moved).
-
-Letter workspace moves (`ctrl-shift-a/w/r/t`) rely on `exec-on-workspace-change` for the sketchybar update. Only numbered workspace moves (`ctrl-shift-1..5`) additionally run `update-editor-mapping.sh` to persist the mapping.
+The fast path works because workspace switching doesn't change labels — only which workspace is highlighted. Window moves do change labels, so all move keybindings explicitly trigger `aerospace_node_moved` (via `exec-and-forget`) to force a full refresh. This fires after the fast path from `exec-on-workspace-change`, so the user sees instant highlight feedback followed by correct labels. The `front_app_switched` event can also trigger a full refresh, but it doesn't fire when the focused app stays the same (which happens when moving a window with `--focus-follows-window`).
 
 ### Styling
 

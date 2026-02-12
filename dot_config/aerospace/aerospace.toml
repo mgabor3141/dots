@@ -62,16 +62,16 @@ ctrl-3 = "workspace 73"
 ctrl-4 = "workspace 84"
 ctrl-5 = "workspace 95"
 
-ctrl-shift-a = "move-node-to-workspace --focus-follows-window 1A"
-ctrl-shift-q = "move-node-to-workspace --focus-follows-window 2Q"
-ctrl-shift-w = "move-node-to-workspace --focus-follows-window 3W"
+ctrl-shift-a = ["move-node-to-workspace --focus-follows-window 1A", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-q = ["move-node-to-workspace --focus-follows-window 2Q", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-w = ["move-node-to-workspace --focus-follows-window 3W", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 ctrl-shift-r = "exec-and-forget ~/.config/aerospace/last-numbered-ws.sh move"
-ctrl-shift-t = "move-node-to-workspace --focus-follows-window 4T"
-ctrl-shift-1 = ["move-node-to-workspace --focus-follows-window 51", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 51"]
-ctrl-shift-2 = ["move-node-to-workspace --focus-follows-window 62", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 62"]
-ctrl-shift-3 = ["move-node-to-workspace --focus-follows-window 73", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 73"]
-ctrl-shift-4 = ["move-node-to-workspace --focus-follows-window 84", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 84"]
-ctrl-shift-5 = ["move-node-to-workspace --focus-follows-window 95", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 95"]
+ctrl-shift-t = ["move-node-to-workspace --focus-follows-window 4T", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-1 = ["move-node-to-workspace --focus-follows-window 51", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 51", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-2 = ["move-node-to-workspace --focus-follows-window 62", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 62", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-3 = ["move-node-to-workspace --focus-follows-window 73", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 73", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-4 = ["move-node-to-workspace --focus-follows-window 84", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 84", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-5 = ["move-node-to-workspace --focus-follows-window 95", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 95", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 
 ctrl-f20 = "workspace-back-and-forth"
 
@@ -86,12 +86,12 @@ ctrl-d     = "exec-and-forget aerospace focus down --boundaries-action fail || a
 
 ctrl-shift-left  = "move left --boundaries-action stop"
 ctrl-shift-right = "move right --boundaries-action stop"
-ctrl-shift-up    = "move-node-to-workspace --focus-follows-window prev"
-ctrl-shift-down  = "move-node-to-workspace --focus-follows-window next"
+ctrl-shift-up    = ["move-node-to-workspace --focus-follows-window prev", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-down  = ["move-node-to-workspace --focus-follows-window next", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 ctrl-shift-s     = "move left --boundaries-action stop"
 ctrl-shift-f     = "move right --boundaries-action stop"
-ctrl-shift-e     = "move-node-to-workspace --focus-follows-window prev"
-ctrl-shift-d     = "move-node-to-workspace --focus-follows-window next"
+ctrl-shift-e     = ["move-node-to-workspace --focus-follows-window prev", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-d     = ["move-node-to-workspace --focus-follows-window next", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 
 ctrl-x = "layout floating tiling"
 ctrl-b = "layout h_tiles h_accordion"
@@ -118,7 +118,7 @@ run = "move-node-to-workspace 1A --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.google.Chrome"
-run = "move-node-to-workspace 1A --focus-follows-window"
+run = "move-node-to-workspace 2Q --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "dev.zed.Zed"
@@ -144,12 +144,12 @@ run = "move-node-to-workspace 62 --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.hnc.Discord"
-run = "move-node-to-workspace 3W --focus-follows-window"
+run = "move-node-to-workspace 5T --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.tinyspeck.slackmacgap"
-run = "move-node-to-workspace 3W --focus-follows-window"
+run = "move-node-to-workspace 5T --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.facebook.archon"
-run = "move-node-to-workspace 3W --focus-follows-window"
+run = "move-node-to-workspace 5T --focus-follows-window"

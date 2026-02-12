@@ -41,5 +41,6 @@ case "${1:-switch}" in
   move)
     aerospace move-node-to-workspace --focus-follows-window "$target"
     ~/.config/aerospace/update-editor-mapping.sh "$target"
+    sketchybar --trigger aerospace_node_moved
     ;;
 esac
