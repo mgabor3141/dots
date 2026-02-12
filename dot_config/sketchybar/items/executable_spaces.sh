@@ -24,7 +24,7 @@ for sid in $ALL_WORKSPACES; do
   fi
 
   sketchybar --add item space."$sid" left \
-    --subscribe space."$sid" aerospace_workspace_change display_change system_woke mouse.entered mouse.exited \
+    --subscribe space."$sid" mouse.entered mouse.exited \
     --set space."$sid" \
     display="$(
         v=$(aerospace list-windows --workspace "$sid" --format "%{monitor-appkit-nsscreen-screens-id}" | cut -c1)
@@ -58,7 +58,7 @@ sketchybar --add item space_separator left \
   label.drawing=off \
   background.drawing=off \
   script="$PLUGIN_DIR/space_windows.sh" \
-  --subscribe space_separator aerospace_workspace_change front_app_switched space_windows_change aerospace_monitor_change aerospace_node_moved
+  --subscribe space_separator aerospace_workspace_change front_app_switched space_windows_change aerospace_monitor_change aerospace_node_moved system_woke
 
 # Load labels on startup using the same logic as the plugin
 "$PLUGIN_DIR/space_windows.sh"
