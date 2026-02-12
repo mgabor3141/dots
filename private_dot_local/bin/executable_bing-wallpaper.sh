@@ -199,7 +199,11 @@ update_once() {
     "${copyright:-[No description]}" \
     "Applying colors: $gradient_from -> $gradient_to ($gradient_angle)"
 
-  "$SCRIPT_DIR/set-wallpaper.sh" "$CACHE_DIR" "$annotated" "$blurred" "$gradient_angle" "$gradient_from" "$gradient_to"
+  # Fall back to the plain wallpaper if annotation failed (e.g. missing ghostscript)
+  local wallpaper="$annotated"
+  [[ -f "$wallpaper" ]] || wallpaper="$outfile"
+
+  "$SCRIPT_DIR/set-wallpaper.sh" "$CACHE_DIR" "$wallpaper" "$blurred" "$gradient_angle" "$gradient_from" "$gradient_to"
 
   next_wallpaper=$((
       $("${DATE_CMD[@]}" "${fullstartdate:0:8} ${fullstartdate:8:2}:${fullstartdate:10:2}" +%s)

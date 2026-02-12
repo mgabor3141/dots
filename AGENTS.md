@@ -23,6 +23,7 @@ This is a **public** dotfiles repository managed by chezmoi. It supports multipl
 - dot_config/zed/README.md
 - dot_config/sketchybar/README.md
 - dot_config/niri/README.md
+- dot_brew/README.md
 - dot_config/autostart/README.md
 - dot_config/customizepkg/README.md
 - dot_config/org.coolercontrol.CoolerControl/README.md
