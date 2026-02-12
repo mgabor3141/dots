@@ -68,6 +68,10 @@
     ;; -- Exceptions --
     (lmet home) (lmet home)
     (lmet end)  (lmet end)
+
+    ;; F13 → Hyper+M so Hammerspoon can catch it as a normal hotkey
+    ;; (macOS sends bare F13 as a system-defined event that hs.hotkey can't bind)
+    (f13)       (lctl lsft lalt lmet m)
   )
 )
 
