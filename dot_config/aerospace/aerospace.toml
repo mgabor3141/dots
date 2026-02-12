@@ -1,4 +1,4 @@
-accordion-padding = 30
+accordion-padding = 32
 after-login-command = []
 default-root-container-layout = "accordion"
 default-root-container-orientation = "horizontal"
@@ -6,7 +6,7 @@ enable-normalization-flatten-containers = true
 enable-normalization-opposite-orientation-for-nested-containers = true
 on-focused-monitor-changed = ["move-mouse monitor-lazy-center"]
 start-at-login = true
-automatically-unhide-macos-hidden-apps = false
+automatically-unhide-macos-hidden-apps = true
 
 exec-on-workspace-change = [
     '/bin/bash',
@@ -30,19 +30,19 @@ vertical = [
 [gaps.outer]
 bottom = [
     { monitor."built-in" = 0 },
-    8,
+    32,
 ]
 left = [
     { monitor."built-in" = 0 },
-    8,
+    32,
 ]
 right = [
     { monitor."built-in" = 0 },
-    8,
+    32,
 ]
 top = [
     { monitor."built-in" = 0 },
-    38,
+    54,
 ]
 
 [key-mapping]
