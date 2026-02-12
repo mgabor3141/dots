@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 source "$HOME/.config/aerospace/workspaces.conf"
 source "$CONFIG_DIR/space_styles.sh"
