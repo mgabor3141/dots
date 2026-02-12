@@ -6,17 +6,6 @@ Tiling window manager configuration using [AeroSpace](https://github.com/nikitab
 
 There are two categories of workspaces, defined in `workspaces.conf`:
 
-| Workspace | Hotkey | Purpose |
-|-----------|--------|---------|
-| `1A` | `ctrl-a` | Browsers (Zen, Chrome) |
-| `2W` | `ctrl-w` | Chat (Discord, Slack, Messenger) |
-| `4T` | `ctrl-t` | General |
-| `51` | `ctrl-1` | Editor (dynamic) |
-| `62` | `ctrl-2` | Editor (dynamic) |
-| `73` | `ctrl-3` | Editor (dynamic) |
-| `84` | `ctrl-4` | Editor (dynamic) |
-| `95` | `ctrl-5` | Editor (dynamic) |
-
 Letter workspaces have fixed app assignments. Numbered workspaces are dynamically assigned to editor (Zed) project windows.
 
 The naming convention uses a two-character format where the first character controls sort order and the second is the visible label.
@@ -88,23 +77,10 @@ Apps are assigned to fixed workspaces via `on-window-detected` rules:
 | Zen Browser | `1A` |
 | Google Chrome | `1A` |
 | VS Code, WebStorm, Cursor | `62` |
-| Discord, Slack, Messenger | `2W` |
+| Discord, Slack, Messenger | `3W` |
 
 Zen browser extension windows and Finder windows float. Zed settings windows float.
 
 ### PiP follow (`pip-move.sh`)
 
 Picture-in-Picture and Google Meet windows are set to float and follow you to whichever workspace you switch to. Triggered on every workspace change via `exec-on-workspace-change`.
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `aerospace.toml` | Main AeroSpace configuration |
-| `workspaces.conf` | Shared workspace definitions sourced by scripts |
-| `assign-editor-workspace.sh` | Auto-assigns Zed windows to numbered workspaces (read-only) |
-| `update-editor-mapping.sh` | Saves workspace mapping on manual move (write) |
-| `track-numbered-ws.sh` | Tracks numbered workspace MRU order in `/tmp` on each workspace switch |
-| `last-numbered-ws.sh` | Resolves MRU numbered workspace and switches/moves to it |
-| `pip-move.sh` | Moves PiP/Meet windows to follow focused workspace |
-| `editor-workspaces.json` | Runtime state file (not tracked by chezmoi) |
