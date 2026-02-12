@@ -1,15 +1,57 @@
 #!/bin/sh
-output=$(jj yeet "$@" 2>&1)
-rc=$?
+# yeet - push the current change to a remote branch.
+#
+# Default: find the nearest ancestor bookmark between trunk and the target
+#          commit, move it to the target, and push. Falls back to creating a
+#          new bookmark if none exists.
+# --new/-n: always create a new bookmark and branch (for stacked PRs).
+
+# Parse flags.
+new_flag=false
+args=""
+for arg in "$@"; do
+    case "$arg" in
+        -n|--new) new_flag=true ;;
+        *) args="$args $arg" ;;
+    esac
+done
+
+# Target: current commit if not empty, parent if empty.
+target='(@ ~ empty()) | parents(@ & empty())'
+
+# Decide mode: if --new, or no ancestor bookmark exists, create new.
+bookmark=""
+if [ "$new_flag" = false ]; then
+    bookmark=$(jj log -r "trunk()..$target & bookmarks()" --no-graph \
+        -T 'local_bookmarks.map(|b| b.name()).join("\n")' \
+        --limit 1 2>/dev/null | head -1)
+fi
+
+if [ -n "$bookmark" ]; then
+    # Move existing bookmark to target and push.
+    jj bookmark move "$bookmark" --to "$target" 2>&1
+    output=$(jj git push --bookmark "$bookmark" $args 2>&1)
+    rc=$?
+else
+    # Create a new bookmark via the push-new alias.
+    output=$(jj push-new $args 2>&1)
+    rc=$?
+fi
+
 printf '%s\n' "$output"
 
+# Auto-open "create PR" links (contain /pull/new/ or /compare/).
 url=$(printf '%s\n' "$output" | grep -oE 'https?://[^ ]+' | head -1)
 if [ -n "$url" ]; then
-    if command -v open >/dev/null 2>&1; then
-        open "$url"
-    elif command -v xdg-open >/dev/null 2>&1; then
-        xdg-open "$url"
-    fi
+    case "$url" in
+        */pull/new/*|*/compare/*)
+            if command -v open >/dev/null 2>&1; then
+                open "$url"
+            elif command -v xdg-open >/dev/null 2>&1; then
+                xdg-open "$url"
+            fi
+            ;;
+    esac
 fi
 
 exit $rc
