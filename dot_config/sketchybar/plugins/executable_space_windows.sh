@@ -25,12 +25,30 @@ if [ "$SENDER" = "aerospace_workspace_change" ]; then
 
   # Unfocus previous workspace
   if [ -n "$PREV_WORKSPACE" ]; then
-    BATCH_ARGS+=(--set "space.$PREV_WORKSPACE"
-      background.color="$TRANSPARENT"
-      background.drawing=off
-      label.color="$ACCENT_COLOR"
-      icon.color="$ACCENT_COLOR"
-    )
+    # Check if previous workspace should be hidden (empty workspace
+    # that was only visible because it was focused). Query sketchybar
+    # for its label — empty label means no windows.
+    PREV_LABEL=$(sketchybar --query "space.$PREV_WORKSPACE" \
+      | grep -A1 '"label"' | grep '"value"' \
+      | sed 's/.*"value": "//;s/",*$//')
+
+    if [ -z "$PREV_LABEL" ]; then
+      # Empty workspace — hide it
+      BATCH_ARGS+=(--set "space.$PREV_WORKSPACE"
+        drawing=off
+        background.color="$TRANSPARENT"
+        background.drawing=off
+        label.color="$ACCENT_COLOR"
+        icon.color="$ACCENT_COLOR"
+      )
+    else
+      BATCH_ARGS+=(--set "space.$PREV_WORKSPACE"
+        background.color="$TRANSPARENT"
+        background.drawing=off
+        label.color="$ACCENT_COLOR"
+        icon.color="$ACCENT_COLOR"
+      )
+    fi
   fi
 
   # Focus current workspace (ensure it's visible even if empty)
@@ -70,9 +88,10 @@ declare -A WS_ZED_TITLE # workspace -> first Zed window title (numbered ws only)
 
 while IFS='|' read -r ws app title; do
   [ -z "$ws" ] && continue
-  ws=$(echo "$ws" | xargs)
-  app=$(echo "$app" | xargs)
-  title=$(echo "$title" | xargs)
+  # Trim whitespace using read (bash builtin, no forks)
+  read -r ws <<< "$ws"
+  read -r app <<< "$app"
+  read -r title <<< "$title"
 
   WS_APPS[$ws]+="$app"$'\n'
 
@@ -169,9 +188,8 @@ for ws in $ALL_WORKSPACES; do
         label.color="$hl_fg_color" icon.color="$hl_fg_color"
       )
     else
-      aerospace move-workspace-to-monitor --workspace "$ws" 1 2>/dev/null
       BATCH_ARGS+=(--set "space.$ws"
-        drawing=off display=1
+        drawing=off
         background.color="$hl_bg_color" background.drawing="$hl_bg_drawing"
         label.color="$hl_fg_color" icon.color="$hl_fg_color"
       )
