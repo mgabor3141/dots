@@ -8,6 +8,7 @@ This is a **public** dotfiles repository managed by chezmoi. It supports multipl
 2. **Sub-project documentation belongs in README files**, not here. When adding documentation about a specific tool or config area, write it in a README.md within that subdirectory and link to it from here. Keep this file as a high-level index.
 3. **Open temporary files for the user.** When creating temporary files intended for the user to read, run `zed <filepath>` after writing them so they open automatically.
 4. **Keep documentation up to date.** When you discover information that isn't documented but would be useful for future sessions (gotchas, design decisions, how things work), update the relevant README or this file.
+5. **README files should explain concepts, not catalog details.** Focus on the "why" and the overarching design — things that aren't obvious from reading the code. Don't list every file, every function, or every flag; those details go stale quickly and are easy to discover by opening the file. If something is self-evident from the code, it doesn't need to be in the README.
 ## Key Gotchas
 1. **External files/repositories**: Some files are managed using `.chezmoiexternal.toml` files (e.g., fish plugins at `dot_config/fish/.chezmoiexternal.toml`). Don't manually add these files to the repo - update the external config instead.
 2. **Platform-specific files**: Files/folders specific to Linux or macOS are conditionally ignored via `.chezmoiignore` based on `chezmoi.os`. Check the ignore file before assuming something should exist.
