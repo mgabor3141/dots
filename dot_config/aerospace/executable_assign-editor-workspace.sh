@@ -60,6 +60,7 @@ for i in "${!MOVES[@]}"; do
   else
     aerospace move-node-to-workspace --window-id "$WINDOW_ID" "$TARGET"
   fi
-
-  sketchybar --trigger aerospace_node_moved TARGET_WORKSPACE="$TARGET"
 done
+
+# Trigger a single sketchybar refresh after all moves
+[ "$TOTAL" -gt 0 ] && sketchybar --trigger aerospace_node_moved

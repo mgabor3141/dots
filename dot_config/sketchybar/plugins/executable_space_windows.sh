@@ -77,30 +77,50 @@ build_letter_label() {
 # Update a workspace's label in sketchybar
 update_workspace_label() {
   local workspace="$1"
+  local focused="$2"
   local result label label_type
-  
+
   if is_numbered_workspace "$workspace"; then
     result=$(build_numbered_label "$workspace")
     if [ -z "$result" ]; then
-      # Empty workspace
-      aerospace move-workspace-to-monitor --workspace "$workspace" 1 2>/dev/null
-      sketchybar --set space.$workspace drawing=off display=1
+      # Empty workspace: show if focused, hide otherwise
+      if [ "$workspace" = "$focused" ]; then
+        sketchybar --set space.$workspace drawing=on label=""
+      else
+        aerospace move-workspace-to-monitor --workspace "$workspace" 1 2>/dev/null
+        sketchybar --set space.$workspace drawing=off display=1
+      fi
       return
     fi
-    
+
     label_type="${result%%:*}"
     label="${result#*:}"
-    
+
     apply_label_style "space.$workspace" "$label" "$label_type"
   else
     label=$(build_letter_label "$workspace")
     if [ -z "$label" ]; then
-      aerospace move-workspace-to-monitor --workspace "$workspace" 1 2>/dev/null
-      sketchybar --set space.$workspace drawing=off display=1
+      # Empty workspace: show if focused, hide otherwise
+      if [ "$workspace" = "$focused" ]; then
+        sketchybar --set space.$workspace drawing=on label=""
+      else
+        aerospace move-workspace-to-monitor --workspace "$workspace" 1 2>/dev/null
+        sketchybar --set space.$workspace drawing=off display=1
+      fi
       return
     fi
     apply_label_style "space.$workspace" "$label" "icon"
   fi
+}
+
+# Refresh all workspaces
+update_all_workspaces() {
+  local focused
+  focused="${FOCUSED_WORKSPACE:-$(aerospace list-workspaces --focused)}"
+
+  for ws in $ALL_WORKSPACES; do
+    update_workspace_label "$ws" "$focused"
+  done
 }
 
 # Handle monitor change
@@ -109,17 +129,13 @@ if [ "$SENDER" = "aerospace_monitor_change" ]; then
   exit 0
 fi
 
-# Handle workspace change - update previous workspace
+# Workspace switch: only update the two affected workspaces (latency-sensitive)
 if [ "$SENDER" = "aerospace_workspace_change" ]; then
-  update_workspace_label "$PREV_WORKSPACE"
-else
-  FOCUSED_WORKSPACE="$(aerospace list-workspaces --focused)"
+  update_workspace_label "$PREV_WORKSPACE" "$FOCUSED_WORKSPACE"
+  update_workspace_label "$FOCUSED_WORKSPACE" "$FOCUSED_WORKSPACE"
+  exit 0
 fi
 
-# Update focused workspace
-update_workspace_label "$FOCUSED_WORKSPACE"
-
-# Handle node moved - update target workspace
-if [ "$SENDER" = "aerospace_node_moved" ]; then
-  update_workspace_label "$TARGET_WORKSPACE"
-fi
+# Everything else (node_moved, front_app_switched, space_windows_change, etc.):
+# full refresh to catch all changes (closed windows, moved windows, etc.)
+update_all_workspaces
