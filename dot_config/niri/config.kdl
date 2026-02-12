@@ -115,7 +115,7 @@ binds {
     XF86AudioStop                      allow-when-locked=true { spawn-sh "playerctl play-pause"; }
     XF86AudioPrev                      allow-when-locked=true { spawn-sh "playerctl previous"; }
 
-    F13                                allow-when-locked=true { spawn "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
+    F13                                allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
 
     // ─── Brightness Controls ───
     XF86MonBrightnessUp                 allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call brightness increase"; }
