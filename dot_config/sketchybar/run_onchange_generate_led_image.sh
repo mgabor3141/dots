@@ -2,8 +2,12 @@
 # Generate the mic-mute LED glow indicator image.
 #
 # Three composited layers (outer glow → mid glow → bright core) with gaussian
-# blur produce a glowing LED strip effect. Output is a 900x30 PNG written to
-# stdout so chezmoi can manage it as a modify_ script.
+# blur produce a glowing LED strip effect.
+#
+# This is a run_onchange_ script: it only re-runs when the script content
+# changes (chezmoi tracks the hash). We can't use modify_ because ImageMagick's
+# blur produces non-deterministic output across process invocations (ASLR
+# affects floating-point rounding), causing chezmoi diff to always show changes.
 #
 # Requires: ImageMagick 7 (magick)
 #
@@ -11,10 +15,9 @@
 #   (dot_config/waybar-mute-indicator/style.css)
 
 set -euo pipefail
-cat > /dev/null  # drain stdin (existing file contents, if any)
 
-tmp=$(mktemp /tmp/mic_mute_led.XXXXXX.png)
-trap 'rm -f "$tmp"' EXIT
+target="$HOME/.config/sketchybar/images"
+mkdir -p "$target"
 
 magick -size 900x30 xc:none \
   \( -size 900x30 xc:none \
@@ -29,6 +32,4 @@ magick -size 900x30 xc:none \
      -fill "rgba(255,200,200,0.95)" -draw "roundrectangle 100,12 799,17 3,3" \
      -blur 6x1 \
   \) -gravity center -composite \
-  "$tmp"
-
-cat "$tmp"
+  "$target/mic_mute_led.png"
