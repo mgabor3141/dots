@@ -1,35 +1,16 @@
 #!/bin/bash
 
-sketchybar --add item aerospace_mode left \
-  --subscribe aerospace_mode aerospace_mode_change \
-  --set aerospace_mode icon="" \
-  script="$CONFIG_DIR/plugins/aerospace_mode.sh" \
-  icon.color="$ACCENT_COLOR" \
-  icon.padding_left=4 \
-  drawing=off
-
 # Add the aerospace events we specified in aerospace.toml
 sketchybar --add event aerospace_workspace_change
-sketchybar --add event aerospace_monitor_change
 sketchybar --add event aerospace_node_moved
 
 source "$HOME/.config/aerospace/workspaces.conf"
 source "$CONFIG_DIR/space_styles.sh"
 
 for sid in $ALL_WORKSPACES; do
-  monitor=$(aerospace list-windows --workspace "$sid" --format "%{monitor-appkit-nsscreen-screens-id}")
-
-  if [ -z "$monitor" ]; then
-    monitor="1"
-  fi
-
   sketchybar --add item space."$sid" left \
     --subscribe space."$sid" mouse.entered mouse.exited \
     --set space."$sid" \
-    display="$(
-        v=$(aerospace list-windows --workspace "$sid" --format "%{monitor-appkit-nsscreen-screens-id}" | cut -c1)
-        echo "${v:-1}"
-    )" \
     drawing=off \
     padding_left=$SPACE_PADDING_LEFT_ICON \
     padding_right=$SPACE_PADDING_RIGHT_ICON \
@@ -58,7 +39,7 @@ sketchybar --add item space_separator left \
   label.drawing=off \
   background.drawing=off \
   script="$PLUGIN_DIR/space_windows.sh" \
-  --subscribe space_separator aerospace_workspace_change front_app_switched space_windows_change aerospace_monitor_change aerospace_node_moved system_woke
+  --subscribe space_separator aerospace_workspace_change front_app_switched space_windows_change aerospace_node_moved system_woke
 
 # Load labels on startup using the same logic as the plugin
 "$PLUGIN_DIR/space_windows.sh"
