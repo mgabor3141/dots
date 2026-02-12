@@ -1,42 +1,63 @@
 #!/bin/bash
 # Configure macOS symbolic hotkeys: disable nearly all, enable a select few.
 #
-# Instead of calling PlistBuddy per-hotkey (~275 calls, ~750ms), we replace the
-# entire AppleSymbolicHotKeys dict with a single plutil -insert -json (~14ms).
+# Only touches the 'enabled' field per hotkey — preserves existing value dicts
+# so the system doesn't see spurious diffs when it writes them back.
+# All commands run in a single PlistBuddy invocation (~6ms).
 #
-# Enabled hotkeys:
-#   31:  Cmd+Shift+1  — screenshot to file
+# To modify hotkeys, edit the two arrays below:
+#   disabled — hotkey IDs to disable
+#   enabled  — "ID param1 param2 param3" to enable with specific key binding
 #
-# Everything else is disabled. Hotkey IDs not listed here are left to system
-# defaults (we don't touch keys we haven't audited).
+# Hotkey reference: https://web.archive.org/web/20141112224103/http://hintsforums.macworld.com/showthread.php?t=114785
 
 # shellcheck source=.plist_common.sh
 source "$CHEZMOI_SOURCE_DIR/private_Library/private_Preferences/.plist_common.sh"
 
-# Build the complete hotkey dict as JSON.
-# Disabled entries only need {"enabled": false} — macOS populates the value
-# dict when re-enabled via System Settings.
-hotkeys='{'
+# --- Disabled hotkeys ---
+disabled=(
+    7 8 9 10 11 12 13                                        # F-key shortcuts (Mission Control, Spaces, etc.)
+    15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30          # various system shortcuts
+    32 33 36 52 53 54 57 59 60 61 64 65 79 80 81 82 98       # input sources, Spotlight, spaces, etc.
+    118 159 162 164 175 190                                    # Notification Center, Do Not Disturb, etc.
+    215 216 217 218 219 222 223 224 225 226 227 228 229       # accessibility
+    230 231 232 233 235 237 238 239                           # accessibility (continued)
+    240 241 242 243 244 245 246 247 248 249                   # Tiling (Sequoia)
+    250 251 256 257 258 260                                   # Tiling (continued)
+)
 
-# Disabled hotkeys (grouped by category for readability)
-for k in \
-    7 8 9 10 11 12 13 \
-    15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 \
-    32 33 36 52 53 54 57 59 60 61 64 65 79 80 81 82 98 \
-    118 159 162 164 175 184 190 \
-    215 216 217 218 219 222 223 224 225 226 227 228 229 \
-    230 231 232 233 235 237 238 239 \
-    240 241 242 243 244 245 246 247 248 249 \
-    250 251 256 257 258 260; do
-    hotkeys+="\"$k\":{\"enabled\":false},"
+# --- Enabled hotkeys ---
+# Format: "ID  param1 param2 param3  # description"
+enabled=(
+    "31  53 23 1179648"     # Cmd+Shift+5 — screenshot to file
+    "184 52 21 1179648"     # Cmd+Shift+4 — screenshot and recording options
+)
+
+# Build PlistBuddy commands
+cmds=(-c "Add :AppleSymbolicHotKeys dict")
+
+for k in "${disabled[@]}"; do
+    cmds+=(-c "Add :AppleSymbolicHotKeys:$k dict")
+    cmds+=(-c "Set :AppleSymbolicHotKeys:$k:enabled false")
+    cmds+=(-c "Add :AppleSymbolicHotKeys:$k:enabled bool false")
 done
 
-# Enabled hotkeys with their key bindings
-hotkeys+='"31":{"enabled":true,"value":{"type":"standard","parameters":[49,18,1179648]}}'
+for entry in "${enabled[@]}"; do
+    read -r k p1 p2 p3 <<< "$entry"
+    cmds+=(-c "Add :AppleSymbolicHotKeys:$k dict")
+    cmds+=(-c "Set :AppleSymbolicHotKeys:$k:enabled true")
+    cmds+=(-c "Add :AppleSymbolicHotKeys:$k:enabled bool true")
+    # Recreate value dict with exact parameters
+    cmds+=(-c "Delete :AppleSymbolicHotKeys:$k:value")
+    cmds+=(-c "Add :AppleSymbolicHotKeys:$k:value dict")
+    cmds+=(-c "Add :AppleSymbolicHotKeys:$k:value:parameters array")
+    cmds+=(-c "Add :AppleSymbolicHotKeys:$k:value:parameters:0 integer $p1")
+    cmds+=(-c "Add :AppleSymbolicHotKeys:$k:value:parameters:1 integer $p2")
+    cmds+=(-c "Add :AppleSymbolicHotKeys:$k:value:parameters:2 integer $p3")
+    cmds+=(-c "Add :AppleSymbolicHotKeys:$k:value:type string standard")
+done
 
-hotkeys+='}'
-
-plutil -remove AppleSymbolicHotKeys "$tmp" 2>/dev/null || true
-plutil -insert AppleSymbolicHotKeys -json "$hotkeys" "$tmp"
+# Errors are expected (Add on existing keys, Set on missing keys) — suppress
+pb "${cmds[@]}" 2>/dev/null || true
 
 plist_finalize

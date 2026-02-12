@@ -220,7 +220,7 @@ binds {
     Mod+Escape                         repeat=false { toggle-overview; }
 
     // ─── Screenshots ───
-    CTRL+SHIFT+1                       { screenshot; }
+    CTRL+SHIFT+5                       { screenshot; }
     CTRL+SHIFT+2                       { screenshot-screen; }
     CTRL+SHIFT+3                       { screenshot-window; }
 
