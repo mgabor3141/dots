@@ -144,12 +144,10 @@ binds {
 
     Mod+UP                             { focus-window-or-workspace-up; }
     Mod+DOWN                           { focus-window-or-workspace-down; }
-    Mod+Shift+UP                       { move-column-to-workspace-down; }
-    Mod+Shift+DOWN                     { move-column-to-workspace-down; }
+    Mod+Shift+E                        { move-column-to-workspace-up; }
+    Mod+Shift+D                        { move-column-to-workspace-down; }
     Mod+E                              { focus-window-or-workspace-up; }
     Mod+D                              { focus-window-or-workspace-down; }
-    Mod+Shift+E                        { move-window-up; }
-    Mod+Shift+D                        { move-window-down; }
 
     Mod+HOME                           { focus-column-first; }
     Mod+END                            { focus-column-last; }
