@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # yeet - push the current change to a remote branch.
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
 #
 # Default: find the nearest ancestor bookmark between trunk and the target
 #          commit, move it to the target, and push. Falls back to creating a
@@ -15,6 +17,16 @@ for arg in "$@"; do
         *) args="$args $arg" ;;
     esac
 done
+
+# Fetch and rebase before pushing.
+jj git fetch
+jj reheat
+
+# Abort if there are conflicts after rebasing.
+if [ "$(jj log -r 'trunk()..@ & conflicts()' --count --no-pager)" -gt 0 ]; then
+    echo "conflicts detected after rebase — resolve them before pushing"
+    exit 1
+fi
 
 # Target: current commit if not empty, parent if empty.
 target='(@ ~ empty()) | parents(@ & empty())'
