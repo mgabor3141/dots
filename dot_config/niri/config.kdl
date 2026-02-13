@@ -100,6 +100,7 @@ workspace "T" {
 
 binds {
     // ─── Applications ───
+    Mod+G                              hotkey-overlay-title="Open Launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
     Mod+SPACE                          hotkey-overlay-title="Open Launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
 
     // ─── Audio Controls ───
@@ -229,7 +230,6 @@ binds {
 
     // ─── Exit / Power ───
     CTRL+ALT+DELETE                    { quit; } // Also quits Niri
-    Mod+P                              { power-off-monitors; } // Turn off screens (useful for OLED or privacy)
 }
 
 // ────────────── Startup Applications ──────────────
