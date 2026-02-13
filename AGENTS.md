@@ -18,17 +18,3 @@ This is a **public** dotfiles repository managed by chezmoi. It supports multipl
 5. **Always check diffs first**: Before applying changes, run `chezmoi diff` to see what would be changed. Then use `chezmoi apply` to apply changes. You do not need to verify that `chezmoi apply` successfully updated the target files - trust that it worked.
 6. **macOS `/bin/bash` is Bash 3.2**: It lacks features like associative arrays (`declare -A`), which silently break. Scripts needing Bash 4+ features must use `#!/usr/bin/env bash` (not `#!/bin/bash`) so they pick up the Homebrew-installed Bash 5. On Linux this is not an issue since the system bash is already 5+.
 7. **Use chezmoi template variables for paths**: In `.tmpl` files, always use template variables (`.chezmoi.homeDir`, `.chezmoi.sourceDir`, `.chezmoi.targetFile`, `.chezmoi.sourceFile`) and `joinPath` for path construction instead of hardcoding `$HOME` or absolute paths. Use `(.chezmoi.targetFile | dir)` for paths relative to the script's target directory and `(.chezmoi.sourceFile | dir)` for paths relative to the source. This ensures everything still works if files are moved within the repo.
-## Sub-project READMEs
-- dot_config/aerospace/README.md
-- dot_config/kanata/README.md
-- dot_config/zed/README.md
-- dot_config/sketchybar/README.md
-- dot_config/niri/README.md
-- dot_brew/README.md
-- dot_config/autostart/README.md
-- dot_config/customizepkg/README.md
-- dot_config/org.coolercontrol.CoolerControl/README.md
-- dot_hammerspoon/README.md
-- pacman/README.md
-- private_Library/Keyboard Layouts/README.md
-- private_Library/private_Preferences/README.md
