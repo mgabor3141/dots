@@ -10,7 +10,10 @@ hs.hotkey.bind({"ctrl"}, ".", function()
     hs.eventtap.keyStroke({"ctrl", "cmd"}, "space")
 end)
 
-hs.hotkey.bind({"ctrl", "cmd", "shift"}, "Q", function()
+-- Sleep trigger (Hyper+S via kanata).
+-- Razer: physical Break key → kanata @sleep alias → Hyper+S
+-- Go60: ZMK sends C_SLEEP (Linux) + F21 (macOS) → kanata defoverride → Hyper+S
+hs.hotkey.bind({"ctrl", "shift", "alt", "cmd"}, "s", function()
     -- Delay the sleep so it's not immediately woken up by the keyup
     hs.timer.doAfter(0.5, function()
         hs.caffeinate.systemSleep()

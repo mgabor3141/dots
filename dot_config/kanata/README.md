@@ -45,6 +45,31 @@ sudo launchctl kickstart -k system/io.github.jtroo.kanata.manager  # restart ser
 
 The Go60 keyboard has its own ZMK firmware config in a separate repository (not managed by chezmoi). The kanata config for the Go60 is intentionally minimal since ZMK handles the layout.
 
+### F13-F24 Key Allocation
+
+F13-F24 are used as an internal signaling bus between firmware, kanata, and application layers. They fall into two categories:
+
+**Direct keys** (F13-F17) — may be pressed by the user or bound directly by applications:
+
+| Key | Usage |
+|-----|-------|
+| F13 | Global mic mute (physical on Razer, chord elsewhere). Kanata remaps to Hyper+M on macOS. |
+| F14-F16 | Razer macro column keys. Currently unassigned (passthrough). |
+| F17 | Razer macro column key → Fn layer toggle. |
+
+**Internal synthetic keys** (F18-F24) — never pressed directly; always synthetic events conveying information between remapping layers:
+
+| Key | Usage |
+|-----|-------|
+| F18 | Kanata substitute for Alt+Left on macOS (frees Alt+Left for word navigation). |
+| F19 | Kanata substitute for Alt+Right on macOS (frees Alt+Right for word navigation). |
+| F20 | Workspace back-and-forth. Kanata `@wm` tap output → Aerospace (macOS) / niri (Linux). |
+| F21 | Sleep. Go60 ZMK firmware sends this alongside C_SLEEP. Kanata remaps to Hyper+S on macOS. |
+| F22-F23 | Unassigned. |
+| F24 | Razer physical key (right of RAlt) → Fn layer toggle. |
+
+All F13-F24 keysyms are defined in `dot_config/xkb/symbols/mysymbols` for Linux compatibility.
+
 ## Setup on MacOS
 
 Add `/opt/homebrew/bin/kanata` in

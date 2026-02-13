@@ -17,3 +17,12 @@ The Scarlett 8i6 USB (primary audio interface) doesn't expose mute or volume con
 ### FluidVoice Guard
 
 Switching the default input device mid-stream crashes FluidVoice (dictation app). The toggle detects active dictation by checking for FluidVoice's overlay window (an `AXSystemDialog` subrole window that only exists during dictation) and refuses to mute while it's present. The main FluidVoice settings window (`AXStandardWindow`) does not trigger the guard.
+
+## Sleep
+
+Hyper+S triggers `systemSleep()` with a 0.5s delay (so the key-up event doesn't immediately wake the machine). The signal arrives via kanata:
+
+- **Razer**: Physical Break key → kanata `@sleep` alias → Hyper+S
+- **Go60**: ZMK firmware sends `C_SLEEP` (works on Linux natively) + `F21` (macOS ignores `C_SLEEP` entirely) → kanata defoverride maps F21 → Hyper+S
+
+macOS has no native sleep keycode support — `C_SLEEP` (HID System Sleep) is never surfaced to userspace, not even to Karabiner's event viewer.

@@ -38,7 +38,7 @@
   lse @lsecondary
 )
 
-(platform (macos) (defalias sleep C-M-S-q)) ;; Standard is C-M-q but that collides with Aerospace
+(platform (macos) (defalias sleep C-S-A-M-s)) ;; Hyper+S → Hammerspoon triggers systemSleep
 (platform (linux) (defalias sleep sleep))
 
 ;; MacOS specific remaps, intended to standardize key positions between platforms
@@ -72,6 +72,10 @@
     ;; F13 → Hyper+M so Hammerspoon can catch it as a normal hotkey
     ;; (macOS sends bare F13 as a system-defined event that hs.hotkey can't bind)
     (f13)       (lctl lsft lalt lmet m)
+
+    ;; F21 → Hyper+S (sleep) — sent by Go60 ZMK firmware alongside C_SLEEP.
+    ;; C_SLEEP works on Linux but macOS ignores it entirely, so we remap F21 here.
+    (f21)       (lctl lsft lalt lmet s)
   )
 )
 
