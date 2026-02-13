@@ -76,6 +76,15 @@
     ;; F21 → Hyper+S (sleep) — sent by Go60 ZMK firmware alongside C_SLEEP.
     ;; C_SLEEP works on Linux but macOS ignores it entirely, so we remap F21 here.
     (f21)       (lctl lsft lalt lmet s)
+
+    ;; WM+G → WM+Space
+    (lctl g)    (lctl spc)
+  )
+)
+(platform (linux)
+  (defoverrides
+    ;; WM+G → WM+Space
+    (lmet g)    (lmet spc)
   )
 )
 

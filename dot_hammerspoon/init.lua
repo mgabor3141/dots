@@ -2,6 +2,39 @@
 
 hs.ipc.cliInstall()
 
+hs.hotkey.bind({"ctrl"}, "escape", function()
+    hs.spaces.toggleMissionControl()
+end)
+
+-- Hold ⌘Q to quit: shows an alert and only sends the real Cmd+Q if held for 0.5s.
+local cmdQTimer = nil
+local cmdQAlert = nil
+local cmdQHotkey
+cmdQHotkey = hs.hotkey.bind({"cmd"}, "q",
+    function() -- pressed
+        cmdQAlert = hs.alert.show("Hold ⌘Q to quit", "indefinite")
+        cmdQTimer = hs.timer.doAfter(0.5, function()
+            hs.alert.closeSpecific(cmdQAlert)
+            cmdQAlert = nil
+            cmdQHotkey:disable()
+            hs.eventtap.keyStroke({"cmd"}, "q")
+            hs.timer.doAfter(0.1, function()
+                cmdQHotkey:enable()
+            end)
+        end)
+    end,
+    function() -- released
+        if cmdQTimer then
+            cmdQTimer:stop()
+            cmdQTimer = nil
+        end
+        if cmdQAlert then
+            hs.alert.closeSpecific(cmdQAlert)
+            cmdQAlert = nil
+        end
+    end
+)
+
 hs.hotkey.bind({"ctrl"}, "X", function()
     hs.window.focusedWindow():close()
 end)
