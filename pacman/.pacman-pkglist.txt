@@ -106,6 +106,7 @@ qt5ct
 qt6ct
 rebuild-detector
 reflector
+rustdesk-bin
 sddm
 sg3_utils
 sof-firmware
