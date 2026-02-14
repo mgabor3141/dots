@@ -1,0 +1,17 @@
+{
+  "lastChangelogVersion": "0.52.12",
+  "enabledModels": [
+    "anthropic/claude-opus-4-6",
+    "anthropic/claude-sonnet-4-5"
+  ],
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-6",
+  "hideThinkingBlock": false,
+  "defaultThinkingLevel": "low",
+  "packages": [
+    "npm:pi-interactive-shell",
+    "npm:pi-web-access",
+    "npm:@aliou/pi-guardrails"
+  ],
+  "quietStartup": true
+}
