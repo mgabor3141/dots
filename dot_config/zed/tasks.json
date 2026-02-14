@@ -38,5 +38,9 @@
   {
     "label": "$ZED_CUSTOM_TYPESCRIPT_RUNNER install",
     "command": "$ZED_CUSTOM_TYPESCRIPT_RUNNER install"
+  },
+  {
+    "label": "pi",
+    "command": "pi"
   }
 ]
