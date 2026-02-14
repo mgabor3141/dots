@@ -2,6 +2,42 @@
 AGENTS.md
 CLAUDE.md
 
+{{- if .headless }}
+# Headless: ignore everything, then whitelist essentials
+*
+**/*
+
+# Shell configs
+!.bashrc
+!.zshrc
+!.profile
+!.fish_profile
+!.config
+!.config/fish
+!.config/fish/**
+
+# Git
+!.gitconfig
+
+# CLI tools
+!.editorconfig
+!.config/btop
+!.config/btop/**
+!.config/direnv
+!.config/direnv/**
+!.config/fastfetch
+!.config/fastfetch/**
+!.config/gh
+!.config/gh/**
+!.config/jj
+!.config/jj/**
+!.config/lesskey
+
+# Pi agent
+!.pi
+!.pi/**
+{{- end }}
+
 {{- if ne .chezmoi.os "linux" }}
 # Folders named "linux" anywhere
 **/linux/**

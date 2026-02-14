@@ -1,5 +1,6 @@
 [data]
 managed = {{ promptBoolOnce . "managed" "managed device" }}
+headless = {{ promptBoolOnce . "headless" "headless server" }}
 
 [data.git]
 name = "{{ promptStringOnce . "git.name" "git name" }}"
