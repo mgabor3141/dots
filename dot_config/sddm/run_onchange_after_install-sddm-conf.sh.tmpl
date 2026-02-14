@@ -1,0 +1,16 @@
+#!/bin/bash
+# {{ include (joinPath (.chezmoi.sourceFile | dir) "sddm.conf") | sha256sum }}
+
+set -euo pipefail
+
+echo "Installing sddm.conf to /etc/sddm.conf..."
+
+# Upgrade to sudo
+if [ "$(id -u)" -ne 0 ]; then
+    sudo "$0" "$@"
+    exit $?
+fi
+
+cp "{{ joinPath (.chezmoi.targetFile | dir) "sddm.conf" }}" /etc/sddm.conf
+
+echo "Done."

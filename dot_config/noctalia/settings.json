@@ -329,13 +329,13 @@
     },
     "hooks": {
         "darkModeChange": "",
-        "enabled": false,
+        "enabled": true,
         "performanceModeDisabled": "",
         "performanceModeEnabled": "",
         "screenLock": "",
         "screenUnlock": "",
         "session": "",
-        "startup": "",
+        "startup": "qs -c noctalia-shell ipc call lockScreen lock",
         "wallpaperChange": ""
     },
     "location": {
