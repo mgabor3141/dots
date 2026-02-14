@@ -8,6 +8,7 @@ flite
 glib2-devel
 gtk4-layer-shell
 inotify-tools
+intel-media-driver
 jdk-openjdk
 kde-cli-tools
 kdegraphics-thumbnailers
@@ -19,6 +20,7 @@ kompare
 konsole
 libappindicator
 liboggz
+libva-intel-driver
 noise-suppression-for-voice
 opencv
 pigz
