@@ -28,6 +28,10 @@ CLAUDE.md
 !.config/jj
 !.config/jj/**
 !.config/lesskey
+
+# Pi agent settings (runtime data persists via symlink)
+!.pi
+!.pi/**
 {{- end }}
 
 {{- if ne .chezmoi.os "linux" }}
