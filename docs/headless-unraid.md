@@ -38,30 +38,15 @@ Everything that needs to survive reboots lives on the array:
 
 ## Boot Sequence
 
-Unraid's boot script is `/boot/config/go` (on the persistent USB stick). Here's what happens in order:
+Two mechanisms run at different boot phases:
 
-### Phase 1: Early boot (array NOT mounted)
+### Phase 1: Early boot — `/boot/config/go` (array NOT mounted)
 
-1. **`/usr/local/sbin/emhttp`** starts — this is Unraid's management utility that eventually mounts the array. It runs in the foreground briefly, then the script continues.
+The `go` script lives on the persistent USB stick and runs before anything else.
 
-2. **`sed` patches `/etc/profile`** — Unraid's default `/etc/profile` contains a hard-coded `cd $HOME` that forces every login shell into `/root`, breaking SSH directory arguments and Zed remote terminals. Since `/etc` is tmpfs, we comment this out on every boot:
-   ```bash
-   sed -i 's/^cd $HOME/#cd $HOME/' /etc/profile
-   ```
+1. **`/usr/local/sbin/emhttp`** starts — Unraid's management utility that eventually mounts the array and starts services.
 
-3. **Background subshell starts** — a `(...)&` block that waits for the array.
-
-### Phase 2: Array available (background, async)
-
-The background subshell polls until `/mnt/user/appdata/chezmoi` exists (array mounted), then:
-
-4. **Copies `~/.env`** from persistent storage — contains API keys (`BRAVE_API_KEY`, etc.) that `.profile` sources via `set -a; [ -f "$HOME/.env" ] && . "$HOME/.env"; set +a`.
-
-5. **Creates `.pi` symlink** — `ln -sfn /mnt/user/appdata/chezmoi/.pi ~/.pi` so pi's runtime data (extensions, downloaded binaries like `rg`/`fd`, session state) persists across reboots without chezmoi needing to manage it.
-
-6. **Runs `chezmoi apply`** — regenerates all managed dotfiles in `/root` from the persistent source repo. This populates `.bashrc`, `.bash_profile`, `.profile`, `.gitconfig`, `.editorconfig`, and CLI tool configs (btop, direnv, fastfetch, jj, lesskey).
-
-### The go script
+2. **`sed` patches `/etc/profile`** — Unraid's default `/etc/profile` contains a hard-coded `cd $HOME` that forces every login shell into `/root`, breaking SSH directory arguments and Zed remote terminals. Since `/etc` is tmpfs, we comment this out on every boot.
 
 ```bash
 #!/bin/bash
@@ -70,13 +55,26 @@ The background subshell polls until `/mnt/user/appdata/chezmoi` exists (array mo
 
 # Remove the forced 'cd $HOME' from /etc/profile (tmpfs, safe to edit)
 sed -i 's/^cd $HOME/#cd $HOME/' /etc/profile
-
-# Apply dotfiles and restore secrets once array is available
-(while [ ! -d /mnt/user/appdata/chezmoi ]; do sleep 5; done
- cp /mnt/user/appdata/chezmoi/.env ~/
- ln -sfn /mnt/user/appdata/chezmoi/.pi ~/.pi
- /mnt/user/appdata/chezmoi/bin/chezmoi apply --config /mnt/user/appdata/chezmoi/config.toml) &
 ```
+
+### Phase 2: Array start — User Scripts plugin (`disks_mounted` event)
+
+The [User Scripts plugin](https://forums.unraid.net/topic/48286-plugin-ca-user-scripts/) fires scripts on array events. A script called `dotfiles_setup` is registered with `"frequency": "at_startup"` (runs at first array start after boot), which guarantees the array is mounted — no polling or sleep needed.
+
+Located at `/boot/config/plugins/user.scripts/scripts/dotfiles_setup/script`:
+
+```bash
+#!/bin/bash
+# Restore dotfiles and secrets to tmpfs /root
+cp /mnt/user/appdata/chezmoi/.env ~/
+ln -sfn /mnt/user/appdata/chezmoi/.pi ~/.pi
+/mnt/user/appdata/chezmoi/bin/chezmoi apply --config /mnt/user/appdata/chezmoi/config.toml
+```
+
+This:
+- **Copies `~/.env`** from persistent storage — contains API keys (`BRAVE_API_KEY`, etc.) that `.profile` sources via `set -a; [ -f "$HOME/.env" ] && . "$HOME/.env"; set +a`.
+- **Creates `.pi` symlink** — `ln -sfn /mnt/user/appdata/chezmoi/.pi ~/.pi` so pi's runtime data (extensions, downloaded binaries like `rg`/`fd`, session state) persists across reboots without chezmoi needing to manage it.
+- **Runs `chezmoi apply`** — regenerates all managed dotfiles in `/root` from the persistent source repo. This populates `.bashrc`, `.bash_profile`, `.profile`, `.gitconfig`, `.editorconfig`, and CLI tool configs (btop, direnv, fastfetch, jj, lesskey).
 
 ## Headless chezmoi Config
 
@@ -122,7 +120,7 @@ Create `~/.env` with API keys and persist it:
 ssh root@unraid.local 'echo "BRAVE_API_KEY=your-key" > ~/.env && cp ~/.env /mnt/user/appdata/chezmoi/.env'
 ```
 
-Set up the go script as shown above, then reboot to verify everything comes back.
+Set up the `go` script and the `dotfiles_setup` user script as shown above, then reboot to verify everything comes back.
 
 ## Updating
 
