@@ -120,7 +120,35 @@ Create `~/.env` with API keys and persist it:
 ssh root@unraid.local 'echo "BRAVE_API_KEY=your-key" > ~/.env && cp ~/.env /mnt/user/appdata/chezmoi/.env'
 ```
 
-Set up the `go` script and the `dotfiles_setup` user script as shown above, then reboot to verify everything comes back.
+Set up the `go` script as shown in the Boot Sequence section above.
+
+Create the `dotfiles_setup` user script and register it to run at array start:
+
+```bash
+# Create the script
+ssh root@unraid.local 'mkdir -p /boot/config/plugins/user.scripts/scripts/dotfiles_setup'
+ssh root@unraid.local 'cat > /boot/config/plugins/user.scripts/scripts/dotfiles_setup/script << '\''EOF'\''
+#!/bin/bash
+cp /mnt/user/appdata/chezmoi/.env ~/
+ln -sfn /mnt/user/appdata/chezmoi/.pi ~/.pi
+/mnt/user/appdata/chezmoi/bin/chezmoi apply --config /mnt/user/appdata/chezmoi/config.toml
+EOF'
+```
+
+Then register it to run at array startup — either via the Unraid web UI (Settings → User Scripts → set `dotfiles_setup` to "At Startup of Array"), or by adding this entry to `/boot/config/plugins/user.scripts/schedule.json`:
+
+```json
+{
+    "/boot/config/plugins/user.scripts/scripts/dotfiles_setup/script": {
+        "script": "/boot/config/plugins/user.scripts/scripts/dotfiles_setup/script",
+        "frequency": "at_startup",
+        "id": "scheduledotfiles_setup",
+        "custom": ""
+    }
+}
+```
+
+Reboot to verify everything comes back.
 
 ## Updating
 

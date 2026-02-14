@@ -16,4 +16,4 @@ Tested on CachyOS and MacOS
 
 ## Headless / Server Deployment
 
-This repo supports headless deployment with a minimal subset of configs (shell, git, CLI tools). See [docs/headless-unraid.md](docs/headless-unraid.md) for Unraid-specific setup, including how to handle its tmpfs root filesystem.
+This repo supports headless deployment with a minimal subset of configs (shell, git, CLI tools). See [.docs/headless-unraid.md](.docs/headless-unraid.md) for Unraid-specific setup, including how to handle its tmpfs root filesystem.
