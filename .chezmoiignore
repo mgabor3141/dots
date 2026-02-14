@@ -28,6 +28,10 @@ CLAUDE.md
 !.config/jj
 !.config/jj/**
 !.config/lesskey
+
+# Pi agent
+!.pi
+!.pi/**
 {{- end }}
 
 {{- if ne .chezmoi.os "linux" }}
