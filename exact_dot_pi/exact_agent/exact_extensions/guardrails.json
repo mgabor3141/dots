@@ -3,32 +3,40 @@
     "patterns": [
       {
         "pattern": "rm -rf",
-        "description": "recursive force delete"
+        "description": "recursive force delete",
+        "regex": true
       },
       {
         "pattern": "sudo",
-        "description": "superuser command"
+        "description": "superuser command",
+        "regex": true
       },
       {
         "pattern": "dd if=",
-        "description": "disk write operation"
+        "description": "disk write operation",
+        "regex": true
       },
       {
         "pattern": "mkfs.",
-        "description": "filesystem format"
+        "description": "filesystem format",
+        "regex": true
       },
       {
         "pattern": "chmod -R 777",
-        "description": "insecure recursive permissions"
+        "description": "insecure recursive permissions",
+        "regex": true
       },
       {
         "pattern": "chown -R",
-        "description": "recursive ownership change"
+        "description": "recursive ownership change",
+        "regex": true
       },
       {
         "pattern": "env",
-        "description": "might leak env"
+        "description": "might leak env",
+        "regex": true
       }
     ]
-  }
+  },
+  "version": "0.6.0-20260204"
 }
