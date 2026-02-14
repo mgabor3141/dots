@@ -28,6 +28,15 @@ set -U __done_min_cmd_duration 10000
 set -U __done_notification_urgency_level low
 
 ## Environment setup
+# Source sensitive env vars (API keys etc.)
+if test -f ~/.env
+  for line in (grep -v '^\s*#' ~/.env | grep -v '^\s*$')
+    set -l key (string split -m1 '=' -- $line)[1]
+    set -l val (string split -m1 '=' -- $line)[2]
+    set -gx $key $val
+  end
+end
+
 # Apply .profile: use this to put fish compatible .profile stuff in
 if test -f ~/.fish_profile
   source ~/.fish_profile
