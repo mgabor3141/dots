@@ -22,6 +22,8 @@ export QT_QPA_PLATFORMTHEME="gtk3"
 export MANGOHUD=1
 export PROTON_ENABLE_WAYLAND=1
 export PROTON_NO_WM_DECORATION=1
+
+export npm_config_prefix="$HOME/.local"
 {{- end }}
 
 {{- if eq .chezmoi.os "darwin" }}
