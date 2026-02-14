@@ -4,12 +4,14 @@ set -a
 set +a
 
 export EDITOR=nano
+{{- if not .headless }}
 export VISUAL="zed --wait"
+{{- end }}
 
 # export LESS="-FR -j3 --color=always"
 # export PAGER="less -FR -j3 --color=always"
 
-{{- if eq .chezmoi.os "linux" }}
+{{- if and (eq .chezmoi.os "linux") (not .headless) }}
 export BROWSER=zen-browser
 export SSH_AUTH_SOCK=$HOME/.bitwarden-ssh-agent.sock
 

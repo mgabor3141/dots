@@ -7,35 +7,27 @@ CLAUDE.md
 *
 **/*
 
-# Shell configs
+# Shell configs (bash only on headless)
 !.bashrc
-!.zshrc
+!.bash_profile
 !.profile
-!.fish_profile
-!.config
-!.config/fish
-!.config/fish/**
 
 # Git
 !.gitconfig
 
 # CLI tools
 !.editorconfig
+!.config
 !.config/btop
 !.config/btop/**
 !.config/direnv
 !.config/direnv/**
 !.config/fastfetch
 !.config/fastfetch/**
-!.config/gh
-!.config/gh/**
+
 !.config/jj
 !.config/jj/**
 !.config/lesskey
-
-# Pi agent
-!.pi
-!.pi/**
 {{- end }}
 
 {{- if ne .chezmoi.os "linux" }}

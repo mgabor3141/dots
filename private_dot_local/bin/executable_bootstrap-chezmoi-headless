@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Bootstrap chezmoi on a headless server (e.g. Unraid) with persistent storage.
+#
+# Usage:
+#   bootstrap-chezmoi-headless <persistent-dir> <repo-url>
+#
+# Example:
+#   bootstrap-chezmoi-headless /mnt/user/appdata/chezmoi https://github.com/user/dotfiles.git
+#
+# What it does:
+#   1. Installs chezmoi binary to <persistent-dir>/bin/
+#   2. Clones the dotfiles repo to <persistent-dir>/source/
+#   3. Writes a chezmoi config with headless=true
+#   4. Runs chezmoi apply
+#   5. Prints instructions for making it persist across reboots
+
+set -euo pipefail
+
+PERSIST_DIR="${1:?Usage: $0 <persistent-dir> <repo-url>}"
+REPO_URL="${2:?Usage: $0 <persistent-dir> <repo-url>}"
+
+BIN_DIR="$PERSIST_DIR/bin"
+SOURCE_DIR="$PERSIST_DIR/source"
+CONFIG_FILE="$PERSIST_DIR/config.toml"
+CHEZMOI="$BIN_DIR/chezmoi"
+
+echo "==> Setting up chezmoi in $PERSIST_DIR"
+mkdir -p "$BIN_DIR" "$SOURCE_DIR"
+
+# Install chezmoi binary
+if [ -x "$CHEZMOI" ]; then
+    echo "==> chezmoi binary already exists, skipping download"
+else
+    echo "==> Installing chezmoi binary"
+    sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$BIN_DIR"
+fi
+
+# Clone or update repo
+if [ -d "$SOURCE_DIR/.git" ]; then
+    echo "==> Repo already cloned, pulling latest"
+    git -C "$SOURCE_DIR" pull --ff-only
+else
+    echo "==> Cloning $REPO_URL"
+    git clone "$REPO_URL" "$SOURCE_DIR"
+fi
+
+# Write config
+if [ -f "$CONFIG_FILE" ]; then
+    echo "==> Config already exists at $CONFIG_FILE, not overwriting"
+else
+    echo "==> Writing config"
+    read -rp "Git name: " git_name
+    read -rp "Git email: " git_email
+    cat > "$CONFIG_FILE" <<EOF
+sourceDir = "$SOURCE_DIR"
+
+[data]
+managed = false
+headless = true
+
+[data.git]
+name = "$git_name"
+email = "$git_email"
+EOF
+    echo "==> Config written to $CONFIG_FILE"
+fi
+
+# Apply
+echo "==> Running chezmoi apply"
+"$CHEZMOI" apply --config "$CONFIG_FILE"
+
+echo
+echo "=== Done! ==="
+echo
+echo "To persist across reboots (Unraid), add this to /boot/config/go:"
+echo
+echo "  $CHEZMOI apply --config $CONFIG_FILE"
+echo
+echo "For interactive use, add to your .bashrc or run:"
+echo
+echo "  alias chezmoi='$CHEZMOI --config $CONFIG_FILE'"
