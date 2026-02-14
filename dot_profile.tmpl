@@ -33,6 +33,11 @@ export PROTON_NO_WM_DECORATION=1
 export npm_config_prefix="$HOME/.local"
 {{- end }}
 
+{{- if .headless }}
+export npm_config_prefix="/mnt/user/appdata/node"
+export PATH="/mnt/user/appdata/node/bin:$PATH"
+{{- end }}
+
 {{- if eq .chezmoi.os "darwin" }}
 export PATH="/opt/homebrew/bin:$PATH"
 export XDG_CONFIG_HOME="$HOME/.config"
