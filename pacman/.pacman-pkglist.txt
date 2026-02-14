@@ -62,6 +62,7 @@ inetutils
 intel-ucode
 jfsutils
 jujutsu
+kdenlive
 kitty
 kvantum-theme-nordic-git
 lazygit
