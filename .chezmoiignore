@@ -16,6 +16,7 @@ CLAUDE.md
 .config/niri
 .config/noctalia
 .config/org.coolercontrol.CoolerControl
+.config/sddm
 .config/pipewire
 .config/sunshine
 .config/systemd
