@@ -13,5 +13,8 @@
     "npm:pi-web-access",
     "npm:@aliou/pi-guardrails"
   ],
+  "terminal": {
+    "clearOnShrink": true
+  },
   "quietStartup": true
 }
