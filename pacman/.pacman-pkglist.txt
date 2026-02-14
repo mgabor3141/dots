@@ -78,6 +78,7 @@ logrotate
 lsscsi
 man-pages
 meld
+moonlight-qt
 mtools
 namcap
 nano-syntax-highlighting
