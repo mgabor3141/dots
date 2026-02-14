@@ -1,3 +1,8 @@
+# Source sensitive env vars (API keys etc.)
+set -a
+[ -f "$HOME/.env" ] && . "$HOME/.env"
+set +a
+
 export EDITOR=nano
 export VISUAL="zed --wait"
 

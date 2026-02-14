@@ -41,6 +41,7 @@
   },
   {
     "label": "pi",
-    "command": "pi"
+    "command": "pi",
+    "allow_concurrent_runs": true
   }
 ]

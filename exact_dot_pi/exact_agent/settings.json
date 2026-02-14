@@ -10,8 +10,9 @@
   "defaultThinkingLevel": "low",
   "packages": [
     "npm:pi-interactive-shell",
-    "npm:pi-web-access",
-    "npm:@aliou/pi-guardrails"
+    "npm:@aliou/pi-guardrails",
+    "npm:pi-librarian",
+    "npm:pi-brave-search"
   ],
   "terminal": {
     "clearOnShrink": true
