@@ -1,52 +1,55 @@
 #!/usr/bin/env bash
-# Niri event-stream daemon — watches for Zed editor windows and assigns
-# them to numbered workspaces based on project→workspace mappings in
-# editor-workspaces.json.
+# Niri event-stream daemon — manages dynamic Zed editor workspaces.
 #
-# Renames numbered workspaces to Zed project labels (shortest unique prefix)
-# so the workspace bar shows project names instead of generic 1e–5e.
+# Assigns Zed windows to numbered workspaces (1-5), creating/destroying
+# workspaces dynamically. Workspace names follow "N-label" format
+# (e.g. "1-dots", "2-go60") so keybinds can target by prefix.
 #
-# Also works around a Zed rendering bug where the window content is frozen
-# until resized, by nudging each new Zed window 1px down and back.
+# Also nudges new Zed windows (1px resize) to work around a rendering bug.
 #
-# Started via spawn-sh-at-startup in niri config.kdl.
+# State file maps project names to slot numbers: {"chezmoi": 1, "go60": 2}
+# Started manually or via spawn-sh-at-startup in niri config.kdl.
 
-LOGFILE="/tmp/niri-event-daemon.log"
-log() { echo "[$(date '+%H:%M:%S.%3N')] $*" >> "$LOGFILE"; }
+set -euo pipefail
 
 WM_SCRIPTS="$HOME/.config/wm-scripts"
-source "$WM_SCRIPTS/workspaces.conf"
+STATE_FILE="$WM_SCRIPTS/editor-workspaces.json"
+LOG="/tmp/niri-event-daemon.log"
+MAX_SLOT=5
+# Number of static workspaces on DP-1 (A, Q, W) — dynamic slots start after these
+STATIC_WS_COUNT=3
+MAIN_OUTPUT="DP-1"
 
-# Wait for niri IPC to be ready
+[ -f "$STATE_FILE" ] || echo '{}' > "$STATE_FILE"
+
+log() { echo "$(date +%H:%M:%S.%3N) $*" >> "$LOG"; }
+
+# Wait for niri IPC
 for _ in $(seq 1 30); do
     niri msg version &>/dev/null && break
     sleep 0.5
 done
 
-log "Daemon started. NUMBERED_WORKSPACES=$NUMBERED_WORKSPACES"
+# ── In-memory tracking ──
+declare -A SEEN        # wid → 1: windows we've processed (assigned + nudged)
+declare -A WIN_WS      # wid → workspace_id: last known workspace for manual-move detection
+declare -A WIN_PROJECT # wid → project name: for cleanup on close
 
-# Track which Zed windows we've already resize-nudged (once per window)
-declare -A NUDGED
+# ── Helpers ──
 
-# Track which workspace indices we've renamed (so we can restore them)
-declare -A RENAMED_IDX  # idx -> original name before we renamed it
-
-# Build set of default numbered workspace names for quick lookup
-NUMBERED_DEFAULTS_SET=" $NUMBERED_WS_DEFAULTS "
-
-nudge_zed_window() {
-    local wid="$1"
-    log "NUDGE wid=$wid starting (sleep 0.3)"
-    sleep 0.3
-    log "NUDGE wid=$wid resizing"
-    niri msg action set-window-height --id "$wid" -- -1 2>> "$LOGFILE"
-    sleep 0.1
-    niri msg action set-window-height --id "$wid" -- +1 2>> "$LOGFILE"
-    log "NUDGE wid=$wid done"
+# Extract project name from Zed window title ("project — file" → "project")
+extract_project() {
+    local title="$1"
+    local project="${title%% — *}"
+    # Skip settings window and empty projects
+    if [[ "$project" == "Zed" || "$project" == "empty project" || -z "$project" ]]; then
+        return 1
+    fi
+    echo "$project"
 }
 
-# Compute shortest unique prefix for a project name among all current Zed projects.
-compute_project_label() {
+# Compute display label for a project (shortest unique prefix, special aliases)
+compute_label() {
     local project="$1"
     shift
     local -a all_projects=("$@")
@@ -67,118 +70,357 @@ compute_project_label() {
 
         local is_unique=true
         for other in "${all_projects[@]}"; do
-            if [ "$other" != "$project" ]; then
-                if [ "$other" = "$candidate" ] || [[ "$other" == "$candidate-"* ]]; then
-                    is_unique=false
-                    break
-                fi
+            if [[ "$other" != "$project" && ("$other" == "$candidate" || "$other" == "$candidate-"*) ]]; then
+                is_unique=false
+                break
             fi
         done
-
-        if [ "$is_unique" = true ]; then
-            break
-        fi
+        $is_unique && break
     done
-
     echo "$candidate"
 }
 
-# Refresh all numbered workspace names based on current Zed windows.
-# Workspaces with Zed → project label, without → restore original name.
-refresh_workspace_names() {
-    local windows workspaces
-    windows=$(niri msg -j windows)
-    workspaces=$(niri msg -j workspaces)
-
-    # Collect all Zed project names and which index they're on
-    local -a all_projects=()
-    local -A idx_to_project=()
-
-    while IFS='|' read -r _wid _title ws_idx; do
-        [ -z "$_wid" ] && continue
-        local project="${_title%% — *}"
-        [ "$project" = "Zed" ] || [ "$project" = "empty project" ] && continue
-        all_projects+=("$project")
-        idx_to_project[$ws_idx]="$project"
-    done < <(echo "$windows" | jq -r --argjson ws "$workspaces" '
-        ($ws | map({(.id | tostring): (.idx | tostring)}) | add) as $wsidx |
-        .[] | select(.app_id == "dev.zed.Zed") |
-        "\(.id)|\(.title)|\($wsidx[.workspace_id | tostring] // "")"
-    ')
-
-    log "REFRESH projects=[${all_projects[*]}] idx_map=[$(for k in "${!idx_to_project[@]}"; do echo -n "$k=${idx_to_project[$k]} "; done)]"
-
-    # Rename workspaces that have Zed windows
-    for idx in "${!idx_to_project[@]}"; do
-        local current_name
-        current_name=$(echo "$workspaces" | jq -r --argjson idx "$idx" '.[] | select(.idx == $idx) | .name // empty')
-        local label
-        label=$(compute_project_label "${idx_to_project[$idx]}" "${all_projects[@]}")
-        if [ "$current_name" != "$label" ]; then
-            # Save original name before renaming (if we haven't already)
-            if [ -z "${RENAMED_IDX[$idx]:-}" ]; then
-                RENAMED_IDX[$idx]="$current_name"
-            fi
-            log "RENAME idx=$idx '$current_name' -> '$label'"
-            niri msg action set-workspace-name --workspace "$idx" "$label"
-        fi
-    done
-
-    # Restore workspaces we previously renamed that no longer have Zed windows
-    for idx in "${!RENAMED_IDX[@]}"; do
-        if [ -z "${idx_to_project[$idx]:-}" ]; then
-            local current_name original_name
-            current_name=$(echo "$workspaces" | jq -r --argjson idx "$idx" '.[] | select(.idx == $idx) | .name // empty')
-            original_name="${RENAMED_IDX[$idx]}"
-            if [ "$current_name" != "$original_name" ]; then
-                log "RESTORE idx=$idx '$current_name' -> '$original_name'"
-                niri msg action set-workspace-name --workspace "$idx" "$original_name"
-            fi
-            unset "RENAMED_IDX[$idx]"
-        fi
-    done
+# Get all current Zed projects (for unique-prefix computation)
+get_all_projects() {
+    niri msg -j windows | jq -r '.[] | select(.app_id == "dev.zed.Zed") | .title' | while read -r title; do
+        extract_project "$title" 2>/dev/null || true
+    done | sort -u
 }
 
+# Find workspace name matching slot prefix "N-*" on main output
+find_slot_workspace() {
+    local slot="$1"
+    niri msg -j workspaces | jq -r --arg slot "$slot" '
+        .[] | select(.output == "DP-1" and (.name // "" | startswith($slot + "-"))) | .name
+    '
+}
+
+# Get the slot number from a workspace name ("2-go60" → "2")
+slot_from_ws_name() {
+    local name="$1"
+    if [[ "$name" =~ ^([1-5])- ]]; then
+        echo "${BASH_REMATCH[1]}"
+    fi
+}
+
+# Find the trailing empty workspace index on DP-1 (always exists)
+trailing_empty_idx() {
+    niri msg -j workspaces | jq '[.[] | select(.output == "DP-1")] | max_by(.idx) | .idx'
+}
+
+# Get the workspace internal ID that contains a given window
+ws_id_of_window() {
+    local wid="$1"
+    niri msg -j windows | jq --argjson wid "$wid" '.[] | select(.id == $wid) | .workspace_id'
+}
+
+# Check if a workspace (by name) has any Zed windows on it
+ws_has_zed() {
+    local ws_name="$1"
+    local ws_id
+    ws_id=$(niri msg -j workspaces | jq -r --arg name "$ws_name" '.[] | select(.name == $name) | .id')
+    [ -z "$ws_id" ] && return 1
+    local count
+    count=$(niri msg -j windows | jq --argjson wsid "$ws_id" '[.[] | select(.app_id == "dev.zed.Zed" and .workspace_id == $wsid)] | length')
+    [ "$count" -gt 0 ]
+}
+
+# Read state file: project → slot
+state_get() {
+    jq -r --arg p "$1" '.[$p] // empty' "$STATE_FILE"
+}
+
+# Write state file: project → slot
+state_set() {
+    local project="$1" slot="$2"
+    local tmp="$STATE_FILE.tmp"
+    jq --arg p "$project" --argjson s "$slot" '.[$p] = $s' "$STATE_FILE" > "$tmp"
+    mv "$tmp" "$STATE_FILE"
+}
+
+# Remove project from state file
+state_remove() {
+    local project="$1"
+    local tmp="$STATE_FILE.tmp"
+    jq --arg p "$project" 'del(.[$p])' "$STATE_FILE" > "$tmp"
+    mv "$tmp" "$STATE_FILE"
+}
+
+# Get all used slot numbers from state file
+used_slots() {
+    jq -r '.[] | tostring' "$STATE_FILE" | sort -n
+}
+
+# Find first available slot (1-5)
+first_free_slot() {
+    local used
+    used=$(used_slots)
+    for n in $(seq 1 $MAX_SLOT); do
+        if ! echo "$used" | grep -qx "$n"; then
+            echo "$n"
+            return
+        fi
+    done
+    # All full — this shouldn't happen with 5 slots
+    log "WARNING: all slots full!"
+    echo "$MAX_SLOT"
+}
+
+# Sort dynamic workspaces: each "N-*" goes to index STATIC_WS_COUNT + N
+sort_workspaces() {
+    local ws_json
+    ws_json=$(niri msg -j workspaces)
+
+    # Collect dynamic workspace names on DP-1, sorted by slot number
+    local names
+    names=$(echo "$ws_json" | jq -r '
+        [.[] | select(.output == "DP-1" and (.name // "" | test("^[1-5]-")))]
+        | sort_by(.name | split("-")[0] | tonumber)
+        | .[].name
+    ')
+
+    [ -z "$names" ] && return
+
+    while read -r name; do
+        local slot="${name%%-*}"
+        local target_idx=$(( STATIC_WS_COUNT + slot ))
+        niri msg action move-workspace-to-index --reference "$name" "$target_idx" 2>/dev/null || true
+    done <<< "$names"
+}
+
+# Delete a workspace by name (unset name → auto-GC when empty and unfocused)
+delete_workspace() {
+    local ws_name="$1"
+    log "delete_workspace: $ws_name"
+    niri msg action unset-workspace-name "$ws_name" 2>/dev/null || true
+}
+
+# Create or reuse workspace for a slot, move window there
+# Returns the workspace name
+ensure_workspace_and_move() {
+    local slot="$1" label="$2" wid="$3"
+    local ws_name="${slot}-${label}"
+
+    # Check if workspace already exists
+    local existing
+    existing=$(find_slot_workspace "$slot")
+
+    if [ -n "$existing" ]; then
+        # Workspace exists — rename if label changed
+        if [ "$existing" != "$ws_name" ]; then
+            niri msg action set-workspace-name --workspace "$existing" "$ws_name" 2>/dev/null || true
+            log "renamed workspace $existing → $ws_name"
+        fi
+        # Move window there if not already on it
+        local current_ws_id
+        current_ws_id=$(ws_id_of_window "$wid")
+        local target_ws_id
+        target_ws_id=$(niri msg -j workspaces | jq -r --arg name "$ws_name" '.[] | select(.name == $name) | .id')
+        if [ "$current_ws_id" != "$target_ws_id" ]; then
+            niri msg action move-window-to-workspace --window-id "$wid" "$ws_name" 2>/dev/null || true
+            log "moved window $wid to existing workspace $ws_name"
+        fi
+    else
+        # Create new workspace: move window to trailing empty, then name it
+        local trailing
+        trailing=$(trailing_empty_idx)
+        niri msg action move-window-to-workspace --window-id "$wid" "$trailing" 2>/dev/null || true
+        niri msg action set-workspace-name --workspace "$trailing" "$ws_name" 2>/dev/null || true
+        log "created workspace $ws_name (moved wid $wid to idx $trailing)"
+    fi
+
+    sort_workspaces
+    echo "$ws_name"
+}
+
+# Nudge Zed window to fix frozen rendering (background)
+nudge_zed_window() {
+    local wid="$1"
+    sleep 0.3
+    niri msg action set-window-height --id "$wid" -- -1 2>/dev/null || true
+    sleep 0.1
+    niri msg action set-window-height --id "$wid" -- +1 2>/dev/null || true
+    log "nudged window $wid"
+}
+
+# Refresh workspace labels using shortest-unique-prefix
+refresh_labels() {
+    local -a all_projects=()
+    readarray -t all_projects < <(get_all_projects)
+    [ ${#all_projects[@]} -eq 0 ] && return
+
+    local ws_json
+    ws_json=$(niri msg -j workspaces)
+
+    # For each dynamic workspace, recompute label
+    local names
+    names=$(echo "$ws_json" | jq -r '.[] | select(.output == "DP-1" and (.name // "" | test("^[1-5]-"))) | .name')
+    [ -z "$names" ] && return
+
+    while read -r name; do
+        local slot="${name%%-*}"
+        local current_label="${name#*-}"
+
+        # Find which project is on this workspace (first one wins)
+        local ws_id
+        ws_id=$(echo "$ws_json" | jq -r --arg name "$name" '.[] | select(.name == $name) | .id')
+        local project
+        project=$(niri msg -j windows | jq -r --argjson wsid "$ws_id" '
+            [.[] | select(.app_id == "dev.zed.Zed" and .workspace_id == $wsid)] | first | .title // empty
+        ')
+        project=$(extract_project "$project" 2>/dev/null || echo "")
+        [ -z "$project" ] && continue
+
+        local new_label
+        new_label=$(compute_label "$project" "${all_projects[@]}")
+
+        if [ "$current_label" != "$new_label" ]; then
+            niri msg action set-workspace-name --workspace "$name" "${slot}-${new_label}" 2>/dev/null || true
+            log "relabeled ${name} → ${slot}-${new_label}"
+        fi
+    done <<< "$names"
+}
+
+# ── Event Handlers ──
+
+handle_new_window() {
+    local wid="$1" title="$2" workspace_id="$3"
+
+    local project
+    project=$(extract_project "$title") || return
+
+    SEEN[$wid]=1
+    WIN_PROJECT[$wid]="$project"
+    log "new Zed window $wid: project=$project"
+
+    # 1. Look up or assign slot
+    local slot
+    slot=$(state_get "$project")
+    if [ -z "$slot" ]; then
+        slot=$(first_free_slot)
+        state_set "$project" "$slot"
+        log "assigned slot $slot to $project (new)"
+    fi
+
+    # 2. Compute label
+    local -a all_projects=()
+    readarray -t all_projects < <(get_all_projects)
+    local label
+    label=$(compute_label "$project" "${all_projects[@]}")
+
+    # 3. Ensure workspace exists and move window there
+    ensure_workspace_and_move "$slot" "$label" "$wid"
+
+    # 4. Track workspace for manual-move detection
+    WIN_WS[$wid]=$(ws_id_of_window "$wid")
+
+    # 5. Refresh all labels (adding a project may change unique prefixes)
+    refresh_labels
+
+    # 6. Nudge in background
+    nudge_zed_window "$wid" &
+}
+
+handle_workspace_change() {
+    local wid="$1" title="$2" new_ws_id="$3"
+
+    local project="${WIN_PROJECT[$wid]:-}"
+    [ -z "$project" ] && return
+
+    local old_ws_id="${WIN_WS[$wid]:-}"
+    WIN_WS[$wid]="$new_ws_id"
+
+    log "workspace change: wid=$wid project=$project old_ws=$old_ws_id new_ws=$new_ws_id"
+
+    # Find what slot the new workspace is (if it's a dynamic one)
+    local new_ws_name
+    new_ws_name=$(niri msg -j workspaces | jq -r --argjson wsid "$new_ws_id" '.[] | select(.id == $wsid) | .name // empty')
+    local new_slot
+    new_slot=$(slot_from_ws_name "$new_ws_name")
+
+    if [ -n "$new_slot" ]; then
+        # Moved to a dynamic workspace — update state
+        state_set "$project" "$new_slot"
+        log "updated state: $project → slot $new_slot"
+    fi
+
+    # Check if old workspace is now empty of Zed
+    if [ -n "$old_ws_id" ]; then
+        local old_ws_name
+        old_ws_name=$(niri msg -j workspaces | jq -r --argjson wsid "$old_ws_id" '.[] | select(.id == $wsid) | .name // empty')
+        local old_slot
+        old_slot=$(slot_from_ws_name "$old_ws_name")
+        if [ -n "$old_slot" ] && ! ws_has_zed "$old_ws_name"; then
+            delete_workspace "$old_ws_name"
+            log "cleaned up empty workspace $old_ws_name"
+        fi
+    fi
+
+    refresh_labels
+    sort_workspaces
+}
+
+handle_window_closed() {
+    local wid="$1"
+    local project="${WIN_PROJECT[$wid]:-}"
+
+    unset "SEEN[$wid]"
+    unset "WIN_WS[$wid]"
+    unset "WIN_PROJECT[$wid]"
+
+    log "window closed: wid=$wid project=$project"
+
+    # Check all dynamic workspaces — delete any that lost all Zed windows
+    local ws_json
+    ws_json=$(niri msg -j workspaces)
+    local names
+    names=$(echo "$ws_json" | jq -r '.[] | select(.output == "DP-1" and (.name // "" | test("^[1-5]-"))) | .name')
+    [ -z "$names" ] && return
+
+    while read -r name; do
+        if ! ws_has_zed "$name"; then
+            delete_workspace "$name"
+            log "cleaned up workspace $name after close"
+        fi
+    done <<< "$names"
+
+    refresh_labels
+    sort_workspaces
+}
+
+# ── Main Loop ──
+
+log "=== daemon starting ==="
+echo -n "" > "$LOG"  # truncate log
+
 while IFS= read -r line; do
-    # Fast path: extract event type without full jq parse
+    # Fast-path: extract event type without full jq parse
     event_type="${line%%\":{*}"
     event_type="${event_type#*\"}"
 
     case "$event_type" in
         WindowOpenedOrChanged)
             app_id=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.app_id')
+            [ "$app_id" != "dev.zed.Zed" ] && continue
 
-            if [ "$app_id" = "dev.zed.Zed" ]; then
-                wid=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.id // empty')
-                title=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.title // empty')
-                ws_id=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.workspace_id // empty')
-                log "EVENT WindowOpenedOrChanged wid=$wid title='$title' ws_id=$ws_id"
-                "$WM_SCRIPTS/assign-editor-workspace.sh"
-                refresh_workspace_names
-                # One-time resize nudge to fix frozen rendering
-                if [ -n "$wid" ] && [[ -z "${NUDGED[$wid]:-}" ]]; then
-                    NUDGED[$wid]=1
-                    log "NUDGE queued wid=$wid"
-                    nudge_zed_window "$wid" &
-                else
-                    log "NUDGE skipped wid=$wid (already=${NUDGED[$wid]:-none}, wid_empty=$([ -n "$wid" ] && echo no || echo yes))"
+            wid=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.id')
+            title=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.title')
+            workspace_id=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.workspace_id')
+
+            if [ -z "${SEEN[$wid]:-}" ]; then
+                handle_new_window "$wid" "$title" "$workspace_id"
+            else
+                # Already seen — check for workspace change (manual move)
+                if [ "$workspace_id" != "${WIN_WS[$wid]:-}" ]; then
+                    handle_workspace_change "$wid" "$title" "$workspace_id"
                 fi
+                # Title-only changes: ignore (project name doesn't change)
             fi
             ;;
-        WindowsChanged)
-            # Bulk window update (e.g. startup, focus change) — check if any
-            # Zed windows need assignment and refresh names
-            zed_info=$(echo "$line" | jq -r '.WindowsChanged.windows[] | select(.app_id == "dev.zed.Zed") | "\(.id)|\(.title)|\(.workspace_id)"')
-            if [ -n "$zed_info" ]; then
-                log "EVENT WindowsChanged zed_windows: $(echo "$zed_info" | tr '\n' '; ')"
-                "$WM_SCRIPTS/assign-editor-workspace.sh"
-                refresh_workspace_names
-            fi
-            ;;
+
         WindowClosed)
-            wid=$(echo "$line" | jq -r '.WindowClosed.id // empty')
-            log "EVENT WindowClosed wid=$wid"
-            refresh_workspace_names
+            wid=$(echo "$line" | jq -r '.WindowClosed.id')
+            [ -n "${SEEN[$wid]:-}" ] && handle_window_closed "$wid"
             ;;
     esac
 done < <(niri msg -j event-stream)
