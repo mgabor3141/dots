@@ -253,27 +253,48 @@ refresh_labels() {
     names=$(echo "$ws_json" | jq -r '.[] | select(.output == "DP-1" and (.name // "" | test("^[0-9]+-"))) | .name')
     [ -z "$names" ] && return
 
+    local win_json
+    win_json=$(niri msg -j windows)
+
     while read -r name; do
         local slot="${name%%-*}"
         local current_label="${name#*-}"
 
-        # Find which project is on this workspace (oldest window = lowest id)
         local ws_id
         ws_id=$(echo "$ws_json" | jq -r --arg name "$name" '.[] | select(.name == $name) | .id')
-        local project
-        project=$(niri msg -j windows | jq -r --argjson wsid "$ws_id" '
-            [.[] | select(.app_id == "dev.zed.Zed" and .workspace_id == $wsid)]
-            | sort_by(.id) | first | .title // empty
+
+        # Get all Zed project names on this workspace
+        local -a ws_projects=()
+        readarray -t ws_projects < <(echo "$win_json" | jq -r --argjson wsid "$ws_id" '
+            [.[] | select(.app_id == "dev.zed.Zed" and .workspace_id == $wsid)] | .[].title
         ')
-        project=$(extract_project "$project" 2>/dev/null || echo "")
-        [ -z "$project" ] && continue
 
-        local new_label
-        new_label=$(compute_label "$project" "${all_projects[@]}")
+        # Check if current label still matches any window on the workspace
+        local label_valid=false
+        for title in "${ws_projects[@]}"; do
+            local proj
+            proj=$(extract_project "$title" 2>/dev/null) || continue
+            local lbl
+            lbl=$(compute_label "$proj" "${all_projects[@]}")
+            if [ "$current_label" = "$lbl" ]; then
+                label_valid=true
+                break
+            fi
+        done
 
-        if [ "$current_label" != "$new_label" ]; then
-            niri msg action set-workspace-name --workspace "$name" "${slot}-${new_label}" 2>/dev/null || true
-            log "relabeled ${name} → ${slot}-${new_label}"
+        if ! $label_valid; then
+            # Current label is stale — pick the first valid project
+            for title in "${ws_projects[@]}"; do
+                local proj
+                proj=$(extract_project "$title" 2>/dev/null) || continue
+                local new_label
+                new_label=$(compute_label "$proj" "${all_projects[@]}")
+                if [ "$current_label" != "$new_label" ]; then
+                    niri msg action set-workspace-name --workspace "$name" "${slot}-${new_label}" 2>/dev/null || true
+                    log "relabeled ${name} → ${slot}-${new_label}"
+                fi
+                break
+            done
         fi
     done <<< "$names"
 }
