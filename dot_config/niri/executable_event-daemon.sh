@@ -257,12 +257,13 @@ refresh_labels() {
         local slot="${name%%-*}"
         local current_label="${name#*-}"
 
-        # Find which project is on this workspace (first one wins)
+        # Find which project is on this workspace (oldest window = lowest id)
         local ws_id
         ws_id=$(echo "$ws_json" | jq -r --arg name "$name" '.[] | select(.name == $name) | .id')
         local project
         project=$(niri msg -j windows | jq -r --argjson wsid "$ws_id" '
-            [.[] | select(.app_id == "dev.zed.Zed" and .workspace_id == $wsid)] | first | .title // empty
+            [.[] | select(.app_id == "dev.zed.Zed" and .workspace_id == $wsid)]
+            | sort_by(.id) | first | .title // empty
         ')
         project=$(extract_project "$project" 2>/dev/null || echo "")
         [ -z "$project" ] && continue
