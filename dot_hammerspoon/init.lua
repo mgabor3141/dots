@@ -2,7 +2,7 @@
 
 hs.ipc.cliInstall()
 
-hs.hotkey.bind({"ctrl"}, "Z", function()
+hs.hotkey.bind({"ctrl"}, "X", function()
     hs.window.focusedWindow():close()
 end)
 
