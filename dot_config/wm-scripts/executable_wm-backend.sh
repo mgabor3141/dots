@@ -3,6 +3,10 @@
 # a common interface for workspace/window management scripts.
 #
 # Usage: source this file, then call wm_* functions.
+#
+# Workspace references are WM-specific:
+#   - Aerospace: workspace names (e.g. "51", "62")
+#   - Niri: indices for numbered workspaces (e.g. 4, 5), names for others
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_FILE="$SCRIPT_DIR/editor-workspaces.json"
@@ -22,33 +26,28 @@ else
 fi
 
 # ── Niri backend ──
+# Numbered workspaces are addressed by index (from NUMBERED_WORKSPACES).
+# This makes them immune to display name renames.
 
 _niri_list_editor_windows() {
-    # Returns: id|title|workspace_name per line
-    local windows workspaces
-    windows=$(niri msg -j windows)
-    workspaces=$(niri msg -j workspaces)
-    echo "$windows" | jq -r --argjson ws "$workspaces" '
-        # Build workspace id→name map
-        ($ws | map({(.id | tostring): (.name // (.idx | tostring))}) | add) as $wsmap |
+    # Returns: id|title|workspace_ref per line
+    # workspace_ref = index (as string) for all workspaces
+    niri msg -j windows | jq -r --argjson ws "$(niri msg -j workspaces)" '
+        ($ws | map({(.id | tostring): (.idx | tostring)}) | add) as $wsidx |
         .[] | select(.app_id == "dev.zed.Zed") |
-        "\(.id)|\(.title)|\($wsmap[.workspace_id | tostring] // "")"
+        "\(.id)|\(.title)|\($wsidx[.workspace_id | tostring] // "")"
     '
 }
 
 _niri_list_occupied_workspaces() {
-    # Returns workspace names that have windows on them
-    local windows workspaces
-    windows=$(niri msg -j windows)
-    workspaces=$(niri msg -j workspaces)
-    echo "$windows" | jq -r --argjson ws "$workspaces" '
-        ($ws | map({(.id | tostring): (.name // (.idx | tostring))}) | add) as $wsmap |
-        .[].workspace_id | tostring | $wsmap[.] // empty
+    # Returns workspace indices (as strings) that have windows
+    niri msg -j windows | jq -r --argjson ws "$(niri msg -j workspaces)" '
+        ($ws | map({(.id | tostring): (.idx | tostring)}) | add) as $wsidx |
+        .[].workspace_id | tostring | $wsidx[.] // empty
     ' | sort -u
 }
 
 _niri_move_window() {
-    # Args: window_id target_ws [--focus]
     local wid="$1" target="$2" focus="${3:---focus false}"
     if [ "$focus" = "--focus" ]; then
         niri msg action move-window-to-workspace --window-id "$wid" --focus true "$target"
@@ -58,12 +57,12 @@ _niri_move_window() {
 }
 
 _niri_focused_window() {
-    # Returns: app_id|title
     niri msg -j focused-window | jq -r '"\(.app_id)|\(.title)"'
 }
 
 _niri_focused_workspace() {
-    niri msg -j workspaces | jq -r '.[] | select(.is_focused) | .name // (.idx | tostring)'
+    # Returns workspace index as string
+    niri msg -j workspaces | jq -r '.[] | select(.is_focused) | .idx | tostring'
 }
 
 _niri_switch_workspace() {
@@ -71,7 +70,6 @@ _niri_switch_workspace() {
 }
 
 _niri_move_focused_window() {
-    # Args: target_ws (focus follows)
     niri msg action move-window-to-workspace "$1"
 }
 
@@ -80,23 +78,23 @@ _niri_post_move_hook() {
 }
 
 _niri_mru_numbered_workspace() {
-    # Returns the most recently focused numbered workspace (excluding $1).
-    # Derived from window focus_timestamps — no MRU file needed.
+    # Returns the index of the most recently focused numbered workspace
+    # (excluding $1). Derived from window focus_timestamps.
     local current="$1"
-    local numbered_pattern
-    numbered_pattern=$(echo "$NUMBERED_WORKSPACES" | tr ' ' '|')
 
-    local windows workspaces
-    windows=$(niri msg -j windows)
-    workspaces=$(niri msg -j workspaces)
+    # Build set of numbered indices for jq
+    local numbered_set
+    numbered_set=$(echo "$NUMBERED_WORKSPACES" | tr ' ' '\n' | jq -R . | jq -s '.')
 
-    echo "$windows" | jq -r --argjson ws "$workspaces" --arg current "$current" --arg pat "$numbered_pattern" '
-        ($ws | map({(.id | tostring): (.name // (.idx | tostring))}) | add) as $wsmap |
-        map({ws: $wsmap[.workspace_id | tostring], ts: .focus_timestamp.secs}) |
-        map(select(.ws | test("^(" + $pat + ")$"))) |
-        map(select(.ws != $current)) |
-        group_by(.ws) |
-        map({ws: .[0].ws, ts: (map(.ts) | max)}) |
+    niri msg -j windows | jq -r --argjson ws "$(niri msg -j workspaces)" \
+        --arg current "$current" --argjson numbered "$numbered_set" '
+        ($ws | map({(.id | tostring): (.idx | tostring)}) | add) as $wsidx |
+        ($numbered | map({(.) : true}) | add) as $is_numbered |
+        map({idx: $wsidx[.workspace_id | tostring], ts: .focus_timestamp.secs}) |
+        map(select($is_numbered[.idx] == true)) |
+        map(select(.idx != $current)) |
+        group_by(.idx) |
+        map({ws: .[0].idx, ts: (map(.ts) | max)}) |
         sort_by(-.ts) |
         .[0].ws // empty
     '
@@ -142,8 +140,6 @@ _aerospace_post_move_hook() {
 }
 
 _aerospace_mru_numbered_workspace() {
-    # Returns the most recently focused numbered workspace (excluding $1).
-    # Reads from the MRU file maintained by track-numbered-ws.sh.
     local current="$1"
     if [[ -f "$MRU_FILE" ]]; then
         while IFS= read -r ws; do
@@ -157,12 +153,12 @@ _aerospace_mru_numbered_workspace() {
 
 # ── Dispatch to detected WM ──
 
-wm_list_editor_windows()     { "_${_WM}_list_editor_windows" "$@"; }
+wm_list_editor_windows()      { "_${_WM}_list_editor_windows" "$@"; }
 wm_list_occupied_workspaces() { "_${_WM}_list_occupied_workspaces" "$@"; }
-wm_move_window()             { "_${_WM}_move_window" "$@"; }
-wm_focused_window()          { "_${_WM}_focused_window" "$@"; }
-wm_focused_workspace()       { "_${_WM}_focused_workspace" "$@"; }
-wm_switch_workspace()        { "_${_WM}_switch_workspace" "$@"; }
-wm_move_focused_window()     { "_${_WM}_move_focused_window" "$@"; }
-wm_post_move_hook()          { "_${_WM}_post_move_hook" "$@"; }
-wm_mru_numbered_workspace() { "_${_WM}_mru_numbered_workspace" "$@"; }
+wm_move_window()              { "_${_WM}_move_window" "$@"; }
+wm_focused_window()           { "_${_WM}_focused_window" "$@"; }
+wm_focused_workspace()        { "_${_WM}_focused_workspace" "$@"; }
+wm_switch_workspace()         { "_${_WM}_switch_workspace" "$@"; }
+wm_move_focused_window()      { "_${_WM}_move_focused_window" "$@"; }
+wm_post_move_hook()           { "_${_WM}_post_move_hook" "$@"; }
+wm_mru_numbered_workspace()   { "_${_WM}_mru_numbered_workspace" "$@"; }
