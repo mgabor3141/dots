@@ -1,0 +1,12 @@
+# Gets symlinked into ~/.config/systemd/user/
+
+[Unit]
+Description=Watch for flatpak app changes
+
+[Path]
+PathChanged=/var/lib/flatpak/app
+TriggerLimitIntervalSec=10
+TriggerLimitBurst=1
+
+[Install]
+WantedBy=default.target

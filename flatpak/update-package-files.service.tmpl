@@ -1,0 +1,8 @@
+# Gets symlinked into ~/.config/systemd/user/
+
+[Unit]
+Description=Update flatpak declarative package list
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash {{ .chezmoi.homeDir }}/{{ .chezmoi.sourceFile | dir }}/update-package-files.sh

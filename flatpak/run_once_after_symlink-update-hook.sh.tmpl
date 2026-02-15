@@ -1,0 +1,14 @@
+#!/bin/bash
+
+mkdir -p ~/.config/systemd/user
+
+ln -sf \
+    {{ .chezmoi.homeDir }}/{{ .chezmoi.sourceFile | dir }}/update-package-files.path \
+    ~/.config/systemd/user/update-flatpak-package-files.path
+
+ln -sf \
+    {{ .chezmoi.homeDir }}/{{ .chezmoi.sourceFile | dir }}/update-package-files.service \
+    ~/.config/systemd/user/update-flatpak-package-files.service
+
+systemctl --user daemon-reload
+systemctl --user enable --now update-flatpak-package-files.path
