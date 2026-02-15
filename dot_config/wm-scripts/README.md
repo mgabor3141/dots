@@ -14,9 +14,9 @@ Cross-platform scripts for dynamic editor workspace assignment, shared between [
 | Q | `2Q` | `Q` | Browser 2 |
 | W | `3W` | `W` | Misc / Steam |
 | T | `4T` | `T` | Chat (secondary monitor) |
-| 1–5 | `51`–`95` | `1-label`–`5-label` | Editor (dynamic) |
+| 1–5+ | `51`–`95` | `1-label`… | Editor (dynamic) |
 
-Aerospace uses two-char names for alphabetical sort ordering, and declares all workspaces statically. Niri declares only static workspaces (A, Q, W, T) in config; editor workspaces are created dynamically by the event daemon with names like `1-dots`, `2-go60` (slot number + shortest-unique-prefix label).
+Aerospace uses two-char names for alphabetical sort ordering, and declares all workspaces statically. Niri declares only static workspaces (A, Q, W, T) in config; editor workspaces are created dynamically by the event daemon with names like `1-dots`, `2-go60` (slot number + shortest-unique-prefix label). No upper slot limit on niri.
 
 ## Scripts
 
@@ -35,9 +35,15 @@ Aerospace uses two-char names for alphabetical sort ordering, and declares all w
 
 Zed editor windows are automatically assigned to numbered workspace slots. The system works differently on each platform:
 
-**Niri**: The event daemon (`event-daemon.sh`) handles everything — assignment, workspace creation/deletion, naming, sorting, and state updates. It watches the event stream for window events. Each window is processed exactly once. Moves between dynamic slots (via keybinds or drag) are detected via workspace_id changes and the state file is updated automatically. Moves to static workspaces are ignored (state preserved for the old slot).
+**Niri**: The [event daemon](../niri/README.md#event-daemon) handles everything — assignment, workspace creation/deletion, naming, sorting, and state updates. It watches the event stream for window events. Moves between dynamic slots (via keybinds or drag) are detected via workspace_id changes and the state file is updated automatically. Moves to static workspaces are ignored (state preserved for the old slot).
 
 **Aerospace**: `on-window-detected` callback calls `assign-editor-workspace.sh` for auto-assignment. `update-editor-mapping.sh` is called from move keybinds to save manual pinning.
+
+## Label Algorithm
+
+Labels are the shortest hyphen-delimited prefix of the project name that's unique among all open projects. Special cases (e.g. `chezmoi` → `dots`) are hardcoded in `compute_label()` in the event daemon.
+
+When multiple Zed windows share a workspace, the first arrival's label sticks — new arrivals don't override it. The label only changes when the naming window leaves.
 
 ## MRU Numbered Workspace
 
