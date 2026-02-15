@@ -19,7 +19,6 @@ LOG="/tmp/niri-event-daemon.log"
 # No upper slot limit — slots are created as needed
 # Number of static workspaces on DP-1 (A, Q, W) — dynamic slots start after these
 STATIC_WS_COUNT=3
-MAIN_OUTPUT="DP-1"
 
 [ -f "$STATE_FILE" ] || echo '{}' > "$STATE_FILE"
 
