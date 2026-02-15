@@ -4,9 +4,9 @@
 #
 # Usage: source this file, then call wm_* functions.
 #
-# Workspace references are WM-specific:
+# Workspace references:
 #   - Aerospace: workspace names (e.g. "51", "62")
-#   - Niri: indices for numbered workspaces (e.g. 4, 5), names for others
+#   - Niri: workspace names — static ("A","Q","W","T") or dynamic ("1-dots","2-go60")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_FILE="$SCRIPT_DIR/editor-workspaces.json"
@@ -26,24 +26,20 @@ else
 fi
 
 # ── Niri backend ──
-# Numbered workspaces are addressed by index (from NUMBERED_WORKSPACES).
-# This makes them immune to display name renames.
 
 _niri_list_editor_windows() {
-    # Returns: id|title|workspace_ref per line
-    # workspace_ref = index (as string) for all workspaces
+    # Returns: id|title|workspace_name per line
     niri msg -j windows | jq -r --argjson ws "$(niri msg -j workspaces)" '
-        ($ws | map({(.id | tostring): (.idx | tostring)}) | add) as $wsidx |
+        ($ws | map({(.id | tostring): .name}) | add) as $wsnames |
         .[] | select(.app_id == "dev.zed.Zed") |
-        "\(.id)|\(.title)|\($wsidx[.workspace_id | tostring] // "")"
+        "\(.id)|\(.title)|\($wsnames[.workspace_id | tostring] // "")"
     '
 }
 
 _niri_list_occupied_workspaces() {
-    # Returns workspace indices (as strings) that have windows
     niri msg -j windows | jq -r --argjson ws "$(niri msg -j workspaces)" '
-        ($ws | map({(.id | tostring): (.idx | tostring)}) | add) as $wsidx |
-        .[].workspace_id | tostring | $wsidx[.] // empty
+        ($ws | map({(.id | tostring): .name}) | add) as $wsnames |
+        .[].workspace_id | tostring | $wsnames[.] // empty
     ' | sort -u
 }
 
@@ -61,8 +57,7 @@ _niri_focused_window() {
 }
 
 _niri_focused_workspace() {
-    # Returns workspace index as string
-    niri msg -j workspaces | jq -r '.[] | select(.is_focused) | .idx | tostring'
+    niri msg -j workspaces | jq -r '.[] | select(.is_focused) | .name // (.idx | tostring)'
 }
 
 _niri_switch_workspace() {
@@ -78,23 +73,17 @@ _niri_post_move_hook() {
 }
 
 _niri_mru_numbered_workspace() {
-    # Returns the index of the most recently focused numbered workspace
-    # (excluding $1). Derived from window focus_timestamps.
+    # Returns the name of the most recently focused dynamic workspace (excluding $1).
+    # Dynamic workspaces match "N-*" pattern. Derived from focus_timestamps.
     local current="$1"
 
-    # Build set of numbered indices for jq
-    local numbered_set
-    numbered_set=$(echo "$NUMBERED_WORKSPACES" | tr ' ' '\n' | jq -R . | jq -s '.')
-
-    niri msg -j windows | jq -r --argjson ws "$(niri msg -j workspaces)" \
-        --arg current "$current" --argjson numbered "$numbered_set" '
-        ($ws | map({(.id | tostring): (.idx | tostring)}) | add) as $wsidx |
-        ($numbered | map({(.) : true}) | add) as $is_numbered |
-        map({idx: $wsidx[.workspace_id | tostring], ts: .focus_timestamp.secs}) |
-        map(select($is_numbered[.idx] == true)) |
-        map(select(.idx != $current)) |
-        group_by(.idx) |
-        map({ws: .[0].idx, ts: (map(.ts) | max)}) |
+    niri msg -j windows | jq -r --argjson ws "$(niri msg -j workspaces)" --arg current "$current" '
+        ($ws | map({(.id | tostring): .name}) | add) as $wsnames |
+        map({ws: $wsnames[.workspace_id | tostring], ts: .focus_timestamp.secs}) |
+        map(select(.ws != null and (.ws | test("^[1-5]-")))) |
+        map(select(.ws != $current)) |
+        group_by(.ws) |
+        map({ws: .[0].ws, ts: (map(.ts) | max)}) |
         sort_by(-.ts) |
         .[0].ws // empty
     '

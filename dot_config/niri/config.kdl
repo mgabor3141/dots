@@ -78,21 +78,6 @@ workspace "W" {
 workspace "T" {
     open-on-output "Dell Inc. DELL S2721D JRNFP43"
 }
-workspace "1e" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "2e" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "3e" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "4e" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "5e" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
 
 // ────────────── Keybindings ──────────────
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Key-Bindings
@@ -167,29 +152,29 @@ binds {
     Mod+Shift+WHEELSCROLLDOWN          { move-column-right; }
 
 
-    // Named workspaces — focus (letter by name, numbered by index for rename stability)
+    // Dynamic numbered workspaces — focus by slot prefix
     Mod+A                              { focus-workspace "A"; }
     Mod+Q                              { focus-workspace "Q"; }
     Mod+W                              { focus-workspace "W"; }
     Mod+T                              { focus-workspace "T"; }
-    Mod+1                              { focus-workspace 4; }
-    Mod+2                              { focus-workspace 5; }
-    Mod+3                              { focus-workspace 6; }
-    Mod+4                              { focus-workspace 7; }
-    Mod+5                              { focus-workspace 8; }
+    Mod+1                              { spawn-sh "~/.config/wm-scripts/numbered-ws.sh focus 1"; }
+    Mod+2                              { spawn-sh "~/.config/wm-scripts/numbered-ws.sh focus 2"; }
+    Mod+3                              { spawn-sh "~/.config/wm-scripts/numbered-ws.sh focus 3"; }
+    Mod+4                              { spawn-sh "~/.config/wm-scripts/numbered-ws.sh focus 4"; }
+    Mod+5                              { spawn-sh "~/.config/wm-scripts/numbered-ws.sh focus 5"; }
     // MRU numbered workspace
     Mod+R                              { spawn-sh "~/.config/wm-scripts/last-numbered-ws.sh switch"; }
 
-    // Named workspaces — move column + update editor mapping for numbered
+    // Dynamic numbered workspaces — move column by slot prefix
     Mod+Shift+A                          { move-column-to-workspace "A"; }
     Mod+Shift+Q                          { move-column-to-workspace "Q"; }
     Mod+Shift+W                          { move-column-to-workspace "W"; }
     Mod+Shift+T                          { move-column-to-workspace "T"; }
-    Mod+Shift+1                          { spawn-sh "~/.config/wm-scripts/update-editor-mapping.sh 4 && niri msg action move-column-to-workspace 4"; }
-    Mod+Shift+2                          { spawn-sh "~/.config/wm-scripts/update-editor-mapping.sh 5 && niri msg action move-column-to-workspace 5"; }
-    Mod+Shift+3                          { spawn-sh "~/.config/wm-scripts/update-editor-mapping.sh 6 && niri msg action move-column-to-workspace 6"; }
-    Mod+Shift+4                          { spawn-sh "~/.config/wm-scripts/update-editor-mapping.sh 7 && niri msg action move-column-to-workspace 7"; }
-    Mod+Shift+5                          { spawn-sh "~/.config/wm-scripts/update-editor-mapping.sh 8 && niri msg action move-column-to-workspace 8"; }
+    Mod+Shift+1                          { spawn-sh "~/.config/wm-scripts/numbered-ws.sh move 1"; }
+    Mod+Shift+2                          { spawn-sh "~/.config/wm-scripts/numbered-ws.sh move 2"; }
+    Mod+Shift+3                          { spawn-sh "~/.config/wm-scripts/numbered-ws.sh move 3"; }
+    Mod+Shift+4                          { spawn-sh "~/.config/wm-scripts/numbered-ws.sh move 4"; }
+    Mod+Shift+5                          { spawn-sh "~/.config/wm-scripts/numbered-ws.sh move 5"; }
     // MRU numbered workspace — move
     Mod+Shift+R                          { spawn-sh "~/.config/wm-scripts/last-numbered-ws.sh move"; }
 
@@ -238,9 +223,6 @@ binds {
     // Mute indicator
     spawn-sh-at-startup "pactl subscribe | ~/.config/waybar-mute-indicator/handle-mute-events.sh"
 
-    // WM event daemon — assigns Zed windows to numbered workspaces based on project name
-    spawn-sh-at-startup "~/.config/niri/event-daemon.sh"
-
     spawn-at-startup    "playerctld" "daemon"
     spawn-at-startup    "bing-wallpaper.sh"
     spawn-at-startup    "swayidle" "-w" \
@@ -249,6 +231,10 @@ binds {
         "idlehint" "310"
         // Signal IdleHint to systemd, it can take over from there and account for cloudgaming
         // See: /etc/systemd/logind.conf
+
+    // Zed workspace manager daemon — assigns Zed windows to dynamic numbered
+    // workspaces and renames them to project labels
+    spawn-at-startup "bash" "/home/mg/.config/niri/event-daemon.sh"
 
     prefer-no-csd // Disable program decorations
     screenshot-path null // Disable screenshot saving
