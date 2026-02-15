@@ -41,7 +41,7 @@
   },
   {
     "label": "pi",
-    "command": "pi",
+    "command": "pi --resume",
     "allow_concurrent_runs": true,
     "use_new_terminal": true
   }
