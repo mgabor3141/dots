@@ -437,7 +437,7 @@ binds {
     window-rule {
         match app-id="steam"
         exclude title=r#"^notificationtoasts_\d+_desktop$"#
-        open-on-workspace "5e"
+        open-on-workspace "W"
         open-focused true
     }
 
