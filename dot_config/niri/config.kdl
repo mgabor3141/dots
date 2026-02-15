@@ -64,34 +64,33 @@ output "Dell Inc. DELL S2721D JRNFP43" {
     }
 }
 
-workspace "1" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "2" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "3" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "4" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
-workspace "5" {
-    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
-}
+// Named workspaces — declared statically, always present.
+// Empty ones are skipped during up/down navigation (see skip-empty-workspace.sh).
 workspace "A" {
     open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
 }
-workspace "W" {
-    open-on-output "Dell Inc. DELL S2721D JRNFP43"
-}
-workspace "E" {
+workspace "Q" {
     open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
 }
-workspace "R" {
+workspace "W" {
     open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
 }
 workspace "T" {
+    open-on-output "Dell Inc. DELL S2721D JRNFP43"
+}
+workspace "1e" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "2e" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "3e" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "4e" {
+    open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
+}
+workspace "5e" {
     open-on-output "GIGA-BYTE TECHNOLOGY CO., LTD. Gigabyte M32U 21271B001538"
 }
 
@@ -147,8 +146,8 @@ binds {
     Mod+DOWN                           { focus-window-or-workspace-down; }
     Mod+Shift+E                        { move-column-to-workspace-up; }
     Mod+Shift+D                        { move-column-to-workspace-down; }
-    Mod+E                              { focus-window-or-workspace-up; }
-    Mod+D                              { focus-window-or-workspace-down; }
+    Mod+E                              { spawn-sh "~/.config/wm-scripts/skip-empty-workspace.sh up"; }
+    Mod+D                              { spawn-sh "~/.config/wm-scripts/skip-empty-workspace.sh down"; }
 
     Mod+HOME                           { focus-column-first; }
     Mod+END                            { focus-column-last; }
@@ -168,35 +167,31 @@ binds {
     Mod+Shift+WHEELSCROLLDOWN          { move-column-right; }
 
 
-    Mod+1                              { focus-workspace "1"; }
-    Mod+2                              { focus-workspace "2"; }
-    Mod+3                              { focus-workspace "3"; }
-    Mod+4                              { focus-workspace "4"; }
-    Mod+5                              { focus-workspace "5"; }
-    // Mod+Q                              { focus-workspace "Q"; }
-    Mod+W                              { focus-workspace "W"; }
-    // Mod+E                              { focus-workspace "E"; }
-    Mod+R                              { focus-workspace "R"; }
-    Mod+T                              { focus-workspace "T"; }
+    // Named workspaces — focus
     Mod+A                              { focus-workspace "A"; }
-    // Mod+S                              { focus-workspace "S"; }
-    // Mod+D                              { focus-workspace "D"; }
-    // Mod+F                              { focus-workspace "F"; }
+    Mod+Q                              { focus-workspace "Q"; }
+    Mod+W                              { focus-workspace "W"; }
+    Mod+T                              { focus-workspace "T"; }
+    Mod+1                              { focus-workspace "1e"; }
+    Mod+2                              { focus-workspace "2e"; }
+    Mod+3                              { focus-workspace "3e"; }
+    Mod+4                              { focus-workspace "4e"; }
+    Mod+5                              { focus-workspace "5e"; }
+    // MRU numbered workspace
+    Mod+R                              { spawn-sh "~/.config/wm-scripts/last-numbered-ws.sh switch"; }
 
-    Mod+Shift+1                          { move-column-to-workspace "1"; }
-    Mod+Shift+2                          { move-column-to-workspace "2"; }
-    Mod+Shift+3                          { move-column-to-workspace "3"; }
-    Mod+Shift+4                          { move-column-to-workspace "4"; }
-    Mod+Shift+5                          { move-column-to-workspace "5"; }
-    // Mod+Shift+Q                          { move-column-to-workspace "Q"; }
-    Mod+Shift+W                          { move-column-to-workspace "W"; }
-    // Mod+Shift+E                          { move-column-to-workspace "E"; }
-    Mod+Shift+R                          { move-column-to-workspace "R"; }
-    Mod+Shift+T                          { move-column-to-workspace "T"; }
+    // Named workspaces — move column + update editor mapping for numbered
     Mod+Shift+A                          { move-column-to-workspace "A"; }
-    // Mod+Shift+S                          { move-column-to-workspace "S"; }
-    // Mod+Shift+D                          { move-column-to-workspace "D"; }
-    // Mod+Shift+F                          { move-column-to-workspace "F"; }
+    Mod+Shift+Q                          { move-column-to-workspace "Q"; }
+    Mod+Shift+W                          { move-column-to-workspace "W"; }
+    Mod+Shift+T                          { move-column-to-workspace "T"; }
+    Mod+Shift+1                          { spawn-sh "niri msg action move-column-to-workspace 1e && ~/.config/wm-scripts/update-editor-mapping.sh 1e"; }
+    Mod+Shift+2                          { spawn-sh "niri msg action move-column-to-workspace 2e && ~/.config/wm-scripts/update-editor-mapping.sh 2e"; }
+    Mod+Shift+3                          { spawn-sh "niri msg action move-column-to-workspace 3e && ~/.config/wm-scripts/update-editor-mapping.sh 3e"; }
+    Mod+Shift+4                          { spawn-sh "niri msg action move-column-to-workspace 4e && ~/.config/wm-scripts/update-editor-mapping.sh 4e"; }
+    Mod+Shift+5                          { spawn-sh "niri msg action move-column-to-workspace 5e && ~/.config/wm-scripts/update-editor-mapping.sh 5e"; }
+    // MRU numbered workspace — move
+    Mod+Shift+R                          { spawn-sh "~/.config/wm-scripts/last-numbered-ws.sh move"; }
 
     Mod+F20                            { spawn-sh "niri msg action close-overview && niri msg action focus-workspace-previous"; }
 
@@ -243,6 +238,9 @@ binds {
     // Mute indicator
     spawn-sh-at-startup "pactl subscribe | ~/.config/waybar-mute-indicator/handle-mute-events.sh"
 
+    // WM event daemon — assigns Zed windows to numbered workspaces based on project name
+    spawn-sh-at-startup "~/.config/niri/event-daemon.sh"
+
     spawn-at-startup    "playerctld" "daemon"
     spawn-at-startup    "bing-wallpaper.sh"
     spawn-at-startup    "swayidle" "-w" \
@@ -274,7 +272,7 @@ binds {
         default-column-width {}
 
         focus-ring {
-            width 3
+            width 2
             active-color "#00ac89"
             inactive-color "#505050"
         }
@@ -408,7 +406,7 @@ binds {
     window-rule {
         match is-floating=true
         focus-ring {
-            width 2
+            width 1
         }
     }
 
@@ -433,27 +431,26 @@ binds {
         }
     }
 
-    window-rule {
-        match app-id="dev.zed.Zed"
-        open-on-workspace "S"
-        open-focused true
-    }
+    // Zed editor windows are dynamically assigned to numbered workspaces
+    // by the event daemon (event-daemon.sh → assign-editor-workspace.sh)
 
     window-rule {
         match app-id="steam"
         exclude title=r#"^notificationtoasts_\d+_desktop$"#
-        open-on-workspace "5"
+        open-on-workspace "5e"
         open-focused true
     }
 
     window-rule {
         match app-id="steam" title=r#"^notificationtoasts_\d+_desktop$"#
         default-floating-position x=10 y=10 relative-to="bottom-right"
+        open-floating true
+        open-focused false
     }
 
     window-rule {
         match app-id="spotify"
-        open-on-workspace "W"
+        open-on-workspace "T"
         open-focused true
         default-column-width {
             fixed 800
@@ -463,10 +460,10 @@ binds {
     window-rule {
         match app-id="vesktop"
         match app-id="discord"
-        open-on-workspace "W"
+        open-on-workspace "T"
         open-focused true
         default-column-width {
-            fixed 1200
+            proportion 1.0
         }
     }
 

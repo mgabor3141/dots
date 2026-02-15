@@ -11,7 +11,7 @@ automatically-unhide-macos-hidden-apps = true
 exec-on-workspace-change = [
     '/bin/bash',
     '-c',
-    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE PREV_WORKSPACE=$AEROSPACE_PREV_WORKSPACE; ~/.config/aerospace/pip-move.sh; ~/.config/aerospace/track-numbered-ws.sh'
+    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE PREV_WORKSPACE=$AEROSPACE_PREV_WORKSPACE; ~/.config/aerospace/pip-move.sh; ~/.config/wm-scripts/track-numbered-ws.sh "$AEROSPACE_FOCUSED_WORKSPACE"'
 ]
 
 [exec.env-vars]
@@ -54,7 +54,7 @@ preset = "qwerty"
 ctrl-a = "workspace 1A"
 ctrl-q = "workspace 2Q"
 ctrl-w = "workspace 3W"
-ctrl-r = "exec-and-forget ~/.config/aerospace/last-numbered-ws.sh switch"
+ctrl-r = "exec-and-forget ~/.config/wm-scripts/last-numbered-ws.sh switch"
 ctrl-t = "workspace 4T"
 ctrl-1 = "workspace 51"
 ctrl-2 = "workspace 62"
@@ -65,13 +65,13 @@ ctrl-5 = "workspace 95"
 ctrl-shift-a = ["move-node-to-workspace --focus-follows-window 1A", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 ctrl-shift-q = ["move-node-to-workspace --focus-follows-window 2Q", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 ctrl-shift-w = ["move-node-to-workspace --focus-follows-window 3W", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-r = "exec-and-forget ~/.config/aerospace/last-numbered-ws.sh move"
+ctrl-shift-r = "exec-and-forget ~/.config/wm-scripts/last-numbered-ws.sh move"
 ctrl-shift-t = ["move-node-to-workspace --focus-follows-window 4T", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-1 = ["move-node-to-workspace --focus-follows-window 51", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 51", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-2 = ["move-node-to-workspace --focus-follows-window 62", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 62", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-3 = ["move-node-to-workspace --focus-follows-window 73", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 73", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-4 = ["move-node-to-workspace --focus-follows-window 84", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 84", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-5 = ["move-node-to-workspace --focus-follows-window 95", "exec-and-forget ~/.config/aerospace/update-editor-mapping.sh 95", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-1 = ["move-node-to-workspace --focus-follows-window 51", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 51", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-2 = ["move-node-to-workspace --focus-follows-window 62", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 62", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-3 = ["move-node-to-workspace --focus-follows-window 73", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 73", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-4 = ["move-node-to-workspace --focus-follows-window 84", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 84", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-5 = ["move-node-to-workspace --focus-follows-window 95", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 95", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 
 ctrl-f20 = "workspace-back-and-forth"
 
@@ -128,7 +128,7 @@ run = "layout floating"
 
 [[on-window-detected]]
 if.app-id = "dev.zed.Zed"
-run = "exec-and-forget ~/.config/aerospace/assign-editor-workspace.sh"
+run = "exec-and-forget ~/.config/wm-scripts/assign-editor-workspace.sh"
 
 [[on-window-detected]]
 if.app-id = "com.microsoft.VSCode"

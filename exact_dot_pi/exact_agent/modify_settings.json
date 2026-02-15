@@ -1,0 +1,20 @@
+// chezmoi:template:left-delimiter="/*#" right-delimiter="*/"
+// chezmoi:modify-template
+{
+  /*#- includeTemplate "pick" (dict
+    "stdin" .chezmoi.stdin
+    "jq" `.agent | { lastChangelogVersion, enabledModels, defaultProvider, defaultModel, hideThinkingBlock, defaultThinkingLevel }`
+  ) */
+  "packages": [
+    /*#- if not .headless */
+    "npm:pi-interactive-shell",
+    /*#- end */
+    "npm:@aliou/pi-guardrails",
+    "npm:pi-librarian",
+    "npm:pi-brave-search"
+  ],
+  "terminal": {
+    "clearOnShrink": true
+  },
+  "quietStartup": true
+}
