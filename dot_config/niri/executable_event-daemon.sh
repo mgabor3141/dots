@@ -34,6 +34,7 @@ done
 # ── In-memory tracking ──
 declare -A SEEN        # wid → 1: windows we've fully processed (assigned)
 declare -A NUDGED      # wid → 1: windows we've nudged (rendering fix)
+declare -A PENDING     # wid → 1: "empty project" windows awaiting real title
 declare -A WIN_WS      # wid → workspace_id: last known workspace for manual-move detection
 declare -A WIN_PROJECT # wid → project name: for cleanup on close
 
@@ -299,7 +300,14 @@ handle_new_window() {
     local wid="$1" title="$2" workspace_id="$3"
 
     local project
-    project=$(extract_project "$title") || return
+    if ! project=$(extract_project "$title"); then
+        # Can't determine project yet (e.g. SSH pending → "empty project").
+        # Mark as pending so WindowsChanged can pick it up when title updates.
+        PENDING[$wid]=1
+        log "pending Zed window $wid: title='$title' (awaiting real title)"
+        return
+    fi
+    unset "PENDING[$wid]"
 
     SEEN[$wid]=1
     WIN_PROJECT[$wid]="$project"
@@ -447,9 +455,31 @@ while IFS= read -r line; do
             fi
             ;;
 
+        WindowsChanged)
+            # Only process if we have pending windows (SSH-pending "empty project")
+            if [ ${#PENDING[@]} -gt 0 ]; then
+                for pending_wid in "${!PENDING[@]}"; do
+                    local new_title
+                    new_title=$(echo "$line" | jq -r --argjson wid "$pending_wid" '
+                        .WindowsChanged.windows[] | select(.id == $wid) | .title // empty
+                    ')
+                    [ -z "$new_title" ] && continue
+                    if extract_project "$new_title" &>/dev/null; then
+                        local new_ws_id
+                        new_ws_id=$(echo "$line" | jq -r --argjson wid "$pending_wid" '
+                            .WindowsChanged.windows[] | select(.id == $wid) | .workspace_id
+                        ')
+                        log "pending window $pending_wid title resolved: '$new_title'"
+                        handle_new_window "$pending_wid" "$new_title" "$new_ws_id"
+                    fi
+                done
+            fi
+            ;;
+
         WindowClosed)
             wid=$(echo "$line" | jq -r '.WindowClosed.id')
             [ -n "${SEEN[$wid]:-}" ] && handle_window_closed "$wid"
+            unset "PENDING[$wid]"  # clean up if closed while still pending
             ;;
     esac
 done < <(niri msg -j event-stream)
