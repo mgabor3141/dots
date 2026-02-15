@@ -1,0 +1,28 @@
+#!/bin/bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# .flatpak-pkglist.txt hash: {{ include "flatpak/.flatpak-pkglist.txt" | sha256sum }}
+
+NEEDED="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.flatpak-pkglist.txt"
+
+[ -s "$NEEDED" ] || { echo "❌ [ERROR] $NEEDED missing or empty"; exit 1; }
+
+echo ">>> Ensuring Flathub remote is configured"
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+echo ">>> Installing flatpak packages"
+while IFS= read -r app; do
+    [[ -z "$app" || "$app" == \#* ]] && continue
+    flatpak install --noninteractive flathub "$app" || true
+done < "$NEEDED"
+
+echo ">>> Pruning removed flatpak packages"
+installed=$(flatpak list --app --columns=application | tail -n +1)
+while IFS= read -r app; do
+    [[ -z "$app" ]] && continue
+    if ! grep -qxF "$app" "$NEEDED"; then
+        echo "Removing $app"
+        flatpak uninstall --noninteractive "$app" || true
+    fi
+done <<< "$installed"

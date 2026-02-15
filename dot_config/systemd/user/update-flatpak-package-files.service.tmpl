@@ -1,0 +1,6 @@
+[Unit]
+Description=Update flatpak declarative package list
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash {{ .chezmoi.homeDir }}/flatpak/update-package-files.sh
