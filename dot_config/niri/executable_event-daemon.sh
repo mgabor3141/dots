@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Niri event-stream daemon — manages dynamic Zed editor workspaces.
 #
-# Assigns Zed windows to numbered workspaces (1-5), creating/destroying
+# Assigns Zed windows to numbered workspaces, creating/destroying
 # workspaces dynamically. Workspace names follow "N-label" format
 # (e.g. "1-dots", "2-go60") so keybinds can target by prefix.
 #
@@ -15,7 +15,7 @@ set -euo pipefail
 WM_SCRIPTS="$HOME/.config/wm-scripts"
 STATE_FILE="$WM_SCRIPTS/editor-workspaces.json"
 LOG="/tmp/niri-event-daemon.log"
-MAX_SLOT=5
+# No upper slot limit — slots are created as needed
 # Number of static workspaces on DP-1 (A, Q, W) — dynamic slots start after these
 STATIC_WS_COUNT=3
 MAIN_OUTPUT="DP-1"
@@ -98,7 +98,7 @@ find_slot_workspace() {
 # Get the slot number from a workspace name ("2-go60" → "2")
 slot_from_ws_name() {
     local name="$1"
-    if [[ "$name" =~ ^([1-5])- ]]; then
+    if [[ "$name" =~ ^([0-9]+)- ]]; then
         echo "${BASH_REMATCH[1]}"
     fi
 }
@@ -151,19 +151,15 @@ used_slots() {
     jq -r '.[] | tostring' "$STATE_FILE" | sort -n
 }
 
-# Find first available slot (1-5)
+# Find first available slot (1, 2, 3, ...)
 first_free_slot() {
     local used
     used=$(used_slots)
-    for n in $(seq 1 $MAX_SLOT); do
-        if ! echo "$used" | grep -qx "$n"; then
-            echo "$n"
-            return
-        fi
+    local n=1
+    while echo "$used" | grep -qx "$n"; do
+        n=$(( n + 1 ))
     done
-    # All full — this shouldn't happen with 5 slots
-    log "WARNING: all slots full!"
-    echo "$MAX_SLOT"
+    echo "$n"
 }
 
 # Sort dynamic workspaces: each "N-*" goes to index STATIC_WS_COUNT + N
@@ -174,7 +170,7 @@ sort_workspaces() {
     # Collect dynamic workspace names on DP-1, sorted by slot number
     local names
     names=$(echo "$ws_json" | jq -r '
-        [.[] | select(.output == "DP-1" and (.name // "" | test("^[1-5]-")))]
+        [.[] | select(.output == "DP-1" and (.name // "" | test("^[0-9]+-")))]
         | sort_by(.name | split("-")[0] | tonumber)
         | .[].name
     ')
@@ -254,7 +250,7 @@ refresh_labels() {
 
     # For each dynamic workspace, recompute label
     local names
-    names=$(echo "$ws_json" | jq -r '.[] | select(.output == "DP-1" and (.name // "" | test("^[1-5]-"))) | .name')
+    names=$(echo "$ws_json" | jq -r '.[] | select(.output == "DP-1" and (.name // "" | test("^[0-9]+-"))) | .name')
     [ -z "$names" ] && return
 
     while read -r name; do
@@ -374,7 +370,7 @@ handle_window_closed() {
     local ws_json
     ws_json=$(niri msg -j workspaces)
     local names
-    names=$(echo "$ws_json" | jq -r '.[] | select(.output == "DP-1" and (.name // "" | test("^[1-5]-"))) | .name')
+    names=$(echo "$ws_json" | jq -r '.[] | select(.output == "DP-1" and (.name // "" | test("^[0-9]+-"))) | .name')
     [ -z "$names" ] && return
 
     while read -r name; do
@@ -391,6 +387,18 @@ handle_window_closed() {
 # ── Main Loop ──
 
 log "=== daemon starting ==="
+# ── Startup: populate SEEN from existing Zed windows ──
+# This prevents the daemon from re-assigning windows that were already
+# placed before the daemon (re)started.
+while IFS='|' read -r wid title ws_id; do
+    [ -z "$wid" ] && continue
+    local_project=$(extract_project "$title" 2>/dev/null) || continue
+    SEEN[$wid]=1
+    WIN_WS[$wid]="$ws_id"
+    WIN_PROJECT[$wid]="$local_project"
+    log "startup: registered existing wid=$wid project=$local_project ws=$ws_id"
+done < <(niri msg -j windows | jq -r '.[] | select(.app_id == "dev.zed.Zed") | "\(.id)|\(.title)|\(.workspace_id)"')
+
 echo -n "" > "$LOG"  # truncate log
 
 while IFS= read -r line; do

@@ -8,7 +8,7 @@
 # The event daemon detects the move and fills in the proper label.
 
 ACTION="$1"  # "focus" or "move"
-SLOT="$2"    # 1-5
+SLOT="$2"    # slot number (1, 2, 3, ...)
 
 MAIN_OUTPUT="DP-1"
 STATIC_WS_COUNT=3
