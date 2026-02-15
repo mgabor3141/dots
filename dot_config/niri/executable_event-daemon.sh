@@ -138,14 +138,6 @@ state_set() {
     mv "$tmp" "$STATE_FILE"
 }
 
-# Remove project from state file
-state_remove() {
-    local project="$1"
-    local tmp="$STATE_FILE.tmp"
-    jq --arg p "$project" 'del(.[$p])' "$STATE_FILE" > "$tmp"
-    mv "$tmp" "$STATE_FILE"
-}
-
 # Get all used slot numbers from state file
 used_slots() {
     jq -r '.[] | tostring' "$STATE_FILE" | sort -n
