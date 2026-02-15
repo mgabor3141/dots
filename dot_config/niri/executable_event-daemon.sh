@@ -28,14 +28,11 @@ log "Daemon started. NUMBERED_WORKSPACES=$NUMBERED_WORKSPACES"
 # Track which Zed windows we've already resize-nudged (once per window)
 declare -A NUDGED
 
-# Build index→default-name mapping for numbered workspaces
-declare -A IDX_TO_DEFAULT
-read -ra _nums <<< "$NUMBERED_WORKSPACES"
-read -ra _defaults <<< "$NUMBERED_WS_DEFAULTS"
-for _i in "${!_nums[@]}"; do
-    IDX_TO_DEFAULT[${_nums[$_i]}]=${_defaults[$_i]}
-done
-unset _nums _defaults _i
+# Track which workspace indices we've renamed (so we can restore them)
+declare -A RENAMED_IDX  # idx -> original name before we renamed it
+
+# Build set of default numbered workspace names for quick lookup
+NUMBERED_DEFAULTS_SET=" $NUMBERED_WS_DEFAULTS "
 
 nudge_zed_window() {
     local wid="$1"
@@ -87,7 +84,7 @@ compute_project_label() {
 }
 
 # Refresh all numbered workspace names based on current Zed windows.
-# Workspaces with Zed → project label, without → default name (1e–5e).
+# Workspaces with Zed → project label, without → restore original name.
 refresh_workspace_names() {
     local windows workspaces
     windows=$(niri msg -j windows)
@@ -111,24 +108,33 @@ refresh_workspace_names() {
 
     log "REFRESH projects=[${all_projects[*]}] idx_map=[$(for k in "${!idx_to_project[@]}"; do echo -n "$k=${idx_to_project[$k]} "; done)]"
 
-    # Update each numbered workspace
-    for idx in "${!IDX_TO_DEFAULT[@]}"; do
-        local default_name="${IDX_TO_DEFAULT[$idx]}"
+    # Rename workspaces that have Zed windows
+    for idx in "${!idx_to_project[@]}"; do
         local current_name
         current_name=$(echo "$workspaces" | jq -r --argjson idx "$idx" '.[] | select(.idx == $idx) | .name // empty')
+        local label
+        label=$(compute_project_label "${idx_to_project[$idx]}" "${all_projects[@]}")
+        if [ "$current_name" != "$label" ]; then
+            # Save original name before renaming (if we haven't already)
+            if [ -z "${RENAMED_IDX[$idx]:-}" ]; then
+                RENAMED_IDX[$idx]="$current_name"
+            fi
+            log "RENAME idx=$idx '$current_name' -> '$label'"
+            niri msg action set-workspace-name --workspace "$idx" "$label"
+        fi
+    done
 
-        if [ -n "${idx_to_project[$idx]:-}" ]; then
-            local label
-            label=$(compute_project_label "${idx_to_project[$idx]}" "${all_projects[@]}")
-            if [ "$current_name" != "$label" ]; then
-                log "RENAME idx=$idx '$current_name' -> '$label'"
-                niri msg action set-workspace-name --workspace "$idx" "$label"
+    # Restore workspaces we previously renamed that no longer have Zed windows
+    for idx in "${!RENAMED_IDX[@]}"; do
+        if [ -z "${idx_to_project[$idx]:-}" ]; then
+            local current_name original_name
+            current_name=$(echo "$workspaces" | jq -r --argjson idx "$idx" '.[] | select(.idx == $idx) | .name // empty')
+            original_name="${RENAMED_IDX[$idx]}"
+            if [ "$current_name" != "$original_name" ]; then
+                log "RESTORE idx=$idx '$current_name' -> '$original_name'"
+                niri msg action set-workspace-name --workspace "$idx" "$original_name"
             fi
-        else
-            if [ "$current_name" != "$default_name" ]; then
-                log "RESTORE idx=$idx '$current_name' -> '$default_name'"
-                niri msg action set-workspace-name --workspace "$idx" "$default_name"
-            fi
+            unset "RENAMED_IDX[$idx]"
         fi
     done
 }
