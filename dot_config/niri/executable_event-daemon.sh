@@ -10,7 +10,8 @@
 # State file maps project names to slot numbers: {"chezmoi": 1, "go60": 2}
 # Started manually or via spawn-sh-at-startup in niri config.kdl.
 
-set -euo pipefail
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
 
 WM_SCRIPTS="$HOME/.config/wm-scripts"
 STATE_FILE="$WM_SCRIPTS/editor-workspaces.json"
@@ -31,7 +32,8 @@ for _ in $(seq 1 30); do
 done
 
 # ── In-memory tracking ──
-declare -A SEEN        # wid → 1: windows we've processed (assigned + nudged)
+declare -A SEEN        # wid → 1: windows we've fully processed (assigned)
+declare -A NUDGED      # wid → 1: windows we've nudged (rendering fix)
 declare -A WIN_WS      # wid → workspace_id: last known workspace for manual-move detection
 declare -A WIN_PROJECT # wid → project name: for cleanup on close
 
@@ -326,9 +328,6 @@ handle_new_window() {
 
     # 5. Refresh all labels (adding a project may change unique prefixes)
     refresh_labels
-
-    # 6. Nudge in background
-    nudge_zed_window "$wid" &
 }
 
 handle_workspace_change() {
@@ -408,6 +407,7 @@ while IFS='|' read -r wid title ws_id; do
     [ -z "$wid" ] && continue
     local_project=$(extract_project "$title" 2>/dev/null) || continue
     SEEN[$wid]=1
+    NUDGED[$wid]=1
     WIN_WS[$wid]="$ws_id"
     WIN_PROJECT[$wid]="$local_project"
     log "startup: registered existing wid=$wid project=$local_project ws=$ws_id"
@@ -428,6 +428,13 @@ while IFS= read -r line; do
             wid=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.id')
             title=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.title')
             workspace_id=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.workspace_id')
+
+            # Nudge every new Zed window exactly once (rendering bug workaround).
+            # This fires even for "empty project" (SSH pending) windows.
+            if [ -z "${NUDGED[$wid]:-}" ]; then
+                NUDGED[$wid]=1
+                nudge_zed_window "$wid" &
+            fi
 
             if [ -z "${SEEN[$wid]:-}" ]; then
                 handle_new_window "$wid" "$title" "$workspace_id"
