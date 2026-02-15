@@ -13,7 +13,7 @@ When a fix requires more than two attempts or you're working around tool interna
 Use `interactive_shell` instead of `bash` when:
 - **`sudo` commands** — the user needs to enter their password
 - **Interactive prompts** — you need to see and respond to yes/no confirmations, selection menus, etc.
-- **Desktop/GUI apps** — they run indefinitely and need to be backgrounded
+- **GUI apps and long-running processes** — they run indefinitely and need to be backgrounded (bash `&` doesn't work)
 
 Common patterns:
 
