@@ -36,13 +36,6 @@ _niri_list_editor_windows() {
     '
 }
 
-_niri_list_occupied_workspaces() {
-    niri msg -j windows | jq -r --argjson ws "$(niri msg -j workspaces)" '
-        ($ws | map({(.id | tostring): .name}) | add) as $wsnames |
-        .[].workspace_id | tostring | $wsnames[.] // empty
-    ' | sort -u
-}
-
 _niri_move_window() {
     local wid="$1" target="$2" focus="${3:---focus false}"
     if [ "$focus" = "--focus" ]; then
@@ -95,10 +88,6 @@ _aerospace_list_editor_windows() {
     aerospace list-windows --monitor all --app-bundle-id dev.zed.Zed --format '%{window-id}|%{window-title}|%{workspace}'
 }
 
-_aerospace_list_occupied_workspaces() {
-    aerospace list-workspaces --monitor all --empty no
-}
-
 _aerospace_move_window() {
     local wid="$1" target="$2" focus="$3"
     if [ "$focus" = "--focus" ]; then
@@ -143,7 +132,6 @@ _aerospace_mru_numbered_workspace() {
 # ── Dispatch to detected WM ──
 
 wm_list_editor_windows()      { "_${_WM}_list_editor_windows" "$@"; }
-wm_list_occupied_workspaces() { "_${_WM}_list_occupied_workspaces" "$@"; }
 wm_move_window()              { "_${_WM}_move_window" "$@"; }
 wm_focused_window()           { "_${_WM}_focused_window" "$@"; }
 wm_focused_workspace()        { "_${_WM}_focused_workspace" "$@"; }
