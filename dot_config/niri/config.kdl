@@ -185,11 +185,11 @@ binds {
     Mod+Shift+Q                          { move-column-to-workspace "Q"; }
     Mod+Shift+W                          { move-column-to-workspace "W"; }
     Mod+Shift+T                          { move-column-to-workspace "T"; }
-    Mod+Shift+1                          { spawn-sh "niri msg action move-column-to-workspace 4 && ~/.config/wm-scripts/update-editor-mapping.sh 4"; }
-    Mod+Shift+2                          { spawn-sh "niri msg action move-column-to-workspace 5 && ~/.config/wm-scripts/update-editor-mapping.sh 5"; }
-    Mod+Shift+3                          { spawn-sh "niri msg action move-column-to-workspace 6 && ~/.config/wm-scripts/update-editor-mapping.sh 6"; }
-    Mod+Shift+4                          { spawn-sh "niri msg action move-column-to-workspace 7 && ~/.config/wm-scripts/update-editor-mapping.sh 7"; }
-    Mod+Shift+5                          { spawn-sh "niri msg action move-column-to-workspace 8 && ~/.config/wm-scripts/update-editor-mapping.sh 8"; }
+    Mod+Shift+1                          { spawn-sh "~/.config/wm-scripts/update-editor-mapping.sh 4 && niri msg action move-column-to-workspace 4"; }
+    Mod+Shift+2                          { spawn-sh "~/.config/wm-scripts/update-editor-mapping.sh 5 && niri msg action move-column-to-workspace 5"; }
+    Mod+Shift+3                          { spawn-sh "~/.config/wm-scripts/update-editor-mapping.sh 6 && niri msg action move-column-to-workspace 6"; }
+    Mod+Shift+4                          { spawn-sh "~/.config/wm-scripts/update-editor-mapping.sh 7 && niri msg action move-column-to-workspace 7"; }
+    Mod+Shift+5                          { spawn-sh "~/.config/wm-scripts/update-editor-mapping.sh 8 && niri msg action move-column-to-workspace 8"; }
     // MRU numbered workspace — move
     Mod+Shift+R                          { spawn-sh "~/.config/wm-scripts/last-numbered-ws.sh move"; }
 
