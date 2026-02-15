@@ -129,8 +129,8 @@ binds {
 
     Mod+UP                             { focus-window-or-workspace-up; }
     Mod+DOWN                           { focus-window-or-workspace-down; }
-    Mod+Shift+E                        { move-column-to-workspace-up; }
-    Mod+Shift+D                        { move-column-to-workspace-down; }
+    Mod+Shift+E                        { spawn-sh "~/.config/wm-scripts/move-column-dynamic.sh up"; }
+    Mod+Shift+D                        { spawn-sh "~/.config/wm-scripts/move-column-dynamic.sh down"; }
     Mod+E                              { spawn-sh "~/.config/wm-scripts/skip-empty-workspace.sh up"; }
     Mod+D                              { spawn-sh "~/.config/wm-scripts/skip-empty-workspace.sh down"; }
 
