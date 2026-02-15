@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for flatpak app changes
+
+[Path]
+PathChanged=/var/lib/flatpak/app
+TriggerLimitIntervalSec=0
+
+[Install]
+WantedBy=default.target

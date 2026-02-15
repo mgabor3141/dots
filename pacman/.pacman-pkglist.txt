@@ -7,6 +7,7 @@ alsa-firmware
 alsa-utils
 awesome-terminal-fonts
 base
+bazaar
 bitwarden
 blueman
 bluez-hid2hci
@@ -78,7 +79,6 @@ logrotate
 lsscsi
 man-pages
 meld
-moonlight-qt
 mtools
 namcap
 nano-syntax-highlighting
@@ -107,7 +107,6 @@ qt5ct
 qt6ct
 rebuild-detector
 reflector
-rustdesk-bin
 sddm
 sg3_utils
 sof-firmware

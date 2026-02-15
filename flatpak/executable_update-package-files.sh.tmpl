@@ -1,0 +1,1 @@
+flatpak list --app --columns=application | tail -n +1 > {{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.flatpak-pkglist.txt
