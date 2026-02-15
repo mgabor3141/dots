@@ -2,22 +2,24 @@
 
 ## Workspaces
 
-All workspaces are declared statically in `config.kdl`. See [`wm-scripts/workspaces.conf`](../wm-scripts/README.md) for the full list.
+**Static workspaces** (`A`, `Q`, `W`, `T`) are declared in `config.kdl` with fixed app assignments via window rules. `T` (chat) is on the secondary monitor; the rest are on the primary.
 
-- **Letter workspaces** (`A`, `Q`, `W`, `T`) — fixed app assignments via window rules
-- **Numbered workspaces** (`1e`–`5e`) — dynamically assigned to Zed editor windows
+**Dynamic editor workspaces** (`1-dots`, `2-go60`, etc.) are created on demand by the event daemon when Zed windows open. They use a `N-label` naming convention where N is the slot number (1–5) and the label is a shortest-unique-prefix of the project name. Empty editor workspaces are automatically deleted.
 
-`T` (chat) is on the secondary monitor. All others are on the primary.
-
-Niri's IPC treats purely numeric references as workspace indices, so numbered workspaces use the `1e`–`5e` naming convention instead of plain `1`–`5`.
-
-Empty workspaces are skipped during `Mod+E`/`Mod+D` navigation (`skip-empty-workspace.sh`). Direct access via `Mod+1`–`5` and `Mod+A`/`Q`/`W`/`T` always works regardless.
+Empty workspaces are skipped during `Mod+E`/`Mod+D` navigation (`skip-empty-workspace.sh`). Direct access via `Mod+1`–`5` and `Mod+A`/`Q`/`W`/`T` always works.
 
 ## Event Daemon
 
-`event-daemon.sh` watches niri's IPC event stream for Zed `WindowOpenedOrChanged` events and dispatches to the shared `assign-editor-workspace.sh` script. Started via `spawn-sh-at-startup` in `config.kdl`. Includes a startup retry loop to wait for the IPC socket.
+`event-daemon.sh` watches niri's IPC event stream and manages Zed editor workspaces:
 
-See [wm-scripts README](../wm-scripts/README.md) for full details on editor assignment.
+- **Window open**: Assigns to saved slot (from state file) or first free slot, creates the workspace, names it, sorts it after static workspaces, and nudges the window (1px resize to fix a Zed rendering bug)
+- **Manual move**: Detects workspace_id changes and updates the state file. Deletes the old workspace if it's now empty of Zed windows
+- **Window close**: Deletes workspace if no Zed windows remain on it
+- **Label refresh**: Recomputes shortest-unique-prefix labels when projects are added/removed
+
+Started via `spawn-at-startup` in `config.kdl`. Each window is processed exactly once (SEEN tracking).
+
+See [wm-scripts README](../wm-scripts/README.md) for the state file and cross-platform details.
 
 ## Useful commands
 
@@ -25,4 +27,5 @@ See [wm-scripts README](../wm-scripts/README.md) for full details on editor assi
 niri msg windows      # List all windows (add -j for JSON)
 niri msg workspaces   # List all workspaces
 niri msg event-stream # Watch live events (add -j for JSON)
+tail -f /tmp/niri-event-daemon.log  # Daemon log
 ```
