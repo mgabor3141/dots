@@ -37,6 +37,11 @@ declare -A NUDGED      # wid → 1: windows we've nudged (rendering fix)
 declare -A PENDING     # wid → 1: "empty project" windows awaiting real title
 declare -A WIN_WS      # wid → workspace_id: last known workspace for manual-move detection
 declare -A WIN_PROJECT # wid → project name: for cleanup on close
+# Workaround: bash set -u treats empty associative arrays as unbound.
+# Assign+delete a dummy key so bash considers them initialized.
+for _arr in SEEN NUDGED PENDING WIN_WS WIN_PROJECT; do
+    declare -n _ref="$_arr"; _ref[_]=1; unset "_ref[_]"
+done; unset _arr _ref
 
 # ── Helpers ──
 
@@ -457,7 +462,7 @@ while IFS= read -r line; do
 
         WindowsChanged)
             # Only process if we have pending windows (SSH-pending "empty project")
-            if [ ${#PENDING[@]} -gt 0 ]; then
+            if [ "${#PENDING[@]}" -gt 0 ]; then
                 for pending_wid in "${!PENDING[@]}"; do
                     local new_title
                     new_title=$(echo "$line" | jq -r --argjson wid "$pending_wid" '
