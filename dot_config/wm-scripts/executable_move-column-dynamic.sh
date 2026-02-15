@@ -10,8 +10,7 @@
 #     the old workspace if it becomes empty.
 #   - On a static workspace (A/Q/W/T): uses native niri move-column-to-workspace.
 #
-# Slot bounds: 1–5. Moving below slot 1 or above slot 5 is a no-op from
-# dynamic workspaces.
+# Slot bounds: moving above slot 1 is a no-op. No upper limit.
 
 MAIN_OUTPUT="DP-1"
 STATIC_WS_COUNT=3
@@ -30,7 +29,7 @@ focused=$(niri msg -j workspaces | jq -r '
 ws_name="${focused%%|*}"
 
 # If on a static workspace, use native move
-if ! [[ "$ws_name" =~ ^[1-5]- ]]; then
+if ! [[ "$ws_name" =~ ^[0-9]+- ]]; then
     niri msg action "move-column-to-workspace-${direction}"
     exit 0
 fi
@@ -44,8 +43,8 @@ else
     target_slot=$(( current_slot - 1 ))
 fi
 
-# Bounds check
-if (( target_slot < 1 || target_slot > 5 )); then
+# Bounds check (lower only — no upper limit)
+if (( target_slot < 1 )); then
     exit 0
 fi
 

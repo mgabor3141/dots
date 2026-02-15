@@ -17,7 +17,7 @@ target=$(wm_mru_numbered_workspace "$current")
 if [[ -z "$target" ]]; then
     if [[ "$_WM" == "niri" ]]; then
         target=$(niri msg -j workspaces | jq -r --arg current "$current" '
-            [.[] | select(.output == "DP-1" and (.name // "" | test("^[1-5]-")) and .name != $current)]
+            [.[] | select(.output == "DP-1" and (.name // "" | test("^[0-9]+-")) and .name != $current)]
             | sort_by(.name) | .[0].name // empty
         ')
     else

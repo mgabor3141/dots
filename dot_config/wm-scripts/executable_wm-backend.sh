@@ -80,7 +80,7 @@ _niri_mru_numbered_workspace() {
     niri msg -j windows | jq -r --argjson ws "$(niri msg -j workspaces)" --arg current "$current" '
         ($ws | map({(.id | tostring): .name}) | add) as $wsnames |
         map({ws: $wsnames[.workspace_id | tostring], ts: .focus_timestamp.secs}) |
-        map(select(.ws != null and (.ws | test("^[1-5]-")))) |
+        map(select(.ws != null and (.ws | test("^[0-9]+-")))) |
         map(select(.ws != $current)) |
         group_by(.ws) |
         map({ws: .[0].ws, ts: (map(.ts) | max)}) |
