@@ -93,7 +93,7 @@ ctrl-shift-f     = "move right --boundaries-action stop"
 ctrl-shift-e     = ["move-node-to-workspace --focus-follows-window prev", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 ctrl-shift-d     = ["move-node-to-workspace --focus-follows-window next", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 
-ctrl-x = "layout floating tiling"
+ctrl-z = "layout floating tiling"
 ctrl-b = "layout h_tiles h_accordion"
 ctrl-c = "mode main" # no-op: swallow key so it doesn't pass through to app
 ctrl-v = "mode main" # no-op: swallow key so it doesn't pass through to app
