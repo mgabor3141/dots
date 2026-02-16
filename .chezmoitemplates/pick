@@ -6,7 +6,7 @@ Args (dict):
   - jq: jq/gojq expression that yields an object (or something that becomes one)
 */ -}}
 
-{{- $stdin := .stdin -}}
+{{- $stdin := or .stdin "{}" -}}
 {{- $userQuery := .jq -}}
 {{- $query := printf "(%s) | with_entries(select(.value != null))" $userQuery -}}
 
