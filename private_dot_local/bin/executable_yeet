@@ -64,7 +64,7 @@ fi
 printf '%s\n' "$output"
 
 # Auto-open "create PR" links (contain /pull/new/ or /compare/).
-url=$(printf '%s\n' "$output" | grep -oE 'https?://[^ ]+' | head -1)
+url=$(printf '%s\n' "$output" | grep -oE 'https?://[^ ]+' | head -1 || true)
 if [ -n "$url" ]; then
     case "$url" in
         */pull/new/*|*/compare/*)
@@ -73,7 +73,7 @@ if [ -n "$url" ]; then
                 branch="$bookmark"
             else
                 branch=$(printf '%s\n' "$output" \
-                    | grep -oP '(?<=Creating bookmark )\S+' | head -1)
+                    | sed -n 's/.*Creating bookmark \([^ ]*\).*/\1/p' | head -1)
             fi
 
             # Generate PR title + description with AI, create a draft PR.
