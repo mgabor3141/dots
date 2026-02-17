@@ -21,6 +21,14 @@ for arg in "$@"; do
     esac
 done
 
+open_url() {
+    if command -v open >/dev/null 2>&1; then
+        open "$1"
+    elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$1"
+    fi
+}
+
 # Fetch and rebase before pushing.
 jj git fetch
 jj reheat
@@ -60,8 +68,17 @@ url=$(printf '%s\n' "$output" | grep -oE 'https?://[^ ]+' | head -1)
 if [ -n "$url" ]; then
     case "$url" in
         */pull/new/*|*/compare/*)
-            # Generate PR title + description with AI and copy to clipboard.
-            if [ "$noai_flag" = false ] && command -v pi >/dev/null 2>&1; then
+            # Determine the pushed branch name.
+            if [ -n "$bookmark" ]; then
+                branch="$bookmark"
+            else
+                branch=$(printf '%s\n' "$output" \
+                    | grep -oP '(?<=Creating bookmark )\S+' | head -1)
+            fi
+
+            # Generate PR title + description with AI, create a draft PR.
+            if [ "$noai_flag" = false ] && command -v pi >/dev/null 2>&1 \
+                    && command -v gh >/dev/null 2>&1 && [ -n "$branch" ]; then
                 descriptions=$(jj log -r "trunk()..($target)" --no-graph \
                     -T 'description ++ "\n---\n"' 2>/dev/null)
                 diff_stat=$(jj diff -r "trunk()..($target)" --stat 2>/dev/null)
@@ -83,25 +100,28 @@ Output the title on the first line, then a blank line, then the description."
 
                 echo "Generating PR title and description..."
                 if pr_text=$(pi -p --no-session --no-tools "$prompt" 2>/dev/null); then
-                    if command -v pbcopy >/dev/null 2>&1; then
-                        printf '%s' "$pr_text" | pbcopy
-                    elif command -v wl-copy >/dev/null 2>&1; then
-                        printf '%s' "$pr_text" | wl-copy
-                    elif command -v xclip >/dev/null 2>&1; then
-                        printf '%s' "$pr_text" | xclip -selection clipboard
-                    fi
-                    echo "PR title and description copied to clipboard."
+                    pr_title=$(printf '%s\n' "$pr_text" | head -1)
+                    pr_body=$(printf '%s\n' "$pr_text" | tail -n +3)
+
                     echo ""
                     printf '%s\n' "$pr_text"
-                else
-                    echo "AI generation failed, opening PR without it."
-                fi
-            fi
+                    echo ""
 
-            if command -v open >/dev/null 2>&1; then
-                open "$url"
-            elif command -v xdg-open >/dev/null 2>&1; then
-                xdg-open "$url"
+                    if pr_url=$(gh pr create --draft --title "$pr_title" \
+                            --body "$pr_body" --head "$branch" 2>&1); then
+                        echo "Draft PR created: $pr_url"
+                        open_url "$pr_url"
+                    else
+                        echo "Failed to create draft PR: $pr_url"
+                        echo "Opening PR creation page instead."
+                        open_url "$url"
+                    fi
+                else
+                    echo "AI generation failed, opening PR creation page."
+                    open_url "$url"
+                fi
+            else
+                open_url "$url"
             fi
             ;;
     esac
