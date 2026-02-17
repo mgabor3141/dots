@@ -31,7 +31,7 @@ open_url() {
 
 # Fetch and rebase before pushing.
 jj git fetch
-jj reheat
+reheat
 
 # Abort if there are conflicts after rebasing.
 if [ "$(jj log -r 'trunk()..@ & conflicts()' --count --no-pager)" -gt 0 ]; then
