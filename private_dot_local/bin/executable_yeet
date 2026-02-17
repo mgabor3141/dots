@@ -7,13 +7,16 @@ set -Eeuo pipefail
 #          commit, move it to the target, and push. Falls back to creating a
 #          new bookmark if none exists.
 # --new/-n: always create a new bookmark and branch (for stacked PRs).
+# --noai:   skip AI-generated PR title/description.
 
 # Parse flags.
 new_flag=false
+noai_flag=false
 args=""
 for arg in "$@"; do
     case "$arg" in
         -n|--new) new_flag=true ;;
+        --noai) noai_flag=true ;;
         *) args="$args $arg" ;;
     esac
 done
@@ -57,6 +60,44 @@ url=$(printf '%s\n' "$output" | grep -oE 'https?://[^ ]+' | head -1)
 if [ -n "$url" ]; then
     case "$url" in
         */pull/new/*|*/compare/*)
+            # Generate PR title + description with AI and copy to clipboard.
+            if [ "$noai_flag" = false ] && command -v pi >/dev/null 2>&1; then
+                descriptions=$(jj log -r "trunk()..($target)" --no-graph \
+                    -T 'description ++ "\n---\n"' 2>/dev/null)
+                diff_stat=$(jj diff -r "trunk()..($target)" --stat 2>/dev/null)
+
+                prompt="You are writing a GitHub pull request title and description.
+
+Below are the commit descriptions and a diff stat for this PR.
+
+Commit descriptions:
+$descriptions
+
+Diff stat:
+$diff_stat
+
+Write a concise PR title (one line, no prefix like 'PR:') and a PR description in markdown.
+The description should summarize what changed and why, based on the commit messages.
+Keep it concise — no filler, no restating the title in the body.
+Output the title on the first line, then a blank line, then the description."
+
+                echo "Generating PR title and description..."
+                if pr_text=$(pi -p --no-session --no-tools "$prompt" 2>/dev/null); then
+                    if command -v pbcopy >/dev/null 2>&1; then
+                        printf '%s' "$pr_text" | pbcopy
+                    elif command -v wl-copy >/dev/null 2>&1; then
+                        printf '%s' "$pr_text" | wl-copy
+                    elif command -v xclip >/dev/null 2>&1; then
+                        printf '%s' "$pr_text" | xclip -selection clipboard
+                    fi
+                    echo "PR title and description copied to clipboard."
+                    echo ""
+                    printf '%s\n' "$pr_text"
+                else
+                    echo "AI generation failed, opening PR without it."
+                fi
+            fi
+
             if command -v open >/dev/null 2>&1; then
                 open "$url"
             elif command -v xdg-open >/dev/null 2>&1; then
