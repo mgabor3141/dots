@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# reheat - rebase the current stack onto trunk and clean up merge commits.
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+#
+# 1. Rebase roots of the stack onto trunk (same as the jj reheat alias).
+# 2. Abandon any empty merge commits left in the stack — these appear when
+#    someone merges trunk into a feature branch on the remote. Bookmarks are
+#    retained (--retain-bookmarks) which may create conflicts; we resolve
+#    them by setting each bookmark to the copy that landed on our linear path.
+
+jj rebase -d "trunk()" -s "roots(trunk()..stack(@))"
+
+merges='(stack(@) ~ trunk()..@ ~ immutable()) & merges() & empty()'
+if [ "$(jj log -r "$merges" --count --no-pager 2>/dev/null)" -gt 0 ]; then
+    jj abandon --retain-bookmarks "$merges" 2>&1
+
+    # Resolve any conflicted bookmarks by keeping the copy on our linear stack.
+    while IFS=$'\t' read -r name rev; do
+        [ -z "$name" ] && continue
+        jj bookmark set "$name" -r "$rev" 2>&1
+    done < <(jj log -r "trunk()..@ & bookmarks()" --no-graph \
+        -T 'local_bookmarks.map(|b| b.name() ++ "\t" ++ change_id.short() ++ "\n").join("")' \
+        2>/dev/null)
+fi
