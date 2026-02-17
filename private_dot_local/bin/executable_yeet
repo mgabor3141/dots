@@ -34,7 +34,7 @@ target='(@ ~ empty()) | parents(@ & empty())'
 # Decide mode: if --new, or no ancestor bookmark exists, create new.
 bookmark=""
 if [ "$new_flag" = false ]; then
-    bookmark=$(jj log -r "trunk()..$target & bookmarks()" --no-graph \
+    bookmark=$(jj log -r "trunk()..($target) & bookmarks()" --no-graph \
         -T 'local_bookmarks.map(|b| b.name()).join("\n")' \
         --limit 1 2>/dev/null | head -1)
 fi
