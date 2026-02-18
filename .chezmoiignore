@@ -51,6 +51,7 @@ CLAUDE.md
 .config/sddm
 .config/pipewire
 .config/sunshine
+.config/hyprwhspr
 .config/systemd
 .config/qt5ct
 .config/waybar*
