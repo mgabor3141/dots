@@ -5,19 +5,6 @@ KANATA="/opt/homebrew/bin/kanata"
 CONFIG_DIR="{{ .chezmoi.destDir }}/.config/kanata/1-configs"
 POLL_INTERVAL=3
 
-YELLOW='\033[0;33m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-RESET='\033[0m'
-config_color() {
-    case "$1" in
-        macbook-ansi.kbd) echo "$YELLOW" ;;
-        razer.kbd) echo "$GREEN" ;;
-        go60.kbd) echo "$CYAN" ;;
-        *) echo "$RESET" ;;
-    esac
-}
-
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 # Map config filenames to the device name used in macos-dev-names-include.
@@ -48,10 +35,9 @@ is_running() {
 start_kanata() {
     cfg="$1"
     log "Starting $cfg"
-    # Start kanata directly (no pipeline) so $! captures the real kanata PID.
-    # Previous version piped through `while read` for colored prefixes, but $!
-    # then pointed at the subshell — stop_kanata would kill the shell and orphan
-    # the kanata process, which kept an exclusive grab on the keyboard device.
+    # Start kanata directly — do NOT pipe through a subshell, because $! would
+    # capture the subshell PID instead of kanata's, and stop_kanata would then
+    # orphan the real kanata process (which keeps an exclusive keyboard grab).
     "$KANATA" --cfg "${CONFIG_DIR}/${cfg}" \
         >"/tmp/io.github.jtroo.kanata.${cfg%.kbd}.log" 2>&1 &
     echo "$!" > "$(pid_file "$cfg")"
@@ -65,43 +51,16 @@ stop_kanata() {
     pid=$(cat "$pf")
     log "Stopping $cfg (pid $pid)"
     kill "$pid" 2>/dev/null || true
-    # Wait briefly then force-kill if still alive, so the device grab is released.
-    sleep 1
-    kill -9 "$pid" 2>/dev/null || true
     rm -f "$pf"
-}
-
-# Return the epoch seconds of the last system wake (0 if never slept since boot).
-last_wake_epoch() {
-    sysctl -n kern.waketime | sed 's/.*sec = \([0-9]*\).*/\1/'
 }
 
 # --- Main ---
 log "Starting kanata-manager"
 pkill -x kanata 2>/dev/null || true
-sleep 1  # let existing kanata processes release device grabs
 
 CONFIGS="macbook-ansi.kbd razer.kbd go60.kbd"
-LAST_SEEN_WAKE=$(last_wake_epoch)
 
 while true; do
-    # --- Sleep/wake detection ---
-    # After wake, kanata loses the Karabiner DriverKit device grab and becomes
-    # non-functional even though the process is still alive (known upstream issue:
-    # https://github.com/jtroo/kanata/issues/1357). Kill all instances so the
-    # poll loop below restarts them with a fresh device grab.
-    current_wake=$(last_wake_epoch)
-    if [ "$current_wake" != "$LAST_SEEN_WAKE" ]; then
-        log "Wake from sleep detected (wake epoch: $current_wake) — restarting all kanata instances"
-        for cfg in $CONFIGS; do
-            stop_kanata "$cfg"
-        done
-        pkill -x kanata 2>/dev/null || true
-        sleep 2  # give Karabiner DriverKit time to re-enumerate devices
-        LAST_SEEN_WAKE=$current_wake
-    fi
-
-    # --- Device polling ---
     for cfg in $CONFIGS; do
         dev=$(device_name "$cfg")
         connected=$(device_connected "$dev" && echo 1 || echo 0)
