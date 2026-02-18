@@ -10,7 +10,7 @@ Folders are numbered because the scripts are run alphabetically
 - **`shared/common.kbd`**: Shared aliases and logic included by all keyboard configs.
 - **`shared/chords.kbd`**: Chord definitions (macbook-ansi only currently).
 - **`macbook-ansi.kbd`**, **`razer.kbd`**, **`go60.kbd`**: Per-keyboard configs with device matching.
-- **`2-daemons/darwin/`**: macOS launchd service and manager script. Polls `hidutil list` to detect connected devices and starts/stops one kanata instance per keyboard as devices appear or disappear (handles BLE keyboards that connect after boot).
+- **`2-daemons/darwin/`**: macOS launchd service and manager script. Polls `hidutil list` to detect connected devices and starts/stops one kanata instance per keyboard as devices appear or disappear (handles BLE keyboards that connect after boot). Also monitors `kern.waketime` to detect sleep/wake transitions and restart all kanata instances, since the Karabiner DriverKit device grab is lost on wake ([upstream issue](https://github.com/jtroo/kanata/issues/1357)).
 
 ### Semantic Modifiers
 
@@ -95,7 +95,10 @@ sudo launchctl print system/io.github.jtroo.kanata.manager
 Get logs
 
 ```sh
-cat /tmp/io.github.jtroo.kanata.manager.log
+cat /tmp/io.github.jtroo.kanata.manager.log        # manager log
+cat /tmp/io.github.jtroo.kanata.macbook-ansi.log    # per-keyboard kanata logs
+cat /tmp/io.github.jtroo.kanata.razer.log
+cat /tmp/io.github.jtroo.kanata.go60.log
 ```
 
 ## Linux
