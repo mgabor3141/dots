@@ -1,10 +1,10 @@
 # Global Agent Instructions
 
-Keep this file brief. Update it with critical learnings as you encounter them.
+Keep this and any other AGENTS.md files brief. Add critical learnings to the relevant files as you encounter them.
 
 ## Planning
 
-When a fix requires more than two attempts or you're working around tool internals, **stop and plan first**. Think about whether there's a simpler approach before brute-forcing.
+When you encounter a complex problem, **plan first**. Think about whether there's a simpler approach, weigh tradeoffs between solutions. Experiment with commands and config changes directly first for fast iteration, then make your changes idempotent and declarative using established systems.
 
 ## Tool Usage
 
@@ -44,3 +44,8 @@ Refer to the `interactive-shell` skill for complex operations (multi-turn sessio
 ### Web Search and Research
 
 **Prefer `brave_search` and `librarian`** over assumptions when dealing with external tools, libraries, system configuration, or error messages. Training data may be outdated — verify with live sources first.
+
+## System Configuration
+
+System-level config (packages, PAM, systemd drop-ins, etc.) is managed via chezmoi in `~/.local/share/chezmoi/`. Look there before making ad-hoc system changes. Key areas:
+- See the repo's `AGENTS.md` and `README.md` for chezmoi conventions.
