@@ -1,3 +1,4 @@
-auth.json
+bin/
+sessions/
 
-sessions
+auth.json
