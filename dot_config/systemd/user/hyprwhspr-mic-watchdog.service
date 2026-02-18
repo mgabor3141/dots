@@ -1,0 +1,34 @@
+[Unit]
+Description=Restart hyprwhspr when default audio source reappears after disconnect
+Documentation=https://github.com/goodroot/hyprwhspr
+After=pipewire.service
+Requires=pipewire.service
+
+[Service]
+Type=simple
+# Monitor PipeWire for source add/remove events and restart hyprwhspr when
+# the default source reappears. This works around hyprwhspr's built-in pyudev
+# hotplug monitoring not detecting reconnection of USB audio devices behind hubs.
+#
+# Only restarts hyprwhspr if it's actually running (otherwise no-op).
+ExecStart=/bin/bash -c '\
+  pactl subscribe | while read -r line; do \
+    case "$line" in \
+      *"remove"*"source"*) \
+        echo "[watchdog] Source removed: $line" ;; \
+      *"new"*"source"*) \
+        echo "[watchdog] Source added: $line" ;\
+        sleep 2 ;\
+        if systemctl --user is-active --quiet hyprwhspr.service; then \
+          echo "[watchdog] Restarting hyprwhspr..." ;\
+          systemctl --user restart hyprwhspr.service ;\
+        fi ;; \
+    esac \
+  done'
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
