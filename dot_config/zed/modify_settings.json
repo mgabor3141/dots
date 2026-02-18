@@ -74,7 +74,6 @@
     "folder_icons": false,
     "file_icons": true,
     "entry_spacing": "standard",
-    "hide_gitignore": true,
     "hide_root": true,
     "scrollbar": {
       "show": "never"
@@ -204,7 +203,8 @@
   "tabs": {
     // Show git status colors in the editor tabs.
     "file_icons": true,
-    "git_status": true
+    "git_status": true,
+    "show_close_button": "hidden"
   },
   "max_tabs": 8,
   "preview_tabs": {
