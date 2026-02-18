@@ -144,12 +144,12 @@ run = "move-node-to-workspace 62 --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.hnc.Discord"
-run = "move-node-to-workspace 5T --focus-follows-window"
+run = "move-node-to-workspace 4T --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.tinyspeck.slackmacgap"
-run = "move-node-to-workspace 5T --focus-follows-window"
+run = "move-node-to-workspace 4T --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.facebook.archon"
-run = "move-node-to-workspace 5T --focus-follows-window"
+run = "move-node-to-workspace 4T --focus-follows-window"
