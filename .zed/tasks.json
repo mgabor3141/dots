@@ -20,5 +20,6 @@
     "label": "re-add",
     "command": "chezmoi re-add",
     "show_command": false,
+    "hide": "on_success",
   },
 ]
