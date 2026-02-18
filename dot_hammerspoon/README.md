@@ -14,6 +14,16 @@ F13 (physical key on Razer, chord on other keyboards via kanata) toggles mic mut
 
 The Scarlett 8i6 USB (primary audio interface) doesn't expose mute or volume controls to CoreAudio — both `inputVolume()` and `inputMuted()` return nil. The mute mechanism works around this by switching the default input device to the MacBook Pro Microphone (and muting it), then switching back to unmute.
 
+### Scarlett Disconnected / Reconnected
+
+When the Scarlett is disconnected, the toggle still works — it mutes/unmutes the built-in mic directly. On unmute with no Scarlett, it just unmutes the built-in mic instead of trying to switch to a missing device.
+
+An `hs.audiodevice.watcher` monitors for device additions (`dev#` events). When the Scarlett reconnects:
+- **Not muted**: automatically restores the Scarlett as the default input.
+- **Muted**: stays on the muted built-in mic; the next unmute will switch to the Scarlett.
+
+On startup, the mute state is detected from the actual system state (built-in mic as default + muted), so Hammerspoon restarts don't lose track of mute status.
+
 ### FluidVoice Guard
 
 Switching the default input device mid-stream crashes FluidVoice (dictation app). The toggle detects active dictation by checking for FluidVoice's overlay window (an `AXSystemDialog` subrole window that only exists during dictation) and refuses to mute while it's present. The main FluidVoice settings window (`AXStandardWindow`) does not trigger the guard.
