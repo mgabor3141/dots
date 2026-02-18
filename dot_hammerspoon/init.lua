@@ -61,13 +61,58 @@ end)
 -- The Scarlett 8i6 (primary input) doesn't expose mute/volume to CoreAudio,
 -- so we mute by switching the default input to the built-in mic (muted),
 -- and unmute by switching back to the real device.
+--
+-- When the Scarlett is disconnected, mute/unmute operates directly on the
+-- built-in mic. An audiodevice watcher automatically restores the Scarlett
+-- as the default input when it reconnects (unless currently muted).
 local muted = false
-local unmutedDeviceName = nil
+local BUILTIN_MIC = "MacBook Pro Microphone"
+local preferredInputName = "Scarlett 8i6 USB"
+
+-- Detect initial state: if we start with the built-in mic muted, we're muted.
+-- This handles Hammerspoon restarts while muted.
+local function detectInitialMuteState()
+    local current = hs.audiodevice.defaultInputDevice()
+    if current and current:name() == BUILTIN_MIC and current:inputMuted() then
+        muted = true
+    end
+end
+
+local function isFluidVoiceDictating()
+    local fluid = hs.application.find("com.FluidApp.app")
+    if fluid then
+        for _, w in ipairs(fluid:allWindows()) do
+            if w:subrole() == "AXSystemDialog" then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function findPreferredInput()
+    return hs.audiodevice.findInputByName(preferredInputName)
+end
+
+local function findBuiltInMic()
+    return hs.audiodevice.findInputByName(BUILTIN_MIC)
+end
+
+local function notifySketchybar()
+    hs.execute("/opt/homebrew/bin/sketchybar --trigger mic_change", true)
+end
 
 local function toggleMute()
     muted = not muted
 
     if muted then
+        -- Guard: don't switch devices while FluidVoice is dictating
+        if isFluidVoiceDictating() then
+            hs.alert.show("Dictation active — can't mute")
+            muted = false
+            return
+        end
+
         local current = hs.audiodevice.defaultInputDevice()
         if not current then
             hs.alert.show("No input device found")
@@ -75,24 +120,18 @@ local function toggleMute()
             return
         end
 
-        -- Guard: don't switch devices while FluidVoice is dictating —
-        -- it shows an AXSystemDialog overlay during active dictation and
-        -- crashes if the default input device changes mid-stream.
-        local fluid = hs.application.find("com.FluidApp.app")
-        if fluid then
-            for _, w in ipairs(fluid:allWindows()) do
-                if w:subrole() == "AXSystemDialog" then
-                    hs.alert.show("Dictation active — can't mute")
-                    muted = false
-                    return
-                end
-            end
+        -- Remember the preferred device if it's something other than the built-in
+        if current:name() ~= BUILTIN_MIC then
+            preferredInputName = current:name()
         end
 
-        unmutedDeviceName = current:name()
-        local builtIn = hs.audiodevice.findInputByName("MacBook Pro Microphone")
+        local builtIn = findBuiltInMic()
         if builtIn then
-            builtIn:setDefaultInputDevice()
+            -- Switch to built-in mic and mute it (works whether Scarlett is
+            -- connected or not — if already on built-in, just mutes it)
+            if current:name() ~= BUILTIN_MIC then
+                builtIn:setDefaultInputDevice()
+            end
             builtIn:setInputMuted(true)
         else
             hs.alert.show("Mute failed: built-in mic not found")
@@ -100,19 +139,47 @@ local function toggleMute()
             return
         end
     else
-        if unmutedDeviceName then
-            local original = hs.audiodevice.findInputByName(unmutedDeviceName)
-            if original then
-                original:setDefaultInputDevice()
+        -- Unmute: restore preferred device if available, otherwise unmute built-in
+        local preferred = findPreferredInput()
+        if preferred then
+            preferred:setDefaultInputDevice()
+        else
+            -- Scarlett not connected — just unmute the built-in mic
+            local builtIn = findBuiltInMic()
+            if builtIn then
+                builtIn:setInputMuted(false)
             end
         end
     end
 
-    -- Notify sketchybar immediately (it also queries actual system state)
-    hs.execute("/opt/homebrew/bin/sketchybar --trigger mic_change", true)
+    notifySketchybar()
 end
 
 hs.hotkey.bind({"ctrl", "shift", "alt", "cmd"}, "m", toggleMute)
+
+-- Audio device watcher: auto-restore the preferred input when it reconnects.
+-- The "dev#" event fires when an audio device is added or removed.
+hs.audiodevice.watcher.setCallback(function(event)
+    if event ~= "dev#" then return end
+
+    local preferred = findPreferredInput()
+    if preferred then
+        -- Preferred device just (re)appeared
+        if not muted then
+            -- Restore it as default input
+            local current = hs.audiodevice.defaultInputDevice()
+            if current and current:name() ~= preferredInputName then
+                preferred:setDefaultInputDevice()
+                notifySketchybar()
+            end
+        end
+        -- If muted, do nothing — the Scarlett is available but we stay on
+        -- the muted built-in mic. Unmute will switch to it.
+    end
+end)
+hs.audiodevice.watcher.start()
+
+detectInitialMuteState()
 
 -- Key remapping (Cmd+arrows, Home/End, etc.) is handled by kanata defoverrides
 -- in dot_config/kanata/1-configs/shared/common.kbd
