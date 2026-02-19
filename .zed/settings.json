@@ -2,7 +2,7 @@
   "file_types": {
     "JSON": ["**/*.json.tmpl"],
     "JSONC": ["**/*.jsonc.tmpl"],
-    "TOML": ["**/*.toml.tmpl"],
+    "TOML": ["**/*.toml.tmpl", "dot_gitconfig.tmpl"],
     "Shell Script": [
       "**/dot_*profile.tmpl",
       "**/*.sh.tmpl",
