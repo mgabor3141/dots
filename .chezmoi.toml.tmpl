@@ -2,6 +2,11 @@
 managed = {{ promptBoolOnce . "managed" "managed device" }}
 headless = {{ promptBoolOnce . "headless" "headless server" }}
 
+[diff]
+command = "difft"
+args = ["--background", "light"]
+exclude = ["scripts"]
+
 [data.git]
 name = "{{ promptStringOnce . "git.name" "git name" }}"
 email = "{{ promptStringOnce . "git.email" "git email" }}"
