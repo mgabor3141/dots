@@ -13,13 +13,16 @@
   {
     "label": "apply",
     "command": "chezmoi apply",
-    "show_command": false,
     "hide": "on_success",
   },
   {
     "label": "apply $ZED_FILENAME",
     "command": "chezmoi apply --source-path $ZED_FILE",
-    "show_command": false,
+    "hide": "on_success",
+  },
+  {
+    "label": "apply $ZED_RELATIVE_DIR",
+    "command": "find $ZED_DIRNAME -type f -exec sh -c 'chezmoi apply --source-path \"$1\" || true' _ {} \\;",
     "hide": "on_success",
   },
   {
