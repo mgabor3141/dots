@@ -6,8 +6,19 @@
     "show_command": false,
   },
   {
+    "label": "diff $ZED_FILENAME",
+    "command": "chezmoi diff --source-path $ZED_FILE",
+    "show_command": false,
+  },
+  {
     "label": "apply",
     "command": "chezmoi apply",
+    "show_command": false,
+    "hide": "on_success",
+  },
+  {
+    "label": "apply $ZED_FILENAME",
+    "command": "chezmoi apply --source-path $ZED_FILE",
     "show_command": false,
     "hide": "on_success",
   },
@@ -21,5 +32,10 @@
     "command": "chezmoi re-add",
     "show_command": false,
     "hide": "on_success",
+  },
+  {
+    "label": "re-add $ZED_FILENAME",
+    "command": "chezmoi re-add --source-path $ZED_FILE",
+    "show_command": false,
   },
 ]
