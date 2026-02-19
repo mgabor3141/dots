@@ -29,6 +29,45 @@ open_url() {
     fi
 }
 
+# If @ has changes but no description, generate one with AI and commit.
+has_changes=$(jj log -r '@ ~ empty()' --count --no-pager 2>/dev/null)
+current_desc=$(jj log -r '@' --no-graph -T 'description' --no-pager 2>/dev/null | sed '/^$/d')
+if [ "$has_changes" -gt 0 ] && [ -z "$current_desc" ]; then
+    echo "Working change has no description — generating one..."
+    commit_diff=$(jj diff -r '@' --no-pager 2>/dev/null)
+
+    # Grab recent commit descriptions from trunk as style examples.
+    example_commits=$(jj log -r 'trunk()- | trunk()-' --no-graph --limit 10 \
+        -T 'description.first_line() ++ "\n"' --no-pager 2>/dev/null \
+        | sed '/^$/d' | head -10)
+    examples_section=""
+    if [ -n "$example_commits" ]; then
+        examples_section="
+Here are recent commit messages from this repo — match their style and conventions:
+$example_commits
+"
+    fi
+
+    commit_prompt="You are writing a jj/git commit description.
+
+Below is the diff for the current change:
+$commit_diff
+${examples_section}
+Write a concise commit description. First line is a short summary (imperative mood, no period).
+If needed, add a blank line then a brief body. No filler.
+Match the style of the example commits if provided."
+
+    if commit_msg=$(pi -p --no-session --no-tools "$commit_prompt" 2>/dev/null); then
+        echo ""
+        printf '%s\n' "$commit_msg"
+        echo ""
+        jj commit -m "$commit_msg"
+    else
+        echo "AI description generation failed — commit with an empty description or describe manually."
+        exit 1
+    fi
+fi
+
 # Fetch and rebase before pushing.
 jj git fetch
 reheat
@@ -83,6 +122,63 @@ if [ -n "$url" ]; then
                     -T 'description ++ "\n---\n"' 2>/dev/null)
                 diff_stat=$(jj diff -r "trunk()..($target)" --stat 2>/dev/null)
 
+                # Look for a PR template in the repo.
+                pr_template=""
+                repo_root=$(jj workspace root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || true)
+                if [ -n "$repo_root" ]; then
+                    for tmpl_path in \
+                        ".github/pull_request_template.md" \
+                        ".github/PULL_REQUEST_TEMPLATE.md" \
+                        "PULL_REQUEST_TEMPLATE.md" \
+                        "pull_request_template.md" \
+                        "docs/pull_request_template.md"; do
+                        if [ -f "$repo_root/$tmpl_path" ]; then
+                            pr_template=$(cat "$repo_root/$tmpl_path")
+                            break
+                        fi
+                    done
+                    # Also check the directory form (use the first .md found).
+                    if [ -z "$pr_template" ]; then
+                        for tmpl_dir in \
+                            ".github/PULL_REQUEST_TEMPLATE" \
+                            ".github/pull_request_template"; do
+                            if [ -d "$repo_root/$tmpl_dir" ]; then
+                                first_tmpl=$(find "$repo_root/$tmpl_dir" -name '*.md' -type f | head -1)
+                                if [ -n "$first_tmpl" ]; then
+                                    pr_template=$(cat "$first_tmpl")
+                                    break
+                                fi
+                            fi
+                        done
+                    fi
+                fi
+
+                template_section=""
+                if [ -n "$pr_template" ]; then
+                    template_section="
+The repository has a PR template. Follow its structure for the description:
+$pr_template
+
+Template filling rules:
+- Fill every section as best you can from the commits and diff stat.
+- For sections or checkboxes that are not relevant to this PR, put N/A.
+- For things you are unsure about or lack information for (e.g. ticket numbers, links), put TODO.
+- Keep the description well-formatted, clear, and concise.
+"
+                fi
+
+                # Fetch recent merged PR titles as style examples.
+                pr_examples=""
+                if recent_prs=$(gh pr list --state merged --limit 10 \
+                        --json title --jq '.[].title' 2>/dev/null); then
+                    if [ -n "$recent_prs" ]; then
+                        pr_examples="
+Here are recent PR titles from this repo — match their style and conventions:
+$recent_prs
+"
+                    fi
+                fi
+
                 prompt="You are writing a GitHub pull request title and description.
 
 Below are the commit descriptions and a diff stat for this PR.
@@ -92,10 +188,12 @@ $descriptions
 
 Diff stat:
 $diff_stat
-
+${template_section}${pr_examples}
 Write a concise PR title (one line, no prefix like 'PR:') and a PR description in markdown.
 The description should summarize what changed and why, based on the commit messages.
 Keep it concise — no filler, no restating the title in the body.
+If a PR template was provided, follow its structure instead of freeform markdown.
+If example PR titles were provided, match their style and conventions.
 Output the title on the first line, then a blank line, then the description."
 
                 echo "Generating PR title and description..."
