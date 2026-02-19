@@ -112,7 +112,7 @@ plist_finalize
 | `set_real` | `set_real Key 0.5` | PlistBuddy upsert |
 | `set_string` | `set_string Key value` | PlistBuddy upsert — simple values only |
 | `pl_set_string` | `pl_set_string Key '"quoted"'` | plutil-based — handles literal quotes |
-| `set_data_json` | `set_data_json Key '{"k":1}'` | JSON string → base64 `<data>` — readable in source |
+| `set_data` | `set_data Key base64Value` | plutil-based upsert for `<data>` (expects base64) |
 | `pb` | `pb -c "Add :Key type val"` | Raw PlistBuddy (stdout redirected to stderr) |
 | `$tmp` | `plutil -insert Key -json '[]' "$tmp"` | Temp file path for direct plutil calls |
 | `plist_finalize` | `plist_finalize` | Call at end — converts to binary, outputs to stdout |

@@ -19,9 +19,9 @@ set_bool   RemoveFillerWordsEnabled            false
 set_bool   SaveTranscriptionHistory            true
 
 # --- Hotkeys ---
-# keyCode = macOS virtual key code, modifierFlagsRawValue = modifier bitmask
-# keyCode 2 = D, modifiers 1835008 = Cmd+Option+Ctrl (0x1C0100)
-set_data_json HotkeyShortcutKey '{"keyCode":2,"modifierFlagsRawValue":1835008}'
+# Cmd + Ctrl + Option + D
+set_data HotkeyShortcutKey \
+  eyJrZXlDb2RlIjoyLCJtb2RpZmllckZsYWdzUmF3VmFsdWUiOjE4MzUwMDh9
 
 # --- Overlay ---
 set_string OverlayPosition                     bottom
