@@ -1,0 +1,24 @@
+#!/bin/bash
+# snapper-root hash: {{ include (joinPath (.chezmoi.sourceFile | dir) "snapper-root") | sha256sum }}
+# limine hash: {{ include (joinPath (.chezmoi.sourceFile | dir) "limine") | sha256sum }}
+
+set -euo pipefail
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+echo "Installing snapper and limine configs..."
+
+# Upgrade to sudo
+if [ "$(id -u)" -ne 0 ]; then
+    sudo "$0" "$@"
+    exit $?
+fi
+
+SOURCE_DIR="{{ joinPath (.chezmoi.targetFile | dir) }}"
+
+cp "$SOURCE_DIR/snapper-root" /etc/snapper/configs/root
+echo "  Installed /etc/snapper/configs/root"
+
+cp "$SOURCE_DIR/limine" /etc/default/limine
+echo "  Installed /etc/default/limine"
+
+echo "Done."
