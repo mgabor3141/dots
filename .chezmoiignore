@@ -114,6 +114,7 @@ Library
 .config/aerospace
 .config/linearmouse
 .config/sketchybar
+.finicky.ts
 
 .brew
 .simplebarrc
