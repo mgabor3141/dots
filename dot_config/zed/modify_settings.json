@@ -18,10 +18,12 @@
       "stdin" .chezmoi.stdin
       "jq" `.agent | { default_model, favorite_models }`)
     ) */
+    "tool_permissions": {
+      "default": "allow"
+    },
     "expand_terminal_card": false,
     "expand_edit_card": false,
     "play_sound_when_agent_done": true,
-    "always_allow_tool_actions": true,
     "default_profile": "write",
     "model_parameters": []
   },
@@ -64,9 +66,6 @@
   "helix_mode": false,
   "vim": {
     "toggle_relative_line_numbers": true
-  },
-  "prettier": {
-    "allowed": true
   },
   "project_panel": {
     "auto_reveal_entries": false,
@@ -245,11 +244,17 @@
     "JavaScript": {
       "code_actions_on_format": {
         "source.fixAll.eslint": true
+      },
+      "prettier": {
+        "allowed": true
       }
     },
     "TypeScript": {
       "code_actions_on_format": {
         "source.fixAll.eslint": true
+      },
+      "prettier": {
+        "allowed": true
       }
     }
   },
@@ -272,7 +277,11 @@
     "eslint": {
       "settings": {
         "codeActionOnSave": {
-          "rules": ["import/order"]
+          "rules": ["import/order"],
+          "rulesCustomizations": [
+            // set all eslint errors/warnings to show as warnings
+            { "rule": "*", "severity": "warn" }
+          ]
         }
       }
     },
