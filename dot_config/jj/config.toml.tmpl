@@ -73,6 +73,10 @@ hunk-level = "line"
 program = "difft"
 diff-args = ["--color=always", "--background=light", "$left", "$right"]
 
+[merge-tools.zed]
+program = "zed"
+diff-args = ["--diff", "$left", "$right"]
+
 [git]
 track-default-bookmark-on-clone = true
 private-commits = "description(glob:'private:*') | trunk()..bookmarks(glob:'private/*')"
