@@ -25,6 +25,8 @@ CLAUDE.md
 !.config/direnv/**
 !.config/fastfetch
 !.config/fastfetch/**
+!.config/zed
+!.config/zed/**
 
 !.config/jj
 !.config/jj/**

@@ -1,0 +1,17 @@
+{{- if .headless -}}
+#!/bin/bash
+# pi-interactive-shell: 0.8.2
+# pi: 0.54.0
+set -euo pipefail
+
+NPM_PREFIX="/mnt/user/appdata/node"
+
+echo "Updating pi..."
+npm install --prefix "$NPM_PREFIX" -g @mariozechner/pi-coding-agent@latest
+
+echo "Installing pi-interactive-shell via Docker (native build)..."
+docker run --rm -v "$NPM_PREFIX":/mnt/node node:22 \
+    npm install --prefix /mnt/node -g pi-interactive-shell
+
+echo "Done."
+{{- end -}}

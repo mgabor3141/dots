@@ -6,9 +6,7 @@
     "jq" `.agent | { lastChangelogVersion, enabledModels, defaultProvider, defaultModel, hideThinkingBlock, defaultThinkingLevel }`
   ) */
   "packages": [
-    /*#- if not .headless */
     "npm:pi-interactive-shell",
-    /*#- end */
     "npm:@aliou/pi-guardrails",
     "npm:pi-librarian",
     "npm:pi-brave-search"

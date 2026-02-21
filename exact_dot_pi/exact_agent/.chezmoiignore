@@ -2,3 +2,7 @@ bin/
 sessions/
 
 auth.json
+
+{{- if not .headless }}
+install-packages.sh
+{{- end }}
