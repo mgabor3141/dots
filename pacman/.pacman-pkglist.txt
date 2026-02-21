@@ -79,7 +79,9 @@ logrotate
 lsscsi
 man-pages
 meld
+mold
 mtools
+musl
 namcap
 nano-syntax-highlighting
 netctl
