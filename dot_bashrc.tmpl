@@ -10,8 +10,4 @@ alias grep='grep --color=auto'
 PS1='[\u@\h \W]\$ '
 
 command -v direnv >/dev/null && eval "$(direnv hook bash)"
-{{- if .headless }}
 
-alias chezmoi='/mnt/user/appdata/chezmoi/bin/chezmoi --config /mnt/user/appdata/chezmoi/config.toml'
-alias chezmoi-unraid='/mnt/user/appdata/chezmoi/bin/chezmoi --config /mnt/user/appdata/unraid-config/chezmoi.toml'
-{{- end }}
