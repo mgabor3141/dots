@@ -17,6 +17,7 @@ CLAUDE.md
 
 # CLI tools
 !.editorconfig
+!.tmux.conf
 !.config
 !.config/btop
 !.config/btop/**
@@ -29,9 +30,13 @@ CLAUDE.md
 !.config/jj/**
 !.config/lesskey
 
-# Pi agent settings (runtime data persists via symlink)
+# Pi agent config (runtime data like auth.json and sessions persists via bind mount)
 !.pi
 !.pi/**
+
+# GitHub CLI config (auth persists via bind mount, login is manual)
+!.config/gh
+!.config/gh/**
 {{- end }}
 
 {{- if ne .chezmoi.os "linux" }}
