@@ -8,3 +8,5 @@ sudo systemctl enable --now docker.socket
 sudo usermod -aG docker $USER
 
 sudo systemctl enable --now nix-daemon
+
+sudo systemctl enable --now tailscaled.service
