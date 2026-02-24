@@ -11,13 +11,14 @@
 #
 # Requires: ImageMagick 7 (magick)
 #
-# Color reference: matches the waybar mute indicator CSS gradient
-#   (dot_config/waybar-mute-indicator/style.css)
+# Used by:
+#   - sketchybar (macOS): dot_config/sketchybar/items/executable_mic.sh
+#   - waybar-mute-indicator (Linux): dot_config/waybar-mute-indicator/
 
 set -euo pipefail
 
 # --- Tunables ---
-W=500   # image width  (should match mic.core item width in items/mic.sh)
+W=500   # image width  (should match item width in sketchybar/items/mic.sh and waybar-mute-indicator/config)
 H=30    # image height
 
 # Derived coordinates — LED strip runs from 10% to 90% of width, centered vertically.
@@ -35,8 +36,7 @@ my1=$((H / 3))              my2=$((H * 19 / 30))
 cx1=$((margin + 5))         cx2=$((W - margin - 6))
 cy1=$((H * 2 / 5))          cy2=$((H * 17 / 30))
 
-target="{{ joinPath (.chezmoi.targetFile | dir) "images" }}"
-mkdir -p "$target"
+target="{{ .chezmoi.targetFile | dir }}"
 
 magick -size "${W}x${H}" xc:none \
   \( -size "${W}x${H}" xc:none \

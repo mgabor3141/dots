@@ -1,7 +1,7 @@
 {
     "mode": "overlay",
-    "position": "bottom",
-    "margin-bottom": -4,
+    "position": "top",
+    "margin-top": -4,
     "width": 500,
     "margin-left": 6,
     "margin-right": 6,

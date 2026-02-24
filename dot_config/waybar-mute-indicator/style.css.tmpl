@@ -1,0 +1,11 @@
+#waybar {
+    background-color: transparent;
+}
+
+#waybar > box {
+    background-image: url("{{ joinPath .chezmoi.homeDir ".config/mute-led/mic_mute_led.png" }}");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    min-height: 30px;
+}
