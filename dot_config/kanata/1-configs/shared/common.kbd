@@ -122,5 +122,5 @@
 
 (defalias
   fn    (layer-toggle fn)
-  dct   C-S-A-M-d ;; Dictation toggle
+  dct   f14 ;; Dictation toggle
 )
