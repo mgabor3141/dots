@@ -19,9 +19,9 @@ set_bool   RemoveFillerWordsEnabled            false
 set_bool   SaveTranscriptionHistory            true
 
 # --- Hotkeys ---
-# Cmd + Ctrl + Option + D
+# F14 (no modifiers; fn flag is implicit for function keys)
 set_data HotkeyShortcutKey \
-  eyJrZXlDb2RlIjoyLCJtb2RpZmllckZsYWdzUmF3VmFsdWUiOjE4MzUwMDh9
+  eyJtb2RpZmllckZsYWdzUmF3VmFsdWUiOjgzODg2MDgsImtleUNvZGUiOjEwN30=
 
 # --- Overlay ---
 set_string OverlayPosition                     bottom
