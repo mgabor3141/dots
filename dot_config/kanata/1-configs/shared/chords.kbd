@@ -7,4 +7,5 @@
 (defchordsv2
     (= bspc)     del       $ct all-released ()
     (lalt lmet)  @dct      $ct all-released ()
+    (fn lctl)    f13       $ct all-released ()
 )
