@@ -39,6 +39,11 @@ CLAUDE.md
 # GitHub CLI config (auth persists via bind mount, login is manual)
 !.config/gh
 !.config/gh/**
+
+# Local bin (only externally managed tools on headless)
+!.local
+!.local/bin
+!.local/bin/dust
 {{- end }}
 
 {{- if ne .chezmoi.os "linux" }}

@@ -35,7 +35,7 @@ export npm_config_prefix="$HOME/.local"
 
 {{- if .headless }}
 export npm_config_prefix="/mnt/user/appdata/node"
-export PATH="/mnt/user/appdata/chezmoi/bin:/mnt/user/appdata/node/bin:$PATH"
+export PATH="$HOME/.local/bin:/mnt/user/appdata/chezmoi/bin:/mnt/user/appdata/node/bin:$PATH"
 {{- end }}
 
 {{- if eq .chezmoi.os "darwin" }}
