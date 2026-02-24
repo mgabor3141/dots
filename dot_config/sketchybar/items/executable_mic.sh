@@ -19,7 +19,7 @@ sketchybar --add event mic_change \
         background.color=0x00000000 \
         background.height=30 \
         background.corner_radius=0 \
-        background.image="$HOME/.config/sketchybar/images/mic_mute_led.png" \
+        background.image="$HOME/.config/mute-led/mic_mute_led.png" \
         background.image.scale=1.0 \
         script="$PLUGIN_DIR/mic.sh" \
   --subscribe mic.core mic_change system_woke
