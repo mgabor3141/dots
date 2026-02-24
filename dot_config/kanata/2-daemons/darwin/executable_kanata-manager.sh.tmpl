@@ -3,7 +3,15 @@ set -eu
 
 KANATA="/opt/homebrew/bin/kanata"
 CONFIG_DIR="{{ .chezmoi.destDir }}/.config/kanata/1-configs"
+LOG_DIR="/tmp"
 POLL_INTERVAL=3
+# How many seconds a device must be absent before we stop its kanata instance.
+# Prevents BLE keyboards flapping from causing constant restarts, which
+# destabilize other kanata instances (each restart triggers Karabiner DriverKit
+# reconnection callbacks on ALL running instances).
+DISCONNECT_GRACE=15
+# Max log file size in bytes before rotation (~500KB)
+LOG_MAX_SIZE=512000
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -21,12 +29,29 @@ device_connected() {
     hidutil list --matching '{}' 2>/dev/null | grep -qF "$1"
 }
 
+log_file() { echo "${LOG_DIR}/io.github.jtroo.kanata.${1%.kbd}.log"; }
+
+# Rotate a log file if it exceeds LOG_MAX_SIZE.
+# Keeps one .old backup so we always have some history.
+rotate_log() {
+    lf=$(log_file "$1")
+    if [ -f "$lf" ]; then
+        sz=$(stat -f%z "$lf" 2>/dev/null || echo 0)
+        if [ "$sz" -gt "$LOG_MAX_SIZE" ]; then
+            mv -f "$lf" "${lf}.old"
+            log "Rotated $lf (was ${sz} bytes)"
+        fi
+    fi
+}
+
 # Track running kanata instances: cfg -> PID
 # POSIX sh doesn't have associative arrays, so use files in a temp dir.
 STATE_DIR=$(mktemp -d)
 trap 'rm -rf "$STATE_DIR"' EXIT
 
 pid_file()  { echo "$STATE_DIR/$1.pid"; }
+gone_file() { echo "$STATE_DIR/$1.gone"; }
+
 is_running() {
     pf=$(pid_file "$1")
     [ -f "$pf" ] && kill -0 "$(cat "$pf")" 2>/dev/null
@@ -34,13 +59,17 @@ is_running() {
 
 start_kanata() {
     cfg="$1"
+    rotate_log "$cfg"
     log "Starting $cfg"
+    # Append (>>) so we keep history across restarts for debugging.
     # Start kanata directly — do NOT pipe through a subshell, because $! would
     # capture the subshell PID instead of kanata's, and stop_kanata would then
     # orphan the real kanata process (which keeps an exclusive keyboard grab).
-    "$KANATA" --cfg "${CONFIG_DIR}/${cfg}" \
-        >"/tmp/io.github.jtroo.kanata.${cfg%.kbd}.log" 2>&1 &
+    "$KANATA" --cfg "${CONFIG_DIR}/${cfg}" --nodelay \
+        >>"$(log_file "$cfg")" 2>&1 &
     echo "$!" > "$(pid_file "$cfg")"
+    # Clear disconnect timer
+    rm -f "$(gone_file "$cfg")"
     log "Started $cfg (pid $!)"
 }
 
@@ -51,7 +80,11 @@ stop_kanata() {
     pid=$(cat "$pf")
     log "Stopping $cfg (pid $pid)"
     kill "$pid" 2>/dev/null || true
+    # Wait briefly for clean exit, then force-kill to prevent orphaned grabs
+    sleep 1
+    kill -9 "$pid" 2>/dev/null || true
     rm -f "$pf"
+    rm -f "$(gone_file "$cfg")"
 }
 
 # --- Main ---
@@ -67,9 +100,29 @@ while true; do
         running=$(is_running "$cfg" && echo 1 || echo 0)
 
         if [ "$connected" = "1" ] && [ "$running" = "0" ]; then
+            # Device present but kanata not running — start it.
+            # Clear any disconnect timer since the device is back.
+            rm -f "$(gone_file "$cfg")"
             start_kanata "$cfg"
         elif [ "$connected" = "0" ] && [ "$running" = "1" ]; then
-            stop_kanata "$cfg"
+            # Device gone but kanata still running — apply grace period.
+            # This debounces BLE keyboards that briefly disappear.
+            gf=$(gone_file "$cfg")
+            if [ ! -f "$gf" ]; then
+                # First time we noticed the device is gone — record timestamp
+                date +%s > "$gf"
+            else
+                gone_since=$(cat "$gf")
+                now=$(date +%s)
+                elapsed=$((now - gone_since))
+                if [ "$elapsed" -ge "$DISCONNECT_GRACE" ]; then
+                    log "$cfg device absent for ${elapsed}s, stopping"
+                    stop_kanata "$cfg"
+                fi
+            fi
+        elif [ "$connected" = "1" ] && [ "$running" = "1" ]; then
+            # Both connected and running — clear any stale disconnect timer
+            rm -f "$(gone_file "$cfg")"
         fi
     done
 
