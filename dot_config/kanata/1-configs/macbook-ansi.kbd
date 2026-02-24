@@ -21,6 +21,7 @@
 )
 
 ;; MacBook ANSI (single row enter) physical layout
+;; IntlBackslash present on ISO keyboard maped to grave
 (defsrc
   esc  f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12
   grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
@@ -28,6 +29,8 @@
   caps a    s    d    f    g    h    j    k    l    ;    '    ret
   lsft z    x    c    v    b    n    m    ,    .    /    rsft up
   fn   lctl lalt lmet      spc            rmet ralt      left down rght
+
+  IntlBackslash
 )
 
 (deflayer base
@@ -37,6 +40,8 @@
   esc  a    s    d    f    g    h    j    k    l    ;    '    ret
   lsft z    x    c    v    b    n    m    ,    .    /    rsft up
   lalt @fnc @wm  lmet      spc            rmet @fnc      left down rght
+
+  grv
 )
 
 (deflayer fn
@@ -44,6 +49,8 @@
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
   _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    _         _              _    _         _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    pgup
+  _    _    _    _         _              _    _         home pgdn end
+
+  _
 )
