@@ -70,6 +70,20 @@ F13-F24 are used as an internal signaling bus between firmware, kanata, and appl
 
 All F13-F24 keysyms are defined in `dot_config/xkb/symbols/mysymbols` for Linux compatibility.
 
+### Robustness & the BLE Flapping Problem
+
+**Problem discovered (Feb 2026):** Each time the manager starts/stops a kanata instance (e.g., Go60 BLE keyboard connecting/disconnecting), the new process initializes the Karabiner DriverKit client, which triggers `connected → driver_connected → virtual_hid_keyboard_ready` callbacks on ALL running kanata instances. The macbook-ansi instance sees a driver disconnection each time, enters recovery (releases keyboard grab, waits for reconnection, re-grabs). This creates a window where the keyboard can lock up if the recovery races badly between instances or the driver gets stuck.
+
+**Mitigations in the manager script:**
+- **Disconnect debouncing (15s grace period):** BLE keyboards that briefly disappear don't trigger kanata restarts. This dramatically reduces the number of driver reconnection storms.
+- **Append logging with rotation:** Logs use `>>` instead of `>` so history is preserved across restarts (critical for post-incident debugging). Rotated at ~500KB with one `.old` backup.
+- **`--nodelay` flag:** Eliminates the 2-second startup delay, reducing the window where keyboard is ungrabbed during restarts.
+- **Force-kill on stop:** After SIGTERM, waits 1 second then sends SIGKILL to prevent orphaned kanata processes holding exclusive keyboard grabs.
+
+**Kanata's built-in recovery:** When the DriverKit connection drops, kanata releases all seized input devices (physical keyboard works normally), polls every 500ms for recovery, then re-grabs after a 1-second settling delay. This is in `src/kanata/macos.rs`.
+
+**If keyboard locks up:** The built-in escape hatch is `LCtrl+Space+Escape` (physical keys, before remapping). This force-exits kanata and the manager will restart it.
+
 ## Setup on MacOS
 
 Add `/opt/homebrew/bin/kanata` in
