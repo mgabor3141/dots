@@ -16,20 +16,39 @@
 
 set -euo pipefail
 
+# --- Tunables ---
+W=500   # image width  (should match mic.core item width in items/mic.sh)
+H=30    # image height
+
+# Derived coordinates — LED strip runs from 10% to 90% of width, centered vertically.
+margin=$((W / 10))
+
+# Outer glow
+ox1=$margin                 ox2=$((W - margin - 1))
+oy1=$((H * 7 / 30))        oy2=$((H * 22 / 30))
+
+# Mid glow (inset 3px from outer)
+mx1=$((margin + 3))         mx2=$((W - margin - 4))
+my1=$((H / 3))              my2=$((H * 19 / 30))
+
+# Bright core (inset 5px from outer)
+cx1=$((margin + 5))         cx2=$((W - margin - 6))
+cy1=$((H * 2 / 5))          cy2=$((H * 17 / 30))
+
 target="{{ joinPath (.chezmoi.targetFile | dir) "images" }}"
 mkdir -p "$target"
 
-magick -size 500x30 xc:none \
-  \( -size 500x30 xc:none \
-     -fill "rgba(255,0,0,0.7)" -draw "roundrectangle 50,7 449,22 8,8" \
+magick -size "${W}x${H}" xc:none \
+  \( -size "${W}x${H}" xc:none \
+     -fill "rgba(255,0,0,0.7)" -draw "roundrectangle $ox1,$oy1 $ox2,$oy2 8,8" \
      -blur 12x9 \
   \) -gravity center -composite \
-  \( -size 500x30 xc:none \
-     -fill "rgba(255,40,40,1)" -draw "roundrectangle 53,10 446,19 5,5" \
+  \( -size "${W}x${H}" xc:none \
+     -fill "rgba(255,40,40,1)" -draw "roundrectangle $mx1,$my1 $mx2,$my2 5,5" \
      -blur 8x4 \
   \) -gravity center -composite \
-  \( -size 500x30 xc:none \
-     -fill "rgba(255,200,200,0.95)" -draw "roundrectangle 55,12 444,17 3,3" \
+  \( -size "${W}x${H}" xc:none \
+     -fill "rgba(255,200,200,0.95)" -draw "roundrectangle $cx1,$cy1 $cx2,$cy2 3,3" \
      -blur 6x1 \
   \) -gravity center -composite \
   "$target/mic_mute_led.png"
