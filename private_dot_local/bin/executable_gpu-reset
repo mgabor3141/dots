@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# Reset the NVIDIA GPU by reloading kernel modules and restarting the display
+# manager. Use when the GPU fails to resume from suspend (black screen / no
+# signal) — SSH in from another machine and run this.
+#
+# Background: the NVIDIA open kernel modules have a sporadic bug where
+# nv_drm_atomic_commit hits a "Flip event timeout" on resume from S3 sleep,
+# leaving the display dead. A full module reload recovers it.
+# See: https://github.com/NVIDIA/open-gpu-kernel-modules/issues/815
+
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$0" "$@"
+fi
+
+echo "Stopping display manager..."
+systemctl stop sddm.service
+
+echo "Killing remaining GPU processes..."
+if fuser /dev/nvidia* &>/dev/null; then
+    fuser -k /dev/nvidia* 2>/dev/null || true
+    sleep 2
+fi
+
+echo "Unloading NVIDIA kernel modules..."
+for mod in nvidia_drm nvidia_modeset nvidia_uvm nvidia; do
+    if lsmod | grep -q "^${mod} "; then
+        rmmod "$mod" && echo "  Unloaded $mod" || echo "  ⚠ Failed to unload $mod"
+    fi
+done
+
+echo "Reloading NVIDIA kernel modules..."
+modprobe nvidia
+modprobe nvidia_modeset
+modprobe nvidia_uvm
+modprobe nvidia_drm
+
+echo "Starting display manager..."
+systemctl start sddm.service
+
+echo "✅ GPU reset complete"
