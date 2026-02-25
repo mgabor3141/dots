@@ -404,6 +404,7 @@
 			<key code="39" output="á" />   <!-- ' → á (duplicate) -->
 			<key code="41" output="é" />   <!-- ; → é (duplicate) -->
 			<key code="42" output="ű" />   <!-- \ → ű -->
+			<key code="17" output="™" />   <!-- t → ™ -->
 			<!-- gap -->
 			<key code="36" output="&#xD;" />
 			<!-- gap, 37-47 -->
