@@ -1,6 +1,6 @@
 blackwidow-macro-git
-cursor-bin
 customizepkg-git
+fluxer-bin
 hyprwhspr
 ianny
 it87-dkms-git
@@ -9,10 +9,9 @@ llama.cpp-cuda
 nautilus-gnome-disks
 niri-git
 opencode-bin
-quickshell-git
+piper-tts-bin
+piper-voices-en-us
 sunshine-git
 systemd-manager-tui-bin
 systemd-numlockontty
 vesktop-git
-webstorm
-webstorm-jre
