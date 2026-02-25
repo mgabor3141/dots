@@ -30,6 +30,7 @@ xkb_symbols "keyfixes" {
     key <AE04> { type="FOUR_LEVEL", [ 4,      dollar,  EuroSign  ] };
     key <AC03> { type="FOUR_LEVEL", [ d,      D,       degree    ] };
     key <AB07> { type="FOUR_LEVEL", [ m,      M,       mu        ] };
+    key <AD05> { type="FOUR_LEVEL", [ t,      T,       trademark ] };
     key <AB09> { type="FOUR_LEVEL", [ period, greater, ellipsis  ] };
 };
 
