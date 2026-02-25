@@ -1,0 +1,16 @@
+#!/bin/bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# {{ range (glob (joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) ".etc/coolercontrol/*")) }}
+#   {{ include . | sha256sum }}
+# {{ end }}
+
+SOURCE_DIR="{{ joinPath .chezmoi.sourceDir (.chezmoi.sourceFile | dir) ".etc/coolercontrol" }}"
+TARGET_DIR="/etc/coolercontrol"
+
+echo "Deploying CoolerControl config to $TARGET_DIR..."
+sudo mkdir -p "$TARGET_DIR"
+sudo cp "$SOURCE_DIR"/* "$TARGET_DIR"/
+sudo systemctl restart coolercontrold.service
+echo "✅ CoolerControl config deployed and daemon restarted."
