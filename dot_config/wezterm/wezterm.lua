@@ -61,6 +61,11 @@ config.ssh_domains = {
 	},
 }
 
+-- Session manager: opt-in for automatic session management
+config.set_environment_variables = {
+	SESSION_MANAGER = "1",
+}
+
 -- Keyboard: enable kitty keyboard protocol so modifier+key combos
 -- (like Shift+Enter) are properly encoded and distinguishable.
 config.enable_kitty_keyboard = true

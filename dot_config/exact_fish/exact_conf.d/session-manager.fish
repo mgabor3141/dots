@@ -1,7 +1,8 @@
 # Auto-launch session-manager for interactive shells.
 #
-# Skips when already inside a managed session, non-interactive,
-# explicitly disabled, or dependencies missing.
+# Opt-in: only runs when SESSION_MANAGER=1 is set (by terminal emulator
+# config) or when connecting via SSH. This avoids hijacking IDE task
+# terminals, embedded shells, and other special-purpose shells.
 
 if not status is-interactive
     return

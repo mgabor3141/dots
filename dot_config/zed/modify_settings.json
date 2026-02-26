@@ -151,7 +151,8 @@
       "breadcrumbs": false
     },
     "env": {
-      "fish_mouse_enable": "1"
+      "fish_mouse_enable": "1",
+      "SESSION_MANAGER": "1"
     }
   },
   "soft_wrap": "editor_width",
