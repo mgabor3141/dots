@@ -1,3 +1,12 @@
+{{- if .headless }}
+["fish"]
+    type = "archive-file"
+    url = "https://github.com/fish-shell/fish-shell/releases/download/4.5.0/fish-4.5.0-linux-x86_64.tar.xz"
+    executable = true
+    path = "fish"
+    checksum.sha256 = "a78d17517a6772a616d214a63f163ba8281c70834b71eeae9d1a37267e9e46d3"
+{{- end }}
+
 ["dust"]
     type = "archive-file"
     url = "https://github.com/bootandy/dust/releases/download/v1.2.4/dust-v1.2.4-x86_64-unknown-linux-musl.tar.gz"
