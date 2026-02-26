@@ -132,6 +132,9 @@ create() {
 
 attach() {
     export ABDUCO_SESSION=1
+    # abduco enters the alternate screen on attach, which disables
+    # terminal scrollback. Undo it with a brief delay after attach.
+    (sleep 0.05; printf '\033[?1049l' > /dev/tty) &
     exec abduco -a "$1"
 }
 
