@@ -10,7 +10,16 @@
 )
 
 (include shared/common.kbd)
-(include shared/chords.kbd)
+
+;; f13 = global mute hotkey (bound in the OS)
+;; On Razer, f13 is a physical key (left macro column)
+;; Equals key and Backspace key together => Delete key
+;; Both modifier keys together => Dictation toggle (Hyper+D, caught by Hammerspoon)
+(defchordsv2
+    (= bspc)     del       $ct all-released ()
+    (lalt lmet)  @dct      $ct all-released ()
+    (fn lctl)    f13       $ct all-released ()
+)
 
 (defalias
   ;; ctrl on double tap, fn otherwise
