@@ -45,6 +45,7 @@ CLAUDE.md
 !.local/bin/dust
 !.local/bin/session-manager
 !.local/bin/fish
+!.local/bin/difft
 
 # Fish shell config
 !.config/fish

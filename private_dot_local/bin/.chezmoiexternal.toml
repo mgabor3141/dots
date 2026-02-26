@@ -13,3 +13,10 @@
     executable = true
     path = "dust-v1.2.4-x86_64-unknown-linux-musl/dust"
     checksum.sha256 = "4e313f9f854017e58a2ada4c0d1774677b8cf53d63ab55a991d5871d5f504452"
+
+["difft"]
+    type = "archive-file"
+    url = "https://github.com/Wilfred/difftastic/releases/download/0.67.0/difft-x86_64-unknown-linux-musl.tar.gz"
+    executable = true
+    path = "difft"
+    checksum.sha256 = "328e1ab028a36b81ae990c9fc40a1c8eb618e14559e0d67a0a63f328ad85de09"
