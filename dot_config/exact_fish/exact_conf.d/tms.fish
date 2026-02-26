@@ -1,25 +1,26 @@
-# Auto-launch tms (tmux session manager) for interactive shells.
+# Auto-launch tms (terminal session manager) for interactive shells.
 #
 # Skips when:
-#   - Already inside tmux
-#   - Non-interactive shell
-#   - Running inside an editor terminal that sets TMS_SKIP
-#     (e.g. neovim :terminal)
-#   - tmux or tms not available
+#   - Already inside abduco or tmux
+#   - Non-interactive shell (scripts, scp, etc.)
+#   - TMS_SKIP is set (e.g. neovim :terminal)
+#   - Required commands not available
 
 if not status is-interactive
     return
 end
 
-if set -q TMUX
+# Detect if already inside abduco (abduco sets no env var,
+# so we check the process tree for an abduco parent)
+if set -q TMUX; or set -q TMS_SKIP
     return
 end
 
-if set -q TMS_SKIP
+if test -n "$ABDUCO_SESSION"
     return
 end
 
-if not command -q tmux; or not command -q tms
+if not command -q abduco; or not command -q tms
     return
 end
 
