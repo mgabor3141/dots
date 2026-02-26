@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# tms - tmux session manager
-# Manages tmux sessions pooled by working directory.
+# tms - terminal session manager (abduco backend)
+# Manages abduco sessions pooled by working directory.
 #
 # Usage:
 #   tms              Attach to / create session for $PWD
@@ -8,11 +8,17 @@
 #   tms --kill       Kill sessions (picker)
 #   tms --help       Show help
 #
-# Session naming: <dir-basename>/<N> (e.g. dotfiles/1, pi/2)
-# Full pwd stored in tmux env var TMS_PWD on each session.
+# Sessions are stored as: $ABDUCO_SOCKET_DIR/<sanitized-pwd>/<N>
+# e.g. ~/.abduco/pool/home/1, ~/.abduco/pool/projects--myapp/2
 
 set -Eeuo pipefail
 trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+# --- Configuration ---
+ABDUCO_DIR="${HOME}/.abduco"
+SESSION_DIR="${ABDUCO_DIR}/pool"
+SHELL_CMD="${SHELL:-/bin/sh}"
+HOSTNAME="$(hostname 2>/dev/null || echo unknown)"
 
 # --- Helpers ---
 
@@ -20,89 +26,130 @@ get_pool_dir() {
     echo "${1:-$PWD}"
 }
 
-# Get sessions for a given directory (by matching TMS_PWD env var)
-# Output: session_name\tattached\tcommand
-get_pool_sessions() {
-    local pool_dir="$1"
-    while IFS= read -r sess; do
-        local name attached
-        name="$(echo "$sess" | cut -d: -f1)"
-        attached="$(echo "$sess" | cut -d: -f2)"
-        # Check if this session's TMS_PWD matches
-        local sess_pwd
-        sess_pwd="$(tmux show-environment -t "$name" TMS_PWD 2>/dev/null | sed 's/^TMS_PWD=//' || true)"
-        if [[ "$sess_pwd" == "$pool_dir" ]]; then
-            local pane_cmd
-            pane_cmd="$(tmux list-panes -t "$name" -F '#{pane_current_command}' 2>/dev/null | head -1 || echo "?")"
-            local pane_path
-            pane_path="$(tmux list-panes -t "$name" -F '#{pane_current_path}' 2>/dev/null | head -1 || echo "")"
-            local status_str
-            if [[ "$attached" -gt 0 ]]; then
-                status_str="attached"
-            else
-                status_str="detached"
-            fi
-            printf '%s\t%s\t%s\t%s\n' "$name" "$status_str" "$pane_cmd" "$pane_path"
-        fi
-    done < <(tmux list-sessions -F '#{session_name}:#{session_attached}' 2>/dev/null || true)
-}
-
-# Get ALL tms-managed sessions (those with TMS_PWD set)
-get_all_sessions() {
-    while IFS= read -r sess; do
-        local name attached
-        name="$(echo "$sess" | cut -d: -f1)"
-        attached="$(echo "$sess" | cut -d: -f2)"
-        local sess_pwd
-        sess_pwd="$(tmux show-environment -t "$name" TMS_PWD 2>/dev/null | sed 's/^TMS_PWD=//' || true)"
-        if [[ -n "$sess_pwd" ]]; then
-            local pane_cmd
-            pane_cmd="$(tmux list-panes -t "$name" -F '#{pane_current_command}' 2>/dev/null | head -1 || echo "?")"
-            local pane_path
-            pane_path="$(tmux list-panes -t "$name" -F '#{pane_current_path}' 2>/dev/null | head -1 || echo "")"
-            local status_str
-            if [[ "$attached" -gt 0 ]]; then
-                status_str="attached"
-            else
-                status_str="detached"
-            fi
-            printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$status_str" "$pane_cmd" "$pane_path" "$sess_pwd"
-        fi
-    done < <(tmux list-sessions -F '#{session_name}:#{session_attached}' 2>/dev/null || true)
-}
-
-# Sanitize directory name for use in tmux session name
+# Sanitize directory path for use as abduco session directory name
 sanitize_name() {
     local dir="$1"
-    # Use basename, replace dots/spaces with dashes
-    local base
-    base="$(basename "$dir")"
-    # Home dir special case
     if [[ "$dir" == "$HOME" ]]; then
-        base="home"
+        echo "home"
+    else
+        # Strip home prefix, replace / with --
+        local rel="${dir/#$HOME\//}"
+        echo "$rel" | tr '/ ' '--'
     fi
-    echo "$base" | tr ' ./' '---'
 }
 
-# Create a new session for a pool directory.
-# Race-safe: if tmux new-session fails (duplicate name), retry next number.
+# Strip the @hostname suffix abduco appends to socket names
+strip_hostname() {
+    echo "${1%@*}"
+}
+
+# Check session status by examining the socket
+# A socket is "attached" if someone is connected, "dead" if the process exited
+get_session_status() {
+    local sock_path="$1"
+    if [[ ! -e "$sock_path" ]]; then
+        echo "dead"
+        return
+    fi
+    # Try a read-only attach to probe — if the session's process has exited,
+    # abduco marks the socket with a + prefix in its listing.
+    # We'll use lsof or fuser to check if multiple connections exist,
+    # but simplest: just check if socket is connectable
+    # For now: all existing sockets are "detached" (alive)
+    echo "detached"
+}
+
+# List sessions for a pool directory
+# Output: session_name\tstatus\tdisplay_name
+get_pool_sessions() {
+    local pool_dir="$1"
+    local pool_name
+    pool_name="$(sanitize_name "$pool_dir")"
+    local pool_path="${SESSION_DIR}/${pool_name}"
+
+    [[ -d "$pool_path" ]] || return 0
+
+    for sock in "${pool_path}"/*; do
+        [[ -S "$sock" ]] || continue
+        local basename_raw
+        basename_raw="$(basename "$sock")"
+        local num
+        num="$(strip_hostname "$basename_raw")"
+        local session_name="pool/${pool_name}/${num}"
+        local display_name="${pool_name}/${num}"
+        local status
+        status="$(get_session_status "$sock")"
+
+        printf '%s\t%s\t%s\n' "$session_name" "$status" "$display_name"
+    done
+}
+
+# List ALL tms-managed sessions
+get_all_sessions() {
+    [[ -d "$SESSION_DIR" ]] || return 0
+
+    find "$SESSION_DIR" -type s 2>/dev/null | sort | while IFS= read -r sock; do
+        local rel="${sock#$SESSION_DIR/}"
+        local pool_name="${rel%/*}"
+        local basename_raw="${rel##*/}"
+        local num
+        num="$(strip_hostname "$basename_raw")"
+        local session_name="pool/${pool_name}/${num}"
+        local display_name="${pool_name}/${num}"
+        local status
+        status="$(get_session_status "$sock")"
+
+        # Reverse the pool name to get the original path
+        local orig_path
+        if [[ "$pool_name" == "home" ]]; then
+            orig_path="$HOME"
+        else
+            orig_path="${HOME}/$(echo "$pool_name" | sed 's/--/\//g')"
+        fi
+
+        printf '%s\t%s\t%s\t%s\n' "$session_name" "$status" "$display_name" "$orig_path"
+    done
+}
+
+# Create a new session for a pool directory
+# Race-safe: abduco -c fails if socket already exists
 create_session() {
     local pool_dir="$1"
-    local base
-    base="$(sanitize_name "$pool_dir")"
+    local pool_name
+    pool_name="$(sanitize_name "$pool_dir")"
+    local pool_path="${SESSION_DIR}/${pool_name}"
+    mkdir -p "$pool_path"
+
+    # Create a small wrapper script that sets the env and cd's
+    local wrapper
+    wrapper="$(mktemp)"
+    cat > "$wrapper" <<WRAPPER
+#!/usr/bin/env bash
+export ABDUCO_SESSION=1
+cd $(printf '%q' "$pool_dir") 2>/dev/null
+exec $SHELL_CMD
+WRAPPER
+    chmod +x "$wrapper"
 
     local n=1
     local session_name
     while true; do
-        session_name="${base}/${n}"
-        if tmux new-session -d -s "$session_name" -c "$pool_dir" 2>/dev/null; then
-            tmux set-environment -t "$session_name" TMS_PWD "$pool_dir"
-            echo "$session_name"
-            return
+        session_name="pool/${pool_name}/${n}"
+        # abduco appends @hostname to socket files
+        local sock_path="${SESSION_DIR}/${pool_name}/${n}@${HOSTNAME}"
+        if [[ ! -e "$sock_path" ]]; then
+            # Try to create — abduco will fail if socket already exists (race)
+            if abduco -n "$session_name" "$wrapper" 2>/dev/null; then
+                # Clean up wrapper after brief delay (abduco has forked)
+                (sleep 1; rm -f "$wrapper") &
+                disown
+                echo "$session_name"
+                return
+            fi
         fi
         ((n++))
-        # Safety valve
         if [[ $n -gt 100 ]]; then
+            rm -f "$wrapper"
             echo "tms: failed to create session after 100 attempts" >&2
             return 1
         fi
@@ -111,18 +158,22 @@ create_session() {
 
 # Format session line for fzf display
 format_session_line() {
-    local name="$1" status="$2" cmd="$3" path="$4" pool="${5:-}"
+    local display_name="$1" status="$2" pool="${3:-}"
     local color_status
-    if [[ "$status" == "attached" ]]; then
-        color_status="\033[33m●\033[0m"  # yellow dot
-    else
-        color_status="\033[32m●\033[0m"  # green dot
-    fi
+    case "$status" in
+        attached)   color_status="\033[33m●\033[0m" ;;  # yellow
+        terminated) color_status="\033[31m●\033[0m" ;;  # red
+        *)          color_status="\033[32m●\033[0m" ;;  # green
+    esac
     if [[ -n "$pool" ]]; then
-        printf "${color_status} %-20s  %-12s  %s  [%s]" "$name" "$cmd" "$path" "$pool"
+        printf "${color_status} %-30s  %-10s  [%s]" "$display_name" "$status" "$pool"
     else
-        printf "${color_status} %-20s  %-12s  %s" "$name" "$cmd" "$path"
+        printf "${color_status} %-30s  %s" "$display_name" "$status"
     fi
+}
+
+shorten_path() {
+    echo "${1/#$HOME/~}"
 }
 
 # --- Picker ---
@@ -130,26 +181,26 @@ format_session_line() {
 pick_session_for_pool() {
     local pool_dir="$1"
     local entries=()
-    local unattached_sessions=()
+    local detached_sessions=()
 
-    while IFS=$'\t' read -r name status cmd path; do
-        [[ -z "$name" ]] && continue
-        entries+=("$(format_session_line "$name" "$status" "$cmd" "$path")")
+    while IFS=$'\t' read -r full_name status display_name; do
+        [[ -z "$full_name" ]] && continue
+        [[ "$status" == "terminated" ]] && continue  # skip dead sessions
+        entries+=("$(format_session_line "$display_name" "$status")")
         if [[ "$status" == "detached" ]]; then
-            unattached_sessions+=("$name")
+            detached_sessions+=("$full_name")
         fi
     done < <(get_pool_sessions "$pool_dir")
 
     # Fast paths
     if [[ ${#entries[@]} -eq 0 ]]; then
-        # No sessions — create one directly
         create_and_attach "$pool_dir"
         return
     fi
 
-    if [[ ${#unattached_sessions[@]} -eq 1 && ${#entries[@]} -eq 1 ]]; then
-        # Exactly one session, unattached — attach directly
-        exec tmux attach-session -t "=${unattached_sessions[0]}"
+    if [[ ${#detached_sessions[@]} -eq 1 && ${#entries[@]} -eq 1 ]]; then
+        export ABDUCO_SESSION=1
+        exec abduco -a "${detached_sessions[0]}"
     fi
 
     # Show picker
@@ -170,44 +221,35 @@ pick_session_for_pool() {
               --no-sort --reverse --height=~50%
     )" || true
 
-    # Parse fzf output (first line = key pressed, second line = selected item)
     local key selected
     key="$(echo "$selection" | head -1)"
     selected="$(echo "$selection" | tail -1)"
 
     case "$key" in
-        ctrl-a)
-            pick_session_all
-            return
-            ;;
-        ctrl-x)
-            kill_sessions
-            return
-            ;;
-        ctrl-n)
-            create_and_attach "$pool_dir"
-            return
-            ;;
+        ctrl-a) pick_session_all; return ;;
+        ctrl-x) kill_sessions; return ;;
+        ctrl-n) create_and_attach "$pool_dir"; return ;;
     esac
 
     if [[ "$selected" == "$new_entry" ]]; then
         create_and_attach "$pool_dir"
     elif [[ -n "$selected" ]]; then
-        # Extract session name (after the dot, first field)
         local sess_name
-        sess_name="$(echo "$selected" | sed 's/^[^ ]* //' | awk '{print $1}')"
-        exec tmux attach-session -t "=${sess_name}"
+        sess_name="$(extract_session_name "$selected")"
+        export ABDUCO_SESSION=1
+        exec abduco -a "$sess_name"
     fi
 }
 
 pick_session_all() {
     local entries=()
 
-    while IFS=$'\t' read -r name status cmd path pool; do
-        [[ -z "$name" ]] && continue
+    while IFS=$'\t' read -r full_name status display_name orig_path; do
+        [[ -z "$full_name" ]] && continue
+        [[ "$status" == "terminated" ]] && continue
         local short_pool
-        short_pool="$(shorten_path "$pool")"
-        entries+=("$(format_session_line "$name" "$status" "$cmd" "$path" "$short_pool")")
+        short_pool="$(shorten_path "$orig_path")"
+        entries+=("$(format_session_line "$display_name" "$status" "$short_pool")")
     done < <(get_all_sessions)
 
     if [[ ${#entries[@]} -eq 0 ]]; then
@@ -230,27 +272,25 @@ pick_session_all() {
     selected="$(echo "$selection" | tail -1)"
 
     case "$key" in
-        ctrl-x)
-            kill_sessions
-            return
-            ;;
+        ctrl-x) kill_sessions; return ;;
     esac
 
     if [[ -n "$selected" ]]; then
         local sess_name
-        sess_name="$(echo "$selected" | sed 's/^[^ ]* //' | awk '{print $1}')"
-        exec tmux attach-session -t "=${sess_name}"
+        sess_name="$(extract_session_name "$selected")"
+        export ABDUCO_SESSION=1
+        exec abduco -a "$sess_name"
     fi
 }
 
 kill_sessions() {
     local entries=()
 
-    while IFS=$'\t' read -r name status cmd path pool; do
-        [[ -z "$name" ]] && continue
+    while IFS=$'\t' read -r full_name status display_name orig_path; do
+        [[ -z "$full_name" ]] && continue
         local short_pool
-        short_pool="$(shorten_path "$pool")"
-        entries+=("$(format_session_line "$name" "$status" "$cmd" "$path" "$short_pool")")
+        short_pool="$(shorten_path "${orig_path:-unknown}")"
+        entries+=("$(format_session_line "$display_name" "$status" "$short_pool")")
     done < <(get_all_sessions)
 
     if [[ ${#entries[@]} -eq 0 ]]; then
@@ -269,28 +309,41 @@ kill_sessions() {
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         local sess_name
-        sess_name="$(echo "$line" | sed 's/^[^ ]* //' | awk '{print $1}')"
-        tmux kill-session -t "=${sess_name}" 2>/dev/null && echo "Killed: $sess_name"
+        sess_name="$(extract_session_name "$line")"
+        # Find the socket (abduco appends @hostname)
+        local sock_path="${ABDUCO_DIR}/${sess_name}@${HOSTNAME}"
+        if [[ -S "$sock_path" ]]; then
+            rm -f "$sock_path"
+            echo "Killed: $sess_name"
+        fi
     done <<< "$selection"
+}
+
+# Extract session name (pool/foo/N) from a formatted fzf line
+extract_session_name() {
+    local line="$1"
+    # After the color dot and space, the display name is pool_name/N
+    local display
+    display="$(echo "$line" | sed 's/^[^ ]* //' | awk '{print $1}')"
+    echo "pool/${display}"
 }
 
 create_and_attach() {
     local pool_dir="$1"
     local sess_name
     sess_name="$(create_session "$pool_dir")"
-    exec tmux attach-session -t "=${sess_name}"
-}
-
-shorten_path() {
-    local p="$1"
-    echo "${p/#$HOME/~}"
+    # Brief delay for abduco to set up the socket
+    sleep 0.1
+    export ABDUCO_SESSION=1
+    exec abduco -a "$sess_name"
 }
 
 # --- SSH agent fixup ---
 fixup_ssh_agent() {
-    # Update SSH_AUTH_SOCK in tmux global env so reattached sessions get it
-    if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
-        tmux set-environment -g SSH_AUTH_SOCK "$SSH_AUTH_SOCK" 2>/dev/null || true
+    # For abduco sessions, SSH_AUTH_SOCK is inherited naturally
+    # but we can symlink to a stable path for reconnections
+    if [[ -n "${SSH_AUTH_SOCK:-}" && "$SSH_AUTH_SOCK" != "$HOME/.ssh/agent.sock" ]]; then
+        ln -sf "$SSH_AUTH_SOCK" "$HOME/.ssh/agent.sock" 2>/dev/null || true
     fi
 }
 
