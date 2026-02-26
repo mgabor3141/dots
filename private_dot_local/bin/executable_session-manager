@@ -9,6 +9,7 @@
 #   session-manager              Pick/create session for $PWD
 #   session-manager [directory]  Pick/create session for given directory
 #   session-manager --all        Show all sessions
+#   session-manager --hosts      Show sessions across all SSH hosts
 #
 # Session naming: s:<N>  (sockets in ~/.abduco/)
 #
@@ -22,6 +23,7 @@ trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 
 SHELL_CMD="${SHELL:-/bin/sh}"
 HOSTNAME="$(hostname 2>/dev/null || echo unknown)"
+SSH_TIMEOUT=3
 
 shorten() { echo "${1/#$HOME/\~}"; }
 
@@ -102,6 +104,67 @@ list_all() {
     parse_sessions
 }
 
+# ── SSH host discovery ──────────────────────────────────────────────────────
+
+# Parse ~/.ssh/config for Host entries (skip wildcards, patterns).
+list_ssh_hosts() {
+    local config="$HOME/.ssh/config"
+    [[ -f "$config" ]] || return 0
+    awk '/^[Hh]ost[[:space:]]/ {
+        for (i = 2; i <= NF; i++) {
+            if ($i !~ /[*?!]/) print $i
+        }
+    }' "$config"
+}
+
+# Query a remote host for sessions.  Output: host \t name \t status \t process \t cwd
+# Returns nothing if host is unreachable or session-manager not installed.
+query_remote_host() {
+    local host="$1"
+    local output
+    output="$(ssh -o ConnectTimeout="$SSH_TIMEOUT" \
+                  -o BatchMode=yes \
+                  -o StrictHostKeyChecking=accept-new \
+                  "$host" \
+                  'command -v session-manager >/dev/null 2>&1 && session-manager --list-all-raw' \
+              2>/dev/null)" || return 0
+    [[ -z "$output" ]] && return 0
+    while IFS=$'\t' read -r name status process cwd; do
+        [[ -z "$name" ]] && continue
+        printf '%s\t%s\t%s\t%s\t%s\n' "$host" "$name" "$status" "$process" "$cwd"
+    done <<<"$output"
+}
+
+# Query all hosts (local + remote) in parallel.
+# Output: host \t name \t status \t process \t cwd
+query_all_hosts() {
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+
+    # Local sessions
+    {
+        parse_sessions | while IFS=$'\t' read -r name status process cwd; do
+            printf '%s\t%s\t%s\t%s\t%s\n' "$HOSTNAME" "$name" "$status" "$process" "$cwd"
+        done
+    } > "$tmpdir/local" &
+
+    # Remote hosts in parallel
+    local -a hosts=()
+    while IFS= read -r host; do
+        hosts+=("$host")
+        query_remote_host "$host" > "$tmpdir/remote_${host}" &
+    done < <(list_ssh_hosts)
+
+    wait
+
+    cat "$tmpdir/local"
+    for host in "${hosts[@]+"${hosts[@]}"}"; do
+        cat "$tmpdir/remote_${host}" 2>/dev/null || true
+    done
+
+    rm -rf "$tmpdir"
+}
+
 # ── Session lifecycle ───────────────────────────────────────────────────────
 
 # Create a detached session, print its name.
@@ -144,6 +207,17 @@ create_and_attach() {
     attach "$name"
 }
 
+# Remote session lifecycle (over SSH)
+remote_attach() {
+    local host="$1" name="$2"
+    exec ssh -t "$host" "abduco -a '$name'"
+}
+
+remote_create_and_attach() {
+    local host="$1"
+    exec ssh -t "$host" 'session-manager --create-and-attach "$HOME"'
+}
+
 # ── fzf formatting ──────────────────────────────────────────────────────────
 
 # Indicator logic:
@@ -181,6 +255,18 @@ fmt_all() {
     printf '%s\t%b %b' "$name" "$dot" "$label"
 }
 
+# Hosts view:  ● Aquilo:~/.config/foo › pi   or  ○ unraid:~/docker
+fmt_hosts() {
+    local host="$1" name="$2" status="$3" process="${4:-}" cwd="${5:-}"
+    [[ "$process" == "-" ]] && process=""
+    local dot label
+    _dot_for "$status" "$process"
+    label="\033[1m${host}\033[0m:$(shorten "${cwd:-?}")"
+    [[ -n "$process" ]] && label="$label \033[2m›\033[0m $process"
+    # Key encodes host and session name for routing
+    printf '%s@%s\t%b %b' "$name" "$host" "$dot" "$label"
+}
+
 _dot_for() {
     local status="$1" process="$2"
     if [[ "$status" == "attached" ]]; then
@@ -211,6 +297,19 @@ kill_session() {
     [[ -S "$sock" ]] && rm -f "$sock"
 }
 
+# Kill a session on any host.  Key format: <name>@<host>
+kill_session_any() {
+    local key="$1"
+    local name="${key%%@*}"
+    local host="${key##*@}"
+    if [[ "$host" == "$HOSTNAME" ]]; then
+        kill_session "$name"
+    else
+        ssh -o ConnectTimeout="$SSH_TIMEOUT" -o BatchMode=yes \
+            "$host" "session-manager --kill-session '$name'" 2>/dev/null || true
+    fi
+}
+
 # ── List commands for fzf reload ────────────────────────────────────────────
 
 list_dir_fmt() {
@@ -229,6 +328,20 @@ list_all_fmt() {
         [[ -z "$name" ]] && continue
         printf '%b\n' "$(fmt_all "$name" "$status" "$process" "$cwd")"
     done < <(list_all)
+}
+
+list_hosts_fmt() {
+    _ABDUCO_CACHED=false
+    # "New session" entries: one per host (local first, then remotes)
+    printf '\t  + new session on %s\n' "$HOSTNAME"
+    while IFS= read -r host; do
+        printf '\t  + new session on %s\n' "$host"
+    done < <(list_ssh_hosts)
+    # Sessions from all hosts
+    while IFS=$'\t' read -r host name status process cwd; do
+        [[ -z "$host" ]] && continue
+        printf '%b\n' "$(fmt_hosts "$host" "$name" "$status" "$process" "$cwd")"
+    done < <(query_all_hosts)
 }
 
 # ── Pickers ─────────────────────────────────────────────────────────────────
@@ -298,9 +411,7 @@ pick_all() {
     fi
 
     local self="$0"
-    local header="All sessions │ enter: attach │ ctrl-a: directory │ ctrl-x: kill"
-    local expect_keys="ctrl-x"
-    [[ -n "$dir" ]] && expect_keys="ctrl-a"
+    local header="All sessions │ enter: attach │ ctrl-a: hosts │ ctrl-x: kill"
     local chosen
 
     chosen="$({
@@ -308,7 +419,7 @@ pick_all() {
         printf '%b\n' "${entries[@]}"
     } | fzf --ansi --header="$header" \
               --delimiter='\t' --with-nth=2 \
-              --expect=$expect_keys \
+              --expect=ctrl-a \
               --no-sort --reverse --height=~50% \
               --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-all-fmt)+transform(echo pos\(\$FZF_POS\))")" || true
 
@@ -317,13 +428,76 @@ pick_all() {
     line="$(tail -1 <<<"$chosen")"
 
     case "$key" in
-        ctrl-a) pick_for_dir "$dir"; return ;;
+        ctrl-a) pick_hosts "$dir"; return ;;
     esac
 
     if [[ "$line" == *"new session"* ]]; then
         create_and_attach "$HOME"
     elif [[ -n "$line" ]]; then
         attach "$(extract_name "$line")"
+    fi
+}
+
+pick_hosts() {
+    local dir="${1:-}"
+    local -a entries=()
+
+    while IFS=$'\t' read -r host name status process cwd; do
+        [[ -z "$host" ]] && continue
+        entries+=("$(fmt_hosts "$host" "$name" "$status" "$process" "$cwd")")
+    done < <(query_all_hosts)
+
+    local self="$0"
+    local header="All hosts │ enter: attach │ ctrl-a: local │ ctrl-x: kill"
+    local chosen
+
+    chosen="$({
+        printf '\t  + new session on %s\n' "$HOSTNAME"
+        while IFS= read -r host; do
+            printf '\t  + new session on %s\n' "$host"
+        done < <(list_ssh_hosts)
+        if (( ${#entries[@]} > 0 )); then
+            printf '%b\n' "${entries[@]}"
+        fi
+    } | fzf --ansi --header="$header" \
+              --delimiter='\t' --with-nth=2 \
+              --expect=ctrl-a \
+              --no-sort --reverse --height=~50% \
+              --bind "ctrl-x:execute-silent($self --kill-session-any {1})+reload-sync($self --list-hosts-fmt)+transform(echo pos\(\$FZF_POS\))")" || true
+
+    local key line
+    key="$(head -1 <<<"$chosen")"
+    line="$(tail -1 <<<"$chosen")"
+
+    case "$key" in
+        ctrl-a)
+            if [[ -n "$dir" ]]; then
+                pick_for_dir "$dir"
+            else
+                pick_all
+            fi
+            return ;;
+    esac
+
+    if [[ "$line" == *"new session on "* ]]; then
+        # Extract host from "+ new session on <host>"
+        local target_host="${line##*new session on }"
+        if [[ "$target_host" == "$HOSTNAME" ]]; then
+            create_and_attach "$HOME"
+        else
+            remote_create_and_attach "$target_host" '~'
+        fi
+    elif [[ -n "$line" ]]; then
+        # Key format: <name>@<host>
+        local session_key
+        session_key="$(extract_name "$line")"
+        local sname="${session_key%%@*}"
+        local shost="${session_key##*@}"
+        if [[ "$shost" == "$HOSTNAME" ]]; then
+            attach "$sname"
+        else
+            remote_attach "$shost" "$sname"
+        fi
     fi
 }
 
@@ -343,7 +517,8 @@ main() {
 
     while (( $# )); do
         case "$1" in
-            -a|--all)  mode="all";  shift ;;
+            -a|--all)    mode="all";   shift ;;
+            -H|--hosts)  mode="hosts"; shift ;;
             -h|--help)
                 cat <<-'EOF'
 				Usage: session-manager [options] [directory]
@@ -353,10 +528,14 @@ main() {
 				  session-manager --all        Show all sessions
 				EOF
                 exit 0 ;;
-            # Internal commands used by fzf --bind
-            --kill-session)     kill_session "$2"; exit ;;
-            --list-dir-fmt)     list_dir_fmt "$2"; exit ;;
-            --list-all-fmt)     list_all_fmt; exit ;;
+            # Internal commands (used by fzf --bind and remote SSH)
+            --kill-session)       kill_session "$2"; exit ;;
+            --kill-session-any)   kill_session_any "$2"; exit ;;
+            --list-dir-fmt)       list_dir_fmt "$2"; exit ;;
+            --list-all-fmt)       list_all_fmt; exit ;;
+            --list-all-raw)       _ABDUCO_CACHED=false; parse_sessions; exit ;;
+            --list-hosts-fmt)     list_hosts_fmt; exit ;;
+            --create-and-attach)  create_and_attach "$2"; exit ;;
             *) dir="$(cd "$1" && pwd)"; shift ;;
         esac
     done
@@ -364,8 +543,9 @@ main() {
     fixup_ssh_agent
 
     case "$mode" in
-        dir) pick_for_dir "$dir" ;;
-        all) pick_all ;;
+        dir)   pick_for_dir "$dir" ;;
+        all)   pick_all ;;
+        hosts) pick_hosts ;;
     esac
 }
 
