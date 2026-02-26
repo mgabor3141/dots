@@ -48,6 +48,8 @@ pool_to_path() {
 
 shorten() { echo "${1/#$HOME/\~}"; }
 
+
+
 # ── Session discovery ───────────────────────────────────────────────────────
 
 # Build a lookup of attached sockets (all at once, one fuser call).
@@ -120,13 +122,13 @@ create() {
     local pool
     pool="$(path_to_pool "$pool_dir")"
     mkdir -p "$POOL_DIR/$pool"
+    cd "$pool_dir"
 
     local n=1
     while (( n <= 100 )); do
         if [[ ! -e "$POOL_DIR/$pool/${n}@${HOSTNAME}" ]]; then
             if abduco -n "pool/$pool/$n" \
-                env ABDUCO_SESSION=1 "$SHELL_CMD" \
-                --init-command "cd $(printf '%q' "$pool_dir")" 2>/dev/null; then
+                env ABDUCO_SESSION=1 "$SHELL_CMD" 2>/dev/null; then
                 echo "pool/$pool/$n"
                 return
             fi
