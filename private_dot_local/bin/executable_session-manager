@@ -484,7 +484,7 @@ pick_for_dir() {
     } | fzf --ansi --header="$header" \
           --delimiter='\t' --with-nth=2 \
           --expect=ctrl-n,ctrl-a,ctrl-r \
-          --no-sort --reverse --height=~50% \
+          --no-sort --reverse --height=16 \
           --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-dir-fmt $(printf '%q' "$dir"))+transform(echo pos\(\$FZF_POS\))" \
           --bind "ctrl-d:execute-silent($self --cleanup-idle-dir $(printf '%q' "$dir"))+reload-sync($self --list-dir-fmt $(printf '%q' "$dir"))")" || true
 
@@ -531,7 +531,7 @@ pick_all() {
     } | fzf --ansi --header="$header" \
               --delimiter='\t' --with-nth=2 \
               --expect=ctrl-a,ctrl-n,ctrl-r \
-              --no-sort --reverse --height=~50% \
+              --no-sort --reverse --height=16 \
               --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-all-fmt)+transform(echo pos\(\$FZF_POS\))" \
               --bind "ctrl-d:execute-silent($self --cleanup-idle-all)+reload-sync($self --list-all-fmt)")" || true
 
@@ -560,15 +560,9 @@ pick_all() {
 
 pick_hosts() {
     local dir="${1:-}"
-    local -a entries=()
-    local has_hosts=false
-
-    while IFS=$'\t' read -r host name status process cwd; do
-        [[ -z "$host" ]] && continue
-        entries+=("$(fmt_hosts "$host" "$name" "$status" "$process" "$cwd")")
-    done < <(query_remote_hosts)
 
     local -a ssh_hosts=()
+    local has_hosts=false
     while IFS= read -r host; do
         ssh_hosts+=("$host")
         has_hosts=true
@@ -581,18 +575,18 @@ pick_hosts() {
              printf '\033[33mctrl-x\033[0m kill')"
     local chosen
 
+    # Show picker immediately with "new session" entries + loading indicator,
+    # then reload with full data once SSH queries complete.
     chosen="$({
         for host in "${ssh_hosts[@]+"${ssh_hosts[@]}"}"; do
             printf '\t  + new session on %s\n' "$host"
         done
-        if (( ${#entries[@]} > 0 )); then
-            printf '%b\n' "${entries[@]}"
-        fi
         $has_hosts || printf '\t  \033[2mno remote hosts configured in ~/.ssh/config\033[0m\n'
     } | fzf --ansi --header="$header" \
               --delimiter='\t' --with-nth=2 \
               --expect=ctrl-a \
-              --no-sort --reverse --height=~50% \
+              --no-sort --reverse --height=16 \
+              --bind "load:reload($self --list-hosts-fmt)+unbind(load)" \
               --bind "ctrl-x:execute-silent($self --kill-session-any {1})+reload-sync($self --list-hosts-fmt)+transform(echo pos\(\$FZF_POS\))")" || true
 
     local key line
