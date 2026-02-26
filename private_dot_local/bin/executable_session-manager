@@ -472,7 +472,10 @@ pick_for_dir() {
     fi
 
     local self="$0"
-    local header="Sessions in $(shorten "$dir") │ enter: attach │ ctrl-n: new │ ctrl-r: raw │ ctrl-a: all │ ctrl-x: kill │ ctrl-d: clean idle"
+    local header
+    header="$(printf '\033[1;34m%s\033[0m  \033[2mctrl-a › all\033[0m\n' "Sessions in $(shorten "$dir")"
+             printf '\033[36menter\033[0m attach  \033[36mctrl-n\033[0m new  \033[36mctrl-r\033[0m raw\n'
+             printf '\033[33mctrl-x\033[0m kill  \033[33mctrl-d\033[0m clean idle')"
     local chosen
 
     chosen="$({
@@ -514,7 +517,10 @@ pick_all() {
     local self="$0"
     local next_label="hosts"
     $IS_REMOTE && next_label="directory"
-    local header="All sessions │ enter: attach │ ctrl-n: new │ ctrl-r: raw │ ctrl-a: $next_label │ ctrl-x: kill │ ctrl-d: clean idle"
+    local header
+    header="$(printf '\033[1;32mAll sessions\033[0m  \033[2mctrl-a › %s\033[0m\n' "$next_label"
+             printf '\033[36menter\033[0m attach  \033[36mctrl-n\033[0m new  \033[36mctrl-r\033[0m raw\n'
+             printf '\033[33mctrl-x\033[0m kill  \033[33mctrl-d\033[0m clean idle')"
     local chosen
 
     chosen="$({
@@ -569,7 +575,10 @@ pick_hosts() {
     done < <(list_ssh_hosts)
 
     local self="$0"
-    local header="Remote hosts │ enter: attach │ ctrl-a: local │ ctrl-x: kill"
+    local header
+    header="$(printf '\033[1;35mRemote hosts\033[0m  \033[2mctrl-a › local\033[0m\n'
+             printf '\033[36menter\033[0m attach\n'
+             printf '\033[33mctrl-x\033[0m kill')"
     local chosen
 
     chosen="$({
