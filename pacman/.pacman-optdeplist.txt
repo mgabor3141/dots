@@ -45,5 +45,6 @@ recordmydesktop
 rrdtool
 rustup
 speech-dispatcher
+ttf-nerd-fonts-symbols-mono
 wlsunset
 xorg-xset
