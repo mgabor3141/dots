@@ -7,10 +7,12 @@ CLAUDE.md
 *
 **/*
 
-# Shell configs (bash only on headless)
+# Shell configs
 !.bashrc
 !.bash_profile
 !.profile
+!.config/fish
+!.config/fish/**
 
 # Git
 !.gitconfig
@@ -40,10 +42,11 @@ CLAUDE.md
 !.config/gh
 !.config/gh/**
 
-# Local bin (only externally managed tools on headless)
+# Local bin
 !.local
 !.local/bin
 !.local/bin/dust
+!.local/bin/session-manager
 {{- end }}
 
 {{- if ne .chezmoi.os "linux" }}
