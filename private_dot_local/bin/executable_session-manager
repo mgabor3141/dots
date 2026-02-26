@@ -121,21 +121,12 @@ create() {
     pool="$(path_to_pool "$pool_dir")"
     mkdir -p "$POOL_DIR/$pool"
 
-    local wrapper
-    wrapper="$(mktemp)"
-    cat >"$wrapper" <<-WRAPPER
-	#!/usr/bin/env bash
-	export ABDUCO_SESSION=1
-	cd $(printf '%q' "$pool_dir") 2>/dev/null
-	exec $SHELL_CMD
-	WRAPPER
-    chmod +x "$wrapper"
-
     local n=1
     while (( n <= 100 )); do
         if [[ ! -e "$POOL_DIR/$pool/${n}@${HOSTNAME}" ]]; then
-            if abduco -n "pool/$pool/$n" "$wrapper" 2>/dev/null; then
-                (sleep 1; rm -f "$wrapper") & disown
+            if abduco -n "pool/$pool/$n" \
+                env ABDUCO_SESSION=1 "$SHELL_CMD" \
+                --init-command "cd $(printf '%q' "$pool_dir")" 2>/dev/null; then
                 echo "pool/$pool/$n"
                 return
             fi
@@ -143,7 +134,6 @@ create() {
         (( n++ ))
     done
 
-    rm -f "$wrapper"
     echo "session-manager: could not create session after 100 attempts" >&2
     return 1
 }
@@ -159,7 +149,11 @@ attach() {
 create_and_attach() {
     local name
     name="$(create "$1")"
-    sleep 0.05         # let abduco set up the socket
+    # Brief wait for abduco to create the socket
+    local sock="$POOL_DIR/${name#pool/}"
+    sock="${sock%/*}/${name##*/}@${HOSTNAME}"
+    local i=0
+    while [[ ! -S "$sock" ]] && (( i++ < 20 )); do sleep 0.01; done
     attach "$name"
 }
 
