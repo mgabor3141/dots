@@ -19,7 +19,6 @@ CLAUDE.md
 
 # CLI tools
 !.editorconfig
-!.tmux.conf
 !.config
 !.config/btop
 !.config/btop/**
