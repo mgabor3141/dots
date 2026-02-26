@@ -50,6 +50,18 @@ shorten() { echo "${1/#$HOME/\~}"; }
 
 # ── Session discovery ───────────────────────────────────────────────────────
 
+# Cache ss output once per invocation (fast: ~3ms)
+_SS_CACHE=""
+ss_cache() {
+    [[ -n "$_SS_CACHE" ]] || _SS_CACHE="$(ss -x 2>/dev/null)"
+    echo "$_SS_CACHE"
+}
+
+# Check if a socket has an attached client
+is_attached() {
+    ss_cache | grep -q "$1"
+}
+
 # List sessions in a pool.  Output: abduco_name \t status \t display_name
 list_pool() {
     local pool="$1"
@@ -58,8 +70,11 @@ list_pool() {
 
     for sock in "$dir"/*; do
         [[ -S "$sock" ]] || continue
-        local n="${sock##*/}"; n="${n%@*}"
-        printf '%s\t%s\t%s\n' "pool/$pool/$n" "detached" "$pool/$n"
+        local basename_raw="${sock##*/}"
+        local n="${basename_raw%@*}"
+        local status="detached"
+        is_attached "$basename_raw" && status="attached"
+        printf '%s\t%s\t%s\n' "pool/$pool/$n" "$status" "$pool/$n"
     done
 }
 
@@ -69,9 +84,12 @@ list_all() {
     find "$POOL_DIR" -type s 2>/dev/null | sort | while IFS= read -r sock; do
         local rel="${sock#$POOL_DIR/}"
         local pool="${rel%/*}"
-        local n="${rel##*/}"; n="${n%@*}"
+        local basename_raw="${rel##*/}"
+        local n="${basename_raw%@*}"
+        local status="detached"
+        is_attached "$basename_raw" && status="attached"
         printf '%s\t%s\t%s\t%s\n' \
-            "pool/$pool/$n" "detached" "$pool/$n" "$(pool_to_path "$pool")"
+            "pool/$pool/$n" "$status" "$pool/$n" "$(pool_to_path "$pool")"
     done
 }
 
@@ -162,6 +180,11 @@ pick_pool() {
     # No sessions at all — create one directly, no picker needed
     if (( ${#entries[@]} == 0 )); then
         create_and_attach "$pool_dir"; return
+    fi
+
+    # Exactly one session and it's detached — reattach directly
+    if (( ${#detached[@]} == 1 && ${#entries[@]} == 1 )); then
+        attach "${detached[0]}"; return
     fi
 
     local header="Sessions for $(shorten "$pool_dir") │ enter: attach │ ctrl-n: new │ ctrl-a: all │ ctrl-x: kill"
