@@ -24,6 +24,7 @@ trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 SHELL_CMD="${SHELL:-/bin/sh}"
 HOSTNAME="$(hostname 2>/dev/null || echo unknown)"
 SSH_TIMEOUT=3
+IS_REMOTE=false; [[ -n "${SSH_CONNECTION:-}" ]] && IS_REMOTE=true
 
 shorten() { echo "${1/#$HOME/\~}"; }
 
@@ -411,7 +412,9 @@ pick_all() {
     fi
 
     local self="$0"
-    local header="All sessions │ enter: attach │ ctrl-a: hosts │ ctrl-x: kill"
+    local next_label="hosts"
+    $IS_REMOTE && next_label="directory"
+    local header="All sessions │ enter: attach │ ctrl-a: $next_label │ ctrl-x: kill"
     local chosen
 
     chosen="$({
@@ -428,7 +431,13 @@ pick_all() {
     line="$(tail -1 <<<"$chosen")"
 
     case "$key" in
-        ctrl-a) pick_hosts "$dir"; return ;;
+        ctrl-a)
+            if $IS_REMOTE || [[ -z "$dir" ]]; then
+                pick_for_dir "${dir:-$PWD}"
+            else
+                pick_hosts "$dir"
+            fi
+            return ;;
     esac
 
     if [[ "$line" == *"new session"* ]]; then
@@ -545,7 +554,12 @@ main() {
     case "$mode" in
         dir)   pick_for_dir "$dir" ;;
         all)   pick_all ;;
-        hosts) pick_hosts ;;
+        hosts)
+            if $IS_REMOTE; then
+                echo "session-manager: hosts view disabled over SSH" >&2
+                exit 1
+            fi
+            pick_hosts ;;
     esac
 }
 
