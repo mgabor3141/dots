@@ -446,6 +446,7 @@ list_hosts_fmt() {
 
 pick_for_dir() {
     local dir="$1"
+    local fast="${2:-false}"
     local -a entries=()
     local -a detached_names=()
 
@@ -455,27 +456,29 @@ pick_for_dir() {
         [[ "$status" == "detached" ]] && detached_names+=("$name")
     done < <(list_for_dir "$dir")
 
-    # No sessions for this dir — create directly (unless home with detached elsewhere)
-    # All sessions attached — create directly (unless home with detached elsewhere)
-    if (( ${#entries[@]} == 0 || ${#detached_names[@]} == 0 )); then
-        # In home dir, check for detached sessions in other directories first
-        if [[ "$dir" == "$HOME" ]]; then
-            local has_detached_elsewhere=false
-            while IFS=$'\t' read -r _n status _p cwd; do
-                if [[ "$status" == "detached" && "$cwd" != "$HOME" ]]; then
-                    has_detached_elsewhere=true; break
+    if $fast; then
+        # No sessions for this dir — create directly (unless home with detached elsewhere)
+        # All sessions attached — create directly (unless home with detached elsewhere)
+        if (( ${#entries[@]} == 0 || ${#detached_names[@]} == 0 )); then
+            # In home dir, check for detached sessions in other directories first
+            if [[ "$dir" == "$HOME" ]]; then
+                local has_detached_elsewhere=false
+                while IFS=$'\t' read -r _n status _p cwd; do
+                    if [[ "$status" == "detached" && "$cwd" != "$HOME" ]]; then
+                        has_detached_elsewhere=true; break
+                    fi
+                done < <(parse_sessions)
+                if $has_detached_elsewhere; then
+                    pick_all "$dir"; return
                 fi
-            done < <(parse_sessions)
-            if $has_detached_elsewhere; then
-                pick_all "$dir"; return
             fi
+            create_and_attach "$dir"; return
         fi
-        create_and_attach "$dir"; return
-    fi
 
-    # Single detached session — reattach directly
-    if (( ${#detached_names[@]} == 1 )); then
-        attach "${detached_names[0]}"; return
+        # Single detached session — reattach directly
+        if (( ${#detached_names[@]} == 1 )); then
+            attach "${detached_names[0]}"; return
+        fi
     fi
 
     local self="$0"
@@ -487,7 +490,9 @@ pick_for_dir() {
 
     chosen="$({
         printf '\t  + new session\n'
-        printf '%b\n' "${entries[@]}"
+        if (( ${#entries[@]} > 0 )); then
+            printf '%b\n' "${entries[@]}"
+        fi
     } | fzf --ansi --header="$header" \
           --delimiter='\t' --with-nth=2 \
           --expect=ctrl-n,ctrl-a,ctrl-r \
@@ -680,7 +685,7 @@ main() {
         cleanup_virgin
         _ABDUCO_CACHED=false
         case "$mode" in
-            dir)   pick_for_dir "$dir" ;;
+            dir)   pick_for_dir "$dir" true ;;
             all)   pick_all ;;
             hosts)
                 if $IS_REMOTE; then
