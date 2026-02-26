@@ -13,6 +13,9 @@
 #
 # Session naming: s:<N>  (sockets in ~/.abduco/)
 #
+# Detach with Ctrl-\ (abduco default) to return to the session picker.
+# Exit the shell normally to end the session and close the terminal.
+#
 # Environment:
 #   ABDUCO_SESSION=1   Set inside managed sessions to prevent nesting
 
@@ -25,12 +28,11 @@ SHELL_CMD="${SHELL:-/bin/sh}"
 HOSTNAME="$(hostname 2>/dev/null || echo unknown)"
 SSH_TIMEOUT=3
 IS_REMOTE=false; [[ -n "${SSH_CONNECTION:-}" ]] && IS_REMOTE=true
-SWITCH_MARKER="$HOME/.abduco/.switch"
 VIRGIN_PREFIX="$HOME/.abduco/.virgin-"
-IDLE_PREFIX="$HOME/.abduco/.idle-"
-IDLE_TIMEOUT_MIN=5  # kill detached idle sessions after this many minutes
 
 shorten() { echo "${1/#$HOME/\~}"; }
+
+sock_for() { echo "$HOME/.abduco/${1}@${HOSTNAME}"; }
 
 # ── Session discovery (via abduco native listing) ───────────────────────────
 
@@ -103,7 +105,6 @@ list_for_dir() {
     done
 }
 
-
 # List all sessions.  Output: name \t status \t process \t cwd
 list_all() {
     parse_sessions
@@ -172,7 +173,7 @@ create() {
     local n=1
     while (( n <= 100 )); do
         local name="s:${n}"
-        if [[ ! -e "$HOME/.abduco/${name}@${HOSTNAME}" ]]; then
+        if [[ ! -e "$(sock_for "$name")" ]]; then
             if abduco -n "$name" \
                 env ABDUCO_SESSION=1 SESSION_NAME="$name" "$SHELL_CMD" 2>/dev/null; then
                 touch "${VIRGIN_PREFIX}${name}"
@@ -187,19 +188,27 @@ create() {
     return 1
 }
 
+# Attach to a session.  Returns when detached (Ctrl-\) or session ends.
+# Sets _ATTACHED_SESSION so the caller can check if it's still alive.
 attach() {
+    _ATTACHED_SESSION="$1"
     export ABDUCO_SESSION=1
     # abduco enters the alternate screen on attach, which disables
     # terminal scrollback. Undo it with a brief delay after attach.
     (sleep 0.02; printf '\033[?1049l' > /dev/tty 2>/dev/null) &
     abduco -a "$1" 2>/dev/null || true
-    # Returns here when session ends (normal exit, bye, or switch)
+}
+
+# Returns true if the last attached session is still alive (was detached).
+session_alive() {
+    [[ -n "${_ATTACHED_SESSION:-}" ]] && [[ -S "$(sock_for "$_ATTACHED_SESSION")" ]]
 }
 
 create_and_attach() {
     local name
     name="$(create "$1")"
-    local sock="$HOME/.abduco/${name}@${HOSTNAME}"
+    local sock
+    sock="$(sock_for "$name")"
     local i=0
     while [[ ! -S "$sock" ]] && (( i++ < 20 )); do sleep 0.01; done
     attach "$name"
@@ -225,10 +234,7 @@ remote_create_and_attach() {
 #   yellow ● = idle (no process), attached
 #   green ○  = process running, detached
 #   dim ○    = idle, detached
-#
-# Display (pool view):  ● s:1 (pi)
-# Display (all view):   ● s:1 (pi)  [~/projects/foo]
-#                        ○ s:2       [~]
+
 # Output: <name>\t<display>   (name is hidden via --with-nth=2)
 # Pool view:  ● pi        or  ○ empty
 fmt_pool() {
@@ -255,7 +261,7 @@ fmt_all() {
     printf '%s\t%b %b' "$name" "$dot" "$label"
 }
 
-# Hosts view:  ● Aquilo:~/.config/foo › pi   or  ○ unraid:~/docker
+# Hosts view:  ● unraid:~/docker › pi   or  ○ unraid:~/docker
 fmt_hosts() {
     local host="$1" name="$2" status="$3" process="${4:-}" cwd="${5:-}"
     [[ "$process" == "-" ]] && process=""
@@ -291,12 +297,13 @@ extract_name() {
     awk -F'\t' '{print $1}' <<<"$input"
 }
 
-# ── Kill helper (callable from fzf --bind) ──────────────────────────────────
+# ── Kill helpers ────────────────────────────────────────────────────────────
 
 kill_session() {
     local name="${1:-}"
     [[ -z "$name" ]] && return 0
-    local sock="$HOME/.abduco/${name}@${HOSTNAME}"
+    local sock
+    sock="$(sock_for "$name")"
     [[ -S "$sock" ]] && rm -f "$sock"
 }
 
@@ -314,33 +321,21 @@ kill_session_full() {
     rm -f "${VIRGIN_PREFIX}${name}"
 }
 
-# Kill the current session from within. Our parent process ($PPID) is
-# the abduco server; killing it tears down the session immediately.
-kill_self() {
-    if [[ -z "${SESSION_NAME:-}" ]]; then
-        echo "session-manager: not inside a managed session" >&2
-        return 1
+# Kill a session on any host.  Key format: <name>@<host>
+kill_session_any() {
+    local key="${1:-}"
+    [[ -z "$key" ]] && return 0
+    local name="${key%%@*}"
+    local host="${key##*@}"
+    if [[ "$host" == "$HOSTNAME" ]]; then
+        kill_session "$name"
+    else
+        ssh -o ConnectTimeout="$SSH_TIMEOUT" -o BatchMode=yes \
+            "$host" "bash -lc \"session-manager --kill-session '$name'\"" 2>/dev/null || true
     fi
-    kill_session_full "$SESSION_NAME"
-    kill "$PPID" 2>/dev/null || true
 }
 
-# Detach from the current session and reopen the picker.
-# Kills the abduco CLIENT (not server) so the session stays alive,
-# then sets a marker for the outer session-manager loop.
-switch_session() {
-    if [[ -z "${SESSION_NAME:-}" ]]; then
-        echo "session-manager: not inside a managed session" >&2
-        return 1
-    fi
-    touch "$SWITCH_MARKER"
-    # Find and kill the abduco client; server stays alive
-    local client_pid
-    client_pid="$(pgrep -f "abduco -a ${SESSION_NAME}\$" 2>/dev/null | head -1 || true)"
-    if [[ -n "$client_pid" ]]; then
-        kill "$client_pid" 2>/dev/null || true
-    fi
-}
+# ── Cleanup ─────────────────────────────────────────────────────────────────
 
 # Clean up detached sessions that were never interacted with (virgin).
 cleanup_virgin() {
@@ -373,20 +368,6 @@ cleanup_idle_all() {
     done < <(parse_sessions)
 }
 
-# Kill a session on any host.  Key format: <name>@<host>
-kill_session_any() {
-    local key="${1:-}"
-    [[ -z "$key" ]] && return 0
-    local name="${key%%@*}"
-    local host="${key##*@}"
-    if [[ "$host" == "$HOSTNAME" ]]; then
-        kill_session "$name"
-    else
-        ssh -o ConnectTimeout="$SSH_TIMEOUT" -o BatchMode=yes \
-            "$host" "bash -lc \"session-manager --kill-session '$name'\"" 2>/dev/null || true
-    fi
-}
-
 # ── List commands for fzf reload ────────────────────────────────────────────
 
 list_dir_fmt() {
@@ -410,6 +391,7 @@ list_dir_fmt() {
 
 list_all_fmt() {
     _ABDUCO_CACHED=false
+    printf '\t  + new session in ~\n'
     local -a active=() idle=()
     while IFS=$'\t' read -r name status process cwd; do
         [[ -z "$name" ]] && continue
@@ -457,8 +439,7 @@ pick_for_dir() {
     done < <(list_for_dir "$dir")
 
     if $fast; then
-        # No sessions for this dir — create directly (unless home with detached elsewhere)
-        # All sessions attached — create directly (unless home with detached elsewhere)
+        # No sessions or all attached — create directly (unless home with detached elsewhere)
         if (( ${#entries[@]} == 0 || ${#detached_names[@]} == 0 )); then
             # In home dir, check for detached sessions in other directories first
             if [[ "$dir" == "$HOME" ]]; then
@@ -646,6 +627,7 @@ fixup_ssh_agent() {
 main() {
     local mode="dir"
     local dir="$PWD"
+    local first=true
 
     while (( $# )); do
         case "$1" in
@@ -658,11 +640,10 @@ main() {
 				  session-manager              Pick/create session for $PWD
 				  session-manager <dir>        Pick/create session for <dir>
 				  session-manager --all        Show all sessions
+
+				Inside a session, press Ctrl-\ to detach and return to the picker.
 				EOF
                 exit 0 ;;
-            # User commands
-            --kill)               kill_self; exit ;;
-            --switch)             switch_session; exit ;;
             # Internal commands (used by fzf --bind and remote SSH)
             --kill-session)       [[ -n "${2:-}" ]] && kill_session "$2"; exit ;;
             --kill-session-any)   [[ -n "${2:-}" ]] && kill_session_any "$2"; exit ;;
@@ -678,14 +659,14 @@ main() {
     done
 
     fixup_ssh_agent
-    rm -f "$SWITCH_MARKER"
 
     while true; do
         _ABDUCO_CACHED=false
         cleanup_virgin
         _ABDUCO_CACHED=false
+
         case "$mode" in
-            dir)   pick_for_dir "$dir" true ;;
+            dir)   pick_for_dir "$dir" "$first" ;;
             all)   pick_all ;;
             hosts)
                 if $IS_REMOTE; then
@@ -695,10 +676,14 @@ main() {
                 pick_hosts ;;
         esac
 
-        # After attach() returns: check if switch was requested
-        if [[ -f "$SWITCH_MARKER" ]]; then
-            rm -f "$SWITCH_MARKER"
-            mode="all"  # switch always opens the all-sessions picker
+        # After attach() returns (or picker was dismissed):
+        # - Session still alive → user detached (Ctrl-\) → show picker again
+        # - Session dead → user exited shell → close terminal
+        # - No session attached (picker dismissed) → exit
+        if session_alive; then
+            # Detached — show the all-sessions picker next
+            mode="all"
+            first=false
             continue
         fi
         break
