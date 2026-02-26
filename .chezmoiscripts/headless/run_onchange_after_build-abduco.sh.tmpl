@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 
-DEST="{{ .chezmoi.destDir }}/.local/bin"
+DEST="{{ .chezmoi.workingTree }}/bin"
 mkdir -p "$DEST"
 
 echo "Building abduco (static, via Docker)..."
