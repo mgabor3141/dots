@@ -10,11 +10,12 @@ config.font = wezterm.font({
 config.font_size = 11
 
 -- Appearance
-config.window_background_opacity = 0.8
+config.window_background_opacity = 0.9
 config.window_padding = { left = 8, right = 8, top = 8, bottom = 8 }
 config.window_decorations = "RESIZE"
 config.default_cursor_style = "SteadyBar"
 config.hide_tab_bar_if_only_one_tab = true
+config.window_close_confirmation = "NeverPrompt"
 
 -- Nord color scheme
 config.colors = {
@@ -23,6 +24,7 @@ config.colors = {
 
 	cursor_bg = "#D8DEE9",
 	cursor_fg = "#2E3440",
+	cursor_border = "#D8DEE9",
 
 	selection_fg = "none",
 	selection_bg = "rgba(136, 192, 208, 0.3)",
