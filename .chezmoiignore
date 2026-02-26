@@ -46,6 +46,11 @@ CLAUDE.md
 !.local/bin
 !.local/bin/dust
 !.local/bin/session-manager
+!.local/bin/fish
+
+# Fish shell config
+!.config/fish
+!.config/fish/**
 {{- end }}
 
 {{- if ne .chezmoi.os "linux" }}
