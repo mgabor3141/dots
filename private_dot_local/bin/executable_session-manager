@@ -50,12 +50,34 @@ shorten() { echo "${1/#$HOME/\~}"; }
 
 # ── Session discovery ───────────────────────────────────────────────────────
 
-# Check if a socket has an attached client.
-# fuser returns all PIDs using the socket; >1 means server + client(s).
+# Build a lookup of attached sockets (all at once, one fuser call).
+# Much faster than calling fuser per-socket.
+_ATTACHED_CACHE=""
+_ATTACHED_BUILT=false
+build_attached_cache() {
+    $_ATTACHED_BUILT && return
+    _ATTACHED_BUILT=true
+    if [[ ! -d "$POOL_DIR" ]]; then
+        _ATTACHED_CACHE=""
+        return
+    fi
+    local sockets=()
+    while IFS= read -r s; do sockets+=("$s"); done < <(find "$POOL_DIR" -type s 2>/dev/null)
+    (( ${#sockets[@]} )) || return 0
+    # fuser on all sockets at once — lines with 2+ PIDs are attached
+    _ATTACHED_CACHE="$(fuser "${sockets[@]}" 2>&1 | while IFS= read -r line; do
+        # fuser output: /path/to/socket: PID1 PID2 ...
+        local path="${line%%:*}"
+        local pids="${line#*:}"
+        if (( $(echo $pids | wc -w) > 1 )); then
+            echo "$path"
+        fi
+    done)"
+}
+
 is_attached() {
-    local pids
-    pids="$(fuser "$1" 2>/dev/null)" || return 1
-    (( $(echo $pids | wc -w) > 1 ))
+    build_attached_cache
+    echo "$_ATTACHED_CACHE" | grep -qF "$1"
 }
 
 # List sessions in a pool.  Output: abduco_name \t status \t display_name
@@ -130,14 +152,14 @@ attach() {
     export ABDUCO_SESSION=1
     # abduco enters the alternate screen on attach, which disables
     # terminal scrollback. Undo it with a brief delay after attach.
-    (sleep 0.05; printf '\033[?1049l' > /dev/tty) &
+    (sleep 0.02; printf '\033[?1049l' > /dev/tty) &
     exec abduco -a "$1"
 }
 
 create_and_attach() {
     local name
     name="$(create "$1")"
-    sleep 0.1          # let abduco set up the socket
+    sleep 0.05         # let abduco set up the socket
     attach "$name"
 }
 
