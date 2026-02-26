@@ -27,6 +27,8 @@ SSH_TIMEOUT=3
 IS_REMOTE=false; [[ -n "${SSH_CONNECTION:-}" ]] && IS_REMOTE=true
 SWITCH_MARKER="$HOME/.abduco/.switch"
 VIRGIN_PREFIX="$HOME/.abduco/.virgin-"
+IDLE_PREFIX="$HOME/.abduco/.idle-"
+IDLE_TIMEOUT_MIN=5  # kill detached idle sessions after this many minutes
 
 shorten() { echo "${1/#$HOME/\~}"; }
 
@@ -129,7 +131,7 @@ query_remote_host() {
                   -o BatchMode=yes \
                   -o StrictHostKeyChecking=accept-new \
                   "$host" \
-                  'command -v session-manager >/dev/null 2>&1 && session-manager --list-all-raw' \
+                  'bash -lc "command -v session-manager >/dev/null 2>&1 && session-manager --list-all-raw"' \
               2>/dev/null)" || return 0
     [[ -z "$output" ]] && return 0
     while IFS=$'\t' read -r name status process cwd; do
@@ -206,12 +208,12 @@ create_and_attach() {
 # Remote session lifecycle (over SSH)
 remote_attach() {
     local host="$1" name="$2"
-    exec ssh -t "$host" "abduco -a '$name'"
+    exec ssh -t "$host" "bash -lc 'abduco -a \"$name\"'"
 }
 
 remote_create_and_attach() {
     local host="$1"
-    exec ssh -t "$host" 'session-manager --create-and-attach "$HOME"'
+    exec ssh -t "$host" 'bash -lc "session-manager --create-and-attach \$HOME"'
 }
 
 # ── fzf formatting ──────────────────────────────────────────────────────────
@@ -293,6 +295,19 @@ kill_session() {
     [[ -S "$sock" ]] && rm -f "$sock"
 }
 
+# Kill session socket + abduco server process.
+kill_session_full() {
+    local name="$1"
+    kill_session "$name"
+    abduco_cache
+    local pid
+    pid="$(echo "$_ABDUCO_CACHE" | awk -F'\t' -v n="$name" '$4 == n {gsub(/^ +/,"",$3); print $3}')"
+    if [[ -n "$pid" ]]; then
+        kill "$pid" 2>/dev/null || true
+    fi
+    rm -f "${VIRGIN_PREFIX}${name}"
+}
+
 # Kill the current session from within. Our parent process ($PPID) is
 # the abduco server; killing it tears down the session immediately.
 kill_self() {
@@ -300,8 +315,7 @@ kill_self() {
         echo "session-manager: not inside a managed session" >&2
         return 1
     fi
-    kill_session "$SESSION_NAME"
-    rm -f "${VIRGIN_PREFIX}${SESSION_NAME}"
+    kill_session_full "$SESSION_NAME"
     kill "$PPID" 2>/dev/null || true
 }
 
@@ -327,15 +341,28 @@ cleanup_virgin() {
     _ABDUCO_CACHED=false
     while IFS=$'\t' read -r name status _process _cwd; do
         if [[ "$status" == "detached" && -f "${VIRGIN_PREFIX}${name}" ]]; then
-            kill_session "$name"
-            # Kill the abduco server too (find PID from listing)
-            abduco_cache
-            local pid
-            pid="$(echo "$_ABDUCO_CACHE" | awk -F'\t' -v n="$name" '$4 == n {gsub(/^ +/,"",$3); print $3}')"
-            if [[ -n "$pid" ]]; then
-                kill "$pid" 2>/dev/null || true
-            fi
-            rm -f "${VIRGIN_PREFIX}${name}"
+            kill_session_full "$name"
+        fi
+    done < <(parse_sessions)
+}
+
+# Clean up all detached+idle sessions in a directory.
+cleanup_idle_dir() {
+    local dir="$1"
+    _ABDUCO_CACHED=false
+    while IFS=$'\t' read -r name status process; do
+        if [[ "$status" == "detached" && ( "$process" == "-" || -z "$process" ) ]]; then
+            kill_session_full "$name"
+        fi
+    done < <(list_for_dir "$dir")
+}
+
+# Clean up all detached+idle local sessions.
+cleanup_idle_all() {
+    _ABDUCO_CACHED=false
+    while IFS=$'\t' read -r name status process _cwd; do
+        if [[ "$status" == "detached" && ( "$process" == "-" || -z "$process" ) ]]; then
+            kill_session_full "$name"
         fi
     done < <(parse_sessions)
 }
@@ -349,7 +376,7 @@ kill_session_any() {
         kill_session "$name"
     else
         ssh -o ConnectTimeout="$SSH_TIMEOUT" -o BatchMode=yes \
-            "$host" "session-manager --kill-session '$name'" 2>/dev/null || true
+            "$host" "bash -lc \"session-manager --kill-session '$name'\"" 2>/dev/null || true
     fi
 }
 
@@ -359,18 +386,36 @@ list_dir_fmt() {
     local dir="$1"
     _ABDUCO_CACHED=false
     printf '\t  + new session\n'
+    local -a active=() idle=()
     while IFS=$'\t' read -r name status process; do
         [[ -z "$name" ]] && continue
-        printf '%b\n' "$(fmt_pool "$name" "$status" "$process")"
+        local line
+        line="$(fmt_pool "$name" "$status" "$process")"
+        if [[ "$status" == "detached" && ( "$process" == "-" || -z "$process" ) ]]; then
+            idle+=("$line")
+        else
+            active+=("$line")
+        fi
     done < <(list_for_dir "$dir")
+    (( ${#active[@]} > 0 )) && printf '%b\n' "${active[@]}"
+    (( ${#idle[@]} > 0 )) && printf '%b\n' "${idle[@]}"
 }
 
 list_all_fmt() {
     _ABDUCO_CACHED=false
+    local -a active=() idle=()
     while IFS=$'\t' read -r name status process cwd; do
         [[ -z "$name" ]] && continue
-        printf '%b\n' "$(fmt_all "$name" "$status" "$process" "$cwd")"
+        local line
+        line="$(fmt_all "$name" "$status" "$process" "$cwd")"
+        if [[ "$status" == "detached" && ( "$process" == "-" || -z "$process" ) ]]; then
+            idle+=("$line")
+        else
+            active+=("$line")
+        fi
     done < <(list_all)
+    (( ${#active[@]} > 0 )) && printf '%b\n' "${active[@]}"
+    (( ${#idle[@]} > 0 )) && printf '%b\n' "${idle[@]}"
 }
 
 list_hosts_fmt() {
@@ -427,7 +472,7 @@ pick_for_dir() {
     fi
 
     local self="$0"
-    local header="Sessions in $(shorten "$dir") │ enter: attach │ ctrl-n: new │ ctrl-r: raw │ ctrl-a: all │ ctrl-x: kill"
+    local header="Sessions in $(shorten "$dir") │ enter: attach │ ctrl-n: new │ ctrl-r: raw │ ctrl-a: all │ ctrl-x: kill │ ctrl-d: clean idle"
     local chosen
 
     chosen="$({
@@ -437,7 +482,8 @@ pick_for_dir() {
           --delimiter='\t' --with-nth=2 \
           --expect=ctrl-n,ctrl-a,ctrl-r \
           --no-sort --reverse --height=~50% \
-          --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-dir-fmt $(printf '%q' "$dir"))+transform(echo pos\(\$FZF_POS\))")" || true
+          --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-dir-fmt $(printf '%q' "$dir"))+transform(echo pos\(\$FZF_POS\))" \
+          --bind "ctrl-d:execute-silent($self --cleanup-idle-dir $(printf '%q' "$dir"))+reload-sync($self --list-dir-fmt $(printf '%q' "$dir"))")" || true
 
     local key line
     key="$(head -1 <<<"$chosen")"
@@ -468,7 +514,7 @@ pick_all() {
     local self="$0"
     local next_label="hosts"
     $IS_REMOTE && next_label="directory"
-    local header="All sessions │ enter: attach │ ctrl-a: $next_label │ ctrl-x: kill"
+    local header="All sessions │ enter: attach │ ctrl-n: new │ ctrl-r: raw │ ctrl-a: $next_label │ ctrl-x: kill │ ctrl-d: clean idle"
     local chosen
 
     chosen="$({
@@ -478,9 +524,10 @@ pick_all() {
         fi
     } | fzf --ansi --header="$header" \
               --delimiter='\t' --with-nth=2 \
-              --expect=ctrl-a \
+              --expect=ctrl-a,ctrl-n,ctrl-r \
               --no-sort --reverse --height=~50% \
-              --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-all-fmt)+transform(echo pos\(\$FZF_POS\))")" || true
+              --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-all-fmt)+transform(echo pos\(\$FZF_POS\))" \
+              --bind "ctrl-d:execute-silent($self --cleanup-idle-all)+reload-sync($self --list-all-fmt)")" || true
 
     local key line
     key="$(head -1 <<<"$chosen")"
@@ -494,6 +541,8 @@ pick_all() {
                 pick_hosts "$dir"
             fi
             return ;;
+        ctrl-n) create_and_attach "$HOME"; return ;;
+        ctrl-r) exec env TMS_SKIP=1 "$SHELL_CMD"; return ;;
     esac
 
     if [[ "$line" == *"new session"* ]]; then
@@ -600,6 +649,8 @@ main() {
             --list-all-fmt)       list_all_fmt; exit ;;
             --list-all-raw)       _ABDUCO_CACHED=false; parse_sessions; exit ;;
             --list-hosts-fmt)     list_hosts_fmt; exit ;;
+            --cleanup-idle-dir)   cleanup_idle_dir "$2"; exit ;;
+            --cleanup-idle-all)   cleanup_idle_all; exit ;;
             --create-and-attach)  create_and_attach "$2"; exit ;;
             *) dir="$(cd "$1" && pwd)"; shift ;;
         esac
