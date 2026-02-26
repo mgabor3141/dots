@@ -136,20 +136,12 @@ query_remote_host() {
     done <<<"$output"
 }
 
-# Query all hosts (local + remote) in parallel.
+# Query remote hosts only (excludes local), in parallel.
 # Output: host \t name \t status \t process \t cwd
-query_all_hosts() {
+query_remote_hosts() {
     local tmpdir
     tmpdir="$(mktemp -d)"
 
-    # Local sessions
-    {
-        parse_sessions | while IFS=$'\t' read -r name status process cwd; do
-            printf '%s\t%s\t%s\t%s\t%s\n' "$HOSTNAME" "$name" "$status" "$process" "$cwd"
-        done
-    } > "$tmpdir/local" &
-
-    # Remote hosts in parallel
     local -a hosts=()
     while IFS= read -r host; do
         hosts+=("$host")
@@ -158,7 +150,6 @@ query_all_hosts() {
 
     wait
 
-    cat "$tmpdir/local"
     for host in "${hosts[@]+"${hosts[@]}"}"; do
         cat "$tmpdir/remote_${host}" 2>/dev/null || true
     done
@@ -333,16 +324,19 @@ list_all_fmt() {
 
 list_hosts_fmt() {
     _ABDUCO_CACHED=false
-    # "New session" entries: one per host (local first, then remotes)
-    printf '\t  + new session on %s\n' "$HOSTNAME"
+    local found=false
+    # "New session" entries: one per remote host
     while IFS= read -r host; do
         printf '\t  + new session on %s\n' "$host"
+        found=true
     done < <(list_ssh_hosts)
-    # Sessions from all hosts
+    # Sessions from remote hosts
     while IFS=$'\t' read -r host name status process cwd; do
         [[ -z "$host" ]] && continue
         printf '%b\n' "$(fmt_hosts "$host" "$name" "$status" "$process" "$cwd")"
-    done < <(query_all_hosts)
+        found=true
+    done < <(query_remote_hosts)
+    $found || printf '\t  \033[2mno remote hosts configured in ~/.ssh/config\033[0m\n'
 }
 
 # ── Pickers ─────────────────────────────────────────────────────────────────
@@ -450,24 +444,31 @@ pick_all() {
 pick_hosts() {
     local dir="${1:-}"
     local -a entries=()
+    local has_hosts=false
 
     while IFS=$'\t' read -r host name status process cwd; do
         [[ -z "$host" ]] && continue
         entries+=("$(fmt_hosts "$host" "$name" "$status" "$process" "$cwd")")
-    done < <(query_all_hosts)
+    done < <(query_remote_hosts)
+
+    local -a ssh_hosts=()
+    while IFS= read -r host; do
+        ssh_hosts+=("$host")
+        has_hosts=true
+    done < <(list_ssh_hosts)
 
     local self="$0"
-    local header="All hosts │ enter: attach │ ctrl-a: local │ ctrl-x: kill"
+    local header="Remote hosts │ enter: attach │ ctrl-a: local │ ctrl-x: kill"
     local chosen
 
     chosen="$({
-        printf '\t  + new session on %s\n' "$HOSTNAME"
-        while IFS= read -r host; do
+        for host in "${ssh_hosts[@]+"${ssh_hosts[@]}"}"; do
             printf '\t  + new session on %s\n' "$host"
-        done < <(list_ssh_hosts)
+        done
         if (( ${#entries[@]} > 0 )); then
             printf '%b\n' "${entries[@]}"
         fi
+        $has_hosts || printf '\t  \033[2mno remote hosts configured in ~/.ssh/config\033[0m\n'
     } | fzf --ansi --header="$header" \
               --delimiter='\t' --with-nth=2 \
               --expect=ctrl-a \
@@ -489,24 +490,14 @@ pick_hosts() {
     esac
 
     if [[ "$line" == *"new session on "* ]]; then
-        # Extract host from "+ new session on <host>"
         local target_host="${line##*new session on }"
-        if [[ "$target_host" == "$HOSTNAME" ]]; then
-            create_and_attach "$HOME"
-        else
-            remote_create_and_attach "$target_host" '~'
-        fi
+        remote_create_and_attach "$target_host"
     elif [[ -n "$line" ]]; then
-        # Key format: <name>@<host>
         local session_key
         session_key="$(extract_name "$line")"
         local sname="${session_key%%@*}"
         local shost="${session_key##*@}"
-        if [[ "$shost" == "$HOSTNAME" ]]; then
-            attach "$sname"
-        else
-            remote_attach "$shost" "$sname"
-        fi
+        remote_attach "$shost" "$sname"
     fi
 }
 
