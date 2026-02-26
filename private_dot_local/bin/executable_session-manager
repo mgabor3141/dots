@@ -207,12 +207,14 @@ create_and_attach() {
 
 # Remote session lifecycle (over SSH)
 remote_attach() {
-    local host="$1" name="$2"
+    local host="${1:-}" name="${2:-}"
+    [[ -z "$host" || -z "$name" ]] && return 1
     exec ssh -t "$host" "bash -lc 'abduco -a \"$name\"'"
 }
 
 remote_create_and_attach() {
-    local host="$1"
+    local host="${1:-}"
+    [[ -z "$host" ]] && return 1
     exec ssh -t "$host" 'bash -lc "session-manager --create-and-attach \$HOME"'
 }
 
@@ -284,20 +286,24 @@ _dot_for() {
 
 # Extract the session name from fzf output (first tab-delimited field)
 extract_name() {
-    awk -F'\t' '{print $1}' <<<"$1"
+    local input="${1:-}"
+    [[ -z "$input" ]] && return 0
+    awk -F'\t' '{print $1}' <<<"$input"
 }
 
 # ── Kill helper (callable from fzf --bind) ──────────────────────────────────
 
 kill_session() {
-    local name="$1"
+    local name="${1:-}"
+    [[ -z "$name" ]] && return 0
     local sock="$HOME/.abduco/${name}@${HOSTNAME}"
     [[ -S "$sock" ]] && rm -f "$sock"
 }
 
 # Kill session socket + abduco server process.
 kill_session_full() {
-    local name="$1"
+    local name="${1:-}"
+    [[ -z "$name" ]] && return 0
     kill_session "$name"
     abduco_cache
     local pid
@@ -369,7 +375,8 @@ cleanup_idle_all() {
 
 # Kill a session on any host.  Key format: <name>@<host>
 kill_session_any() {
-    local key="$1"
+    local key="${1:-}"
+    [[ -z "$key" ]] && return 0
     local name="${key%%@*}"
     local host="${key##*@}"
     if [[ "$host" == "$HOSTNAME" ]]; then
@@ -488,9 +495,11 @@ pick_for_dir() {
           --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-dir-fmt $(printf '%q' "$dir"))+transform(echo pos\(\$FZF_POS\))" \
           --bind "ctrl-d:execute-silent($self --cleanup-idle-dir $(printf '%q' "$dir"))+reload-sync($self --list-dir-fmt $(printf '%q' "$dir"))")" || true
 
+    [[ -z "$chosen" ]] && return
+
     local key line
     key="$(head -1 <<<"$chosen")"
-    line="$(tail -1 <<<"$chosen")"
+    line="$(sed -n '2p' <<<"$chosen")"
 
     case "$key" in
         ctrl-a) pick_all "$dir"; return ;;
@@ -535,9 +544,11 @@ pick_all() {
               --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-all-fmt)+transform(echo pos\(\$FZF_POS\))" \
               --bind "ctrl-d:execute-silent($self --cleanup-idle-all)+reload-sync($self --list-all-fmt)")" || true
 
+    [[ -z "$chosen" ]] && return
+
     local key line
     key="$(head -1 <<<"$chosen")"
-    line="$(tail -1 <<<"$chosen")"
+    line="$(sed -n '2p' <<<"$chosen")"
 
     case "$key" in
         ctrl-a)
@@ -589,9 +600,11 @@ pick_hosts() {
               --bind "load:reload($self --list-hosts-fmt)+unbind(load)" \
               --bind "ctrl-x:execute-silent($self --kill-session-any {1})+reload-sync($self --list-hosts-fmt)+transform(echo pos\(\$FZF_POS\))")" || true
 
+    [[ -z "$chosen" ]] && return
+
     local key line
     key="$(head -1 <<<"$chosen")"
-    line="$(tail -1 <<<"$chosen")"
+    line="$(sed -n '2p' <<<"$chosen")"
 
     case "$key" in
         ctrl-a)
@@ -646,15 +659,15 @@ main() {
             --kill)               kill_self; exit ;;
             --switch)             switch_session; exit ;;
             # Internal commands (used by fzf --bind and remote SSH)
-            --kill-session)       kill_session "$2"; exit ;;
-            --kill-session-any)   kill_session_any "$2"; exit ;;
-            --list-dir-fmt)       list_dir_fmt "$2"; exit ;;
+            --kill-session)       [[ -n "${2:-}" ]] && kill_session "$2"; exit ;;
+            --kill-session-any)   [[ -n "${2:-}" ]] && kill_session_any "$2"; exit ;;
+            --list-dir-fmt)       list_dir_fmt "${2:-$PWD}"; exit ;;
             --list-all-fmt)       list_all_fmt; exit ;;
             --list-all-raw)       _ABDUCO_CACHED=false; parse_sessions; exit ;;
             --list-hosts-fmt)     list_hosts_fmt; exit ;;
-            --cleanup-idle-dir)   cleanup_idle_dir "$2"; exit ;;
+            --cleanup-idle-dir)   [[ -n "${2:-}" ]] && cleanup_idle_dir "$2"; exit ;;
             --cleanup-idle-all)   cleanup_idle_all; exit ;;
-            --create-and-attach)  create_and_attach "$2"; exit ;;
+            --create-and-attach)  create_and_attach "${2:-$HOME}"; exit ;;
             *) dir="$(cd "$1" && pwd)"; shift ;;
         esac
     done
