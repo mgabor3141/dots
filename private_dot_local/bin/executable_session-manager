@@ -159,12 +159,9 @@ pick_pool() {
         [[ "$status" == "detached" ]] && detached+=("$name")
     done < <(list_pool "$(path_to_pool "$pool_dir")")
 
-    # Fast paths
+    # No sessions at all — create one directly, no picker needed
     if (( ${#entries[@]} == 0 )); then
         create_and_attach "$pool_dir"; return
-    fi
-    if (( ${#detached[@]} == 1 && ${#entries[@]} == 1 )); then
-        attach "${detached[0]}"; return
     fi
 
     local header="Sessions for $(shorten "$pool_dir") │ enter: attach │ ctrl-n: new │ ctrl-a: all │ ctrl-x: kill"
