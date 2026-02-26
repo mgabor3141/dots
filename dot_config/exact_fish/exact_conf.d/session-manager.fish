@@ -21,6 +21,16 @@ if set -q TMS_SKIP; or set -q TMUX
     return
 end
 
+# Skip in Zed task terminals (they set ZED_ROW, regular terminals don't)
+if set -q ZED_ROW
+    return
+end
+
+# Opt-in: terminal emulator sets SESSION_MANAGER=1, or SSH connection
+if not set -q SESSION_MANAGER; and not set -q SSH_CONNECTION
+    return
+end
+
 if not command -q abduco; or not command -q session-manager
     return
 end
