@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-# session-manager — persistent terminal sessions pooled by directory
+# session-manager — persistent terminal sessions with abduco
 #
 # Uses abduco for session persistence with pure escape-sequence passthrough
-# (no flicker in TUI apps). Sessions are grouped by the working directory
-# they were started in.
+# (no flicker in TUI apps). Sessions are simple numbered IDs; their CWD and
+# running process are discovered dynamically from /proc.
 #
 # Usage:
 #   session-manager              Pick/create session for $PWD
 #   session-manager [directory]  Pick/create session for given directory
-#   session-manager --all        Show all sessions across all pools
-#   session-manager --kill       Kill sessions interactively
+#   session-manager --all        Show all sessions
 #
-# Session storage: ~/.abduco/pool/<sanitized-dir>/<N>@<hostname>
+# Session naming: s:<N>  (sockets in ~/.abduco/)
 #
 # Environment:
 #   ABDUCO_SESSION=1   Set inside managed sessions to prevent nesting
@@ -21,115 +20,103 @@ trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
-ABDUCO_DIR="$HOME/.abduco"
-POOL_DIR="$ABDUCO_DIR/pool"
 SHELL_CMD="${SHELL:-/bin/sh}"
 HOSTNAME="$(hostname 2>/dev/null || echo unknown)"
 
-# ── Path helpers ────────────────────────────────────────────────────────────
-
-# Convert a directory path to a pool name:  ~/projects/foo → projects--foo
-path_to_pool() {
-    if [[ "$1" == "$HOME" ]]; then
-        echo "home"
-    else
-        echo "${1#$HOME/}" | tr '/ ' '--'
-    fi
-}
-
-# Reverse: pool name → display path:  projects--foo → ~/projects/foo
-pool_to_path() {
-    if [[ "$1" == "home" ]]; then
-        echo "$HOME"
-    else
-        echo "$HOME/$(echo "$1" | sed 's/--/\//g')"
-    fi
-}
-
 shorten() { echo "${1/#$HOME/\~}"; }
 
+# ── Session discovery (via abduco native listing) ───────────────────────────
 
+# Cache abduco output (one call for all queries).
+# Format per line: [*| ] <day>\t<date>\t<pid>\t<name>
+_ABDUCO_CACHE=""
+_ABDUCO_CACHED=false
+abduco_cache() {
+    $_ABDUCO_CACHED && return
+    _ABDUCO_CACHED=true
+    _ABDUCO_CACHE="$(abduco 2>&1 || true)"
+}
 
-# ── Session discovery ───────────────────────────────────────────────────────
+# For an abduco server PID, find the shell child and return:
+#   <shell_pid> <child_process_name>
+# child_process_name is empty if the shell is idle.
+get_shell_info() {
+    local abduco_pid="$1"
+    local shell_pid child_pid process=""
+    shell_pid="$(pgrep -P "$abduco_pid" 2>/dev/null | head -1 || true)"
+    [[ -n "$shell_pid" ]] || return 0
+    child_pid="$(pgrep -P "$shell_pid" 2>/dev/null | head -1 || true)"
+    [[ -n "$child_pid" ]] && process="$(ps -o comm= -p "$child_pid" 2>/dev/null || true)"
+    echo "$shell_pid $process"
+}
 
-# Build a lookup of attached sockets (all at once, one fuser call).
-# Much faster than calling fuser per-socket.
-_ATTACHED_CACHE=""
-_ATTACHED_BUILT=false
-build_attached_cache() {
-    $_ATTACHED_BUILT && return
-    _ATTACHED_BUILT=true
-    if [[ ! -d "$POOL_DIR" ]]; then
-        _ATTACHED_CACHE=""
-        return
-    fi
-    local sockets=()
-    while IFS= read -r s; do sockets+=("$s"); done < <(find "$POOL_DIR" -type s 2>/dev/null)
-    (( ${#sockets[@]} )) || return 0
-    # fuser on all sockets at once — lines with 2+ PIDs are attached
-    _ATTACHED_CACHE="$(fuser "${sockets[@]}" 2>&1 | while IFS= read -r line; do
-        # fuser output: /path/to/socket: PID1 PID2 ...
-        local path="${line%%:*}"
-        local pids="${line#*:}"
-        if (( $(echo $pids | wc -w) > 1 )); then
-            echo "$path"
+# Get CWD of a process via /proc.
+get_cwd() {
+    readlink "/proc/$1/cwd" 2>/dev/null || true
+}
+
+# Parse abduco listing.  Output: name \t status \t process \t cwd
+# Filters to session-manager sessions (name starts with 's:').
+parse_sessions() {
+    abduco_cache
+    echo "$_ABDUCO_CACHE" | while IFS= read -r line; do
+        [[ "$line" == Active* ]] && continue
+        [[ -z "$line" ]] && continue
+
+        local attached=false
+        [[ "${line:0:1}" == "*" ]] && attached=true
+
+        local pid name
+        pid="$(awk -F'\t' '{gsub(/^ +/,"",$3); print $3}' <<<"$line")"
+        name="$(awk -F'\t' '{print $4}' <<<"$line")"
+        [[ "$name" == s:* ]] || continue
+
+        local status="detached"
+        $attached && status="attached"
+
+        local shell_info shell_pid="" process="" cwd=""
+        shell_info="$(get_shell_info "$pid")"
+        if [[ -n "$shell_info" ]]; then
+            shell_pid="${shell_info%% *}"
+            process="${shell_info#* }"
+            cwd="$(get_cwd "$shell_pid")"
         fi
-    done)"
-}
 
-is_attached() {
-    build_attached_cache
-    echo "$_ATTACHED_CACHE" | grep -qF "$1"
-}
-
-# List sessions in a pool.  Output: abduco_name \t status \t display_name
-list_pool() {
-    local pool="$1"
-    local dir="$POOL_DIR/$pool"
-    [[ -d "$dir" ]] || return 0
-
-    for sock in "$dir"/*; do
-        [[ -S "$sock" ]] || continue
-        local basename_raw="${sock##*/}"
-        local n="${basename_raw%@*}"
-        local status="detached"
-        is_attached "$sock" && status="attached"
-        printf '%s\t%s\t%s\n' "pool/$pool/$n" "$status" "$pool/$n"
+        printf '%s\t%s\t%s\t%s\n' "$name" "$status" "${process:--}" "$cwd"
     done
 }
 
-# List all managed sessions.  Output: abduco_name \t status \t display \t orig_path
+# List sessions matching a directory.  Output: name \t status \t process
+list_for_dir() {
+    local dir="$1"
+    parse_sessions | while IFS=$'\t' read -r name status process cwd; do
+        if [[ "$cwd" == "$dir" ]]; then
+            printf '%s\t%s\t%s\n' "$name" "$status" "$process"
+        fi
+    done
+}
+
+
+# List all sessions.  Output: name \t status \t process \t cwd
 list_all() {
-    [[ -d "$POOL_DIR" ]] || return 0
-    find "$POOL_DIR" -type s 2>/dev/null | sort | while IFS= read -r sock; do
-        local rel="${sock#$POOL_DIR/}"
-        local pool="${rel%/*}"
-        local basename_raw="${rel##*/}"
-        local n="${basename_raw%@*}"
-        local status="detached"
-        is_attached "$sock" && status="attached"
-        printf '%s\t%s\t%s\t%s\n' \
-            "pool/$pool/$n" "$status" "$pool/$n" "$(pool_to_path "$pool")"
-    done
+    parse_sessions
 }
 
 # ── Session lifecycle ───────────────────────────────────────────────────────
 
-# Create a detached session, print its abduco name.
+# Create a detached session, print its name.
 # Race-safe: abduco fails if the socket already exists.
 create() {
-    local pool_dir="$1"
-    local pool
-    pool="$(path_to_pool "$pool_dir")"
-    mkdir -p "$POOL_DIR/$pool"
-    cd "$pool_dir"
+    local dir="$1"
+    cd "$dir"
 
     local n=1
     while (( n <= 100 )); do
-        if [[ ! -e "$POOL_DIR/$pool/${n}@${HOSTNAME}" ]]; then
-            if abduco -n "pool/$pool/$n" \
-                env ABDUCO_SESSION=1 "$SHELL_CMD" 2>/dev/null; then
-                echo "pool/$pool/$n"
+        local name="s:${n}"
+        if [[ ! -e "$HOME/.abduco/${name}@${HOSTNAME}" ]]; then
+            if abduco -n "$name" \
+                env ABDUCO_SESSION=1 SESSION_NAME="$name" "$SHELL_CMD" 2>/dev/null; then
+                echo "$name"
                 return
             fi
         fi
@@ -151,9 +138,7 @@ attach() {
 create_and_attach() {
     local name
     name="$(create "$1")"
-    # Brief wait for abduco to create the socket
-    local sock="$POOL_DIR/${name#pool/}"
-    sock="${sock%/*}/${name##*/}@${HOSTNAME}"
+    local sock="$HOME/.abduco/${name}@${HOSTNAME}"
     local i=0
     while [[ ! -S "$sock" ]] && (( i++ < 20 )); do sleep 0.01; done
     attach "$name"
@@ -161,131 +146,185 @@ create_and_attach() {
 
 # ── fzf formatting ──────────────────────────────────────────────────────────
 
-fmt() {
-    local name="$1" status="$2" extra="${3:-}"
-    local dot
-    case "$status" in
-        attached) dot="\033[33m●\033[0m" ;;
-        *)        dot="\033[32m●\033[0m" ;;
-    esac
-    if [[ -n "$extra" ]]; then
-        printf '%b %-30s  %-10s  [%s]' "$dot" "$name" "$status" "$extra"
+# Indicator logic:
+#   green ●  = process running, attached
+#   yellow ● = idle (no process), attached
+#   green ○  = process running, detached
+#   dim ○    = idle, detached
+#
+# Display (pool view):  ● s:1 (pi)
+# Display (all view):   ● s:1 (pi)  [~/projects/foo]
+#                        ○ s:2       [~]
+# Output: <name>\t<display>   (name is hidden via --with-nth=2)
+# Pool view:  ● pi        or  ○ empty
+fmt_pool() {
+    local name="$1" status="$2" process="${3:-}"
+    [[ "$process" == "-" ]] && process=""
+    local dot label
+    _dot_for "$status" "$process"
+    if [[ -n "$process" ]]; then
+        label="$process"
     else
-        printf '%b %-30s  %s' "$dot" "$name" "$status"
+        label="\033[3mempty\033[0m"
+    fi
+    printf '%s\t%b %b' "$name" "$dot" "$label"
+}
+
+# All view:  ● ~/.config/foo › pi   or  ○ ~/.config/foo
+fmt_all() {
+    local name="$1" status="$2" process="${3:-}" cwd="${4:-}"
+    [[ "$process" == "-" ]] && process=""
+    local dot label
+    _dot_for "$status" "$process"
+    label="$(shorten "${cwd:-?}")"
+    [[ -n "$process" ]] && label="$label \033[2m›\033[0m $process"
+    printf '%s\t%b %b' "$name" "$dot" "$label"
+}
+
+_dot_for() {
+    local status="$1" process="$2"
+    if [[ "$status" == "attached" ]]; then
+        if [[ -n "$process" ]]; then
+            dot="\033[32m●\033[0m"
+        else
+            dot="\033[33m●\033[0m"
+        fi
+    else
+        if [[ -n "$process" ]]; then
+            dot="\033[32m○\033[0m"
+        else
+            dot="\033[2m○\033[0m"
+        fi
     fi
 }
 
-# Extract the abduco session name from a formatted fzf line
+# Extract the session name from fzf output (first tab-delimited field)
 extract_name() {
-    local display
-    display="$(echo "$1" | sed 's/^[^ ]* //' | awk '{print $1}')"
-    echo "pool/$display"
+    awk -F'\t' '{print $1}' <<<"$1"
+}
+
+# ── Kill helper (callable from fzf --bind) ──────────────────────────────────
+
+kill_session() {
+    local name="$1"
+    local sock="$HOME/.abduco/${name}@${HOSTNAME}"
+    [[ -S "$sock" ]] && rm -f "$sock"
+}
+
+# ── List commands for fzf reload ────────────────────────────────────────────
+
+list_dir_fmt() {
+    local dir="$1"
+    _ABDUCO_CACHED=false
+    printf '\t  + new session\n'
+    while IFS=$'\t' read -r name status process; do
+        [[ -z "$name" ]] && continue
+        printf '%b\n' "$(fmt_pool "$name" "$status" "$process")"
+    done < <(list_for_dir "$dir")
+}
+
+list_all_fmt() {
+    _ABDUCO_CACHED=false
+    while IFS=$'\t' read -r name status process cwd; do
+        [[ -z "$name" ]] && continue
+        printf '%b\n' "$(fmt_all "$name" "$status" "$process" "$cwd")"
+    done < <(list_all)
 }
 
 # ── Pickers ─────────────────────────────────────────────────────────────────
 
-pick_pool() {
-    local pool_dir="$1"
-    local -a entries=() detached=()
+pick_for_dir() {
+    local dir="$1"
+    local -a entries=()
+    local -a detached_names=()
 
-    while IFS=$'\t' read -r name status display; do
+    while IFS=$'\t' read -r name status process; do
         [[ -z "$name" ]] && continue
-        entries+=("$(fmt "$display" "$status")")
-        [[ "$status" == "detached" ]] && detached+=("$name")
-    done < <(list_pool "$(path_to_pool "$pool_dir")")
+        entries+=("$(fmt_pool "$name" "$status" "$process")")
+        [[ "$status" == "detached" ]] && detached_names+=("$name")
+    done < <(list_for_dir "$dir")
 
-    # No sessions at all — create one directly, no picker needed
+    # No sessions for this dir — create one directly
     if (( ${#entries[@]} == 0 )); then
-        create_and_attach "$pool_dir"; return
+        create_and_attach "$dir"; return
     fi
 
-    # Exactly one session and it's detached — reattach directly
-    if (( ${#detached[@]} == 1 && ${#entries[@]} == 1 )); then
-        attach "${detached[0]}"; return
+    # Single detached session — reattach directly
+    if (( ${#entries[@]} == 1 && ${#detached_names[@]} == 1 )); then
+        attach "${detached_names[0]}"; return
     fi
 
-    local header="Sessions for $(shorten "$pool_dir") │ enter: attach │ ctrl-n: new │ ctrl-a: all │ ctrl-x: kill"
-    local new_entry="  + new session"
-    local sel key chosen
+    local self="$0"
+    local header="Sessions in $(shorten "$dir") │ enter: attach │ ctrl-n: new │ ctrl-r: raw │ ctrl-a: all │ ctrl-x: kill"
+    local chosen
 
-    sel="$({
-        echo "$new_entry"
+    chosen="$({
+        printf '\t  + new session\n'
         printf '%b\n' "${entries[@]}"
     } | fzf --ansi --header="$header" \
-          --expect=ctrl-n,ctrl-a,ctrl-x \
-          --no-sort --reverse --height=~50%)" || true
+          --delimiter='\t' --with-nth=2 \
+          --expect=ctrl-n,ctrl-a,ctrl-r \
+          --no-sort --reverse --height=~50% \
+          --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-dir-fmt $(printf '%q' "$dir"))+transform(echo pos\(\$FZF_POS\))")" || true
 
-    key="$(head -1 <<<"$sel")"
-    chosen="$(tail -1 <<<"$sel")"
+    local key line
+    key="$(head -1 <<<"$chosen")"
+    line="$(tail -1 <<<"$chosen")"
 
     case "$key" in
-        ctrl-a) pick_all; return ;;
-        ctrl-x) kill_picker; return ;;
-        ctrl-n) create_and_attach "$pool_dir"; return ;;
+        ctrl-a) pick_all "$dir"; return ;;
+        ctrl-n) create_and_attach "$dir"; return ;;
+        ctrl-r) exec env TMS_SKIP=1 "$SHELL_CMD"; return ;;
     esac
 
-    if [[ "$chosen" == "$new_entry" ]]; then
-        create_and_attach "$pool_dir"
-    elif [[ -n "$chosen" ]]; then
-        attach "$(extract_name "$chosen")"
+    if [[ "$line" == *"new session"* ]]; then
+        create_and_attach "$dir"
+    elif [[ -n "$line" ]]; then
+        attach "$(extract_name "$line")"
     fi
 }
 
 pick_all() {
+    local dir="${1:-}"
     local -a entries=()
 
-    while IFS=$'\t' read -r name status display orig; do
+    while IFS=$'\t' read -r name status process cwd; do
         [[ -z "$name" ]] && continue
-        entries+=("$(fmt "$display" "$status" "$(shorten "$orig")")")
+        entries+=("$(fmt_all "$name" "$status" "$process" "$cwd")")
     done < <(list_all)
 
     if (( ${#entries[@]} == 0 )); then
         echo "No sessions found."; return 1
     fi
 
-    local header="All sessions │ enter: attach │ ctrl-x: kill"
-    local sel key chosen
+    local self="$0"
+    local header="All sessions │ enter: attach │ ctrl-a: directory │ ctrl-x: kill"
+    local expect_keys="ctrl-x"
+    [[ -n "$dir" ]] && expect_keys="ctrl-a"
+    local chosen
 
-    sel="$(printf '%b\n' "${entries[@]}" \
-        | fzf --ansi --header="$header" \
-              --expect=ctrl-x \
-              --no-sort --reverse --height=~50%)" || true
+    chosen="$({
+        printf '\t  + new session in ~\n'
+        printf '%b\n' "${entries[@]}"
+    } | fzf --ansi --header="$header" \
+              --delimiter='\t' --with-nth=2 \
+              --expect=$expect_keys \
+              --no-sort --reverse --height=~50% \
+              --bind "ctrl-x:execute-silent($self --kill-session {1})+reload-sync($self --list-all-fmt)+transform(echo pos\(\$FZF_POS\))")" || true
 
-    key="$(head -1 <<<"$sel")"
-    chosen="$(tail -1 <<<"$sel")"
+    local key line
+    key="$(head -1 <<<"$chosen")"
+    line="$(tail -1 <<<"$chosen")"
 
     case "$key" in
-        ctrl-x) kill_picker; return ;;
+        ctrl-a) pick_for_dir "$dir"; return ;;
     esac
 
-    [[ -n "$chosen" ]] && attach "$(extract_name "$chosen")"
-}
-
-kill_picker() {
-    local -a entries=()
-
-    while IFS=$'\t' read -r name status display orig; do
-        [[ -z "$name" ]] && continue
-        entries+=("$(fmt "$display" "$status" "$(shorten "${orig:-?}")")")
-    done < <(list_all)
-
-    if (( ${#entries[@]} == 0 )); then
-        echo "No sessions to kill."; return
+    if [[ "$line" == *"new session"* ]]; then
+        create_and_attach "$HOME"
+    elif [[ -n "$line" ]]; then
+        attach "$(extract_name "$line")"
     fi
-
-    local header="Kill sessions (tab: multi-select) │ enter: kill"
-    local sel
-    sel="$(printf '%b\n' "${entries[@]}" \
-        | fzf --ansi --header="$header" \
-              --multi --no-sort --reverse --height=~50%)" || true
-
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        local name
-        name="$(extract_name "$line")"
-        local sock="$ABDUCO_DIR/${name}@${HOSTNAME}"
-        [[ -S "$sock" ]] && rm -f "$sock" && echo "Killed: $name"
-    done <<<"$sel"
 }
 
 # ── SSH agent ───────────────────────────────────────────────────────────────
@@ -299,33 +338,34 @@ fixup_ssh_agent() {
 # ── Main ────────────────────────────────────────────────────────────────────
 
 main() {
-    local mode="pool"
-    local pool_dir="$PWD"
+    local mode="dir"
+    local dir="$PWD"
 
     while (( $# )); do
         case "$1" in
             -a|--all)  mode="all";  shift ;;
-            -k|--kill) mode="kill"; shift ;;
             -h|--help)
                 cat <<-'EOF'
 				Usage: session-manager [options] [directory]
 
 				  session-manager              Pick/create session for $PWD
 				  session-manager <dir>        Pick/create session for <dir>
-				  session-manager --all        Show all sessions across all pools
-				  session-manager --kill       Kill sessions interactively
+				  session-manager --all        Show all sessions
 				EOF
                 exit 0 ;;
-            *) pool_dir="$(cd "$1" && pwd)"; shift ;;
+            # Internal commands used by fzf --bind
+            --kill-session)     kill_session "$2"; exit ;;
+            --list-dir-fmt)     list_dir_fmt "$2"; exit ;;
+            --list-all-fmt)     list_all_fmt; exit ;;
+            *) dir="$(cd "$1" && pwd)"; shift ;;
         esac
     done
 
     fixup_ssh_agent
 
     case "$mode" in
-        pool) pick_pool "$pool_dir" ;;
-        all)  pick_all ;;
-        kill) kill_picker ;;
+        dir) pick_for_dir "$dir" ;;
+        all) pick_all ;;
     esac
 }
 
