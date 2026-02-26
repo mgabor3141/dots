@@ -7,7 +7,16 @@ if not status is-interactive
     return
 end
 
-if set -q ABDUCO_SESSION; or set -q TMS_SKIP; or set -q TMUX
+# Inside a managed session: remove virgin marker on first command
+if set -q ABDUCO_SESSION; and set -q SESSION_NAME
+    function __session_manager_mark_used --on-event fish_preexec
+        rm -f "$HOME/.abduco/.virgin-$SESSION_NAME"
+        functions -e __session_manager_mark_used  # one-shot
+    end
+    return
+end
+
+if set -q TMS_SKIP; or set -q TMUX
     return
 end
 
