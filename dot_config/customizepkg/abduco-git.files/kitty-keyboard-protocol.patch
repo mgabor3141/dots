@@ -1,0 +1,77 @@
+diff --git a/client.c b/client.c
+index 3d6d82b..7d9679e 100644
+--- a/client.c
++++ b/client.c
+@@ -55,6 +55,54 @@ static void client_setup_terminal(void) {
+ 	}
+ }
+ 
++
++/* Kitty keyboard protocol support.
++ *
++ * Modern terminals (kitty, wezterm, foot, ghostty) and applications (fish,
++ * neovim, helix) increasingly use the kitty keyboard protocol, which encodes
++ * key presses as CSI sequences instead of raw control bytes:
++ *
++ *   Ctrl-\  ->  legacy: 0x1C  ->  kitty protocol: ESC [ 92 ; 5 u
++ *
++ * abduco's detach key detection only checks for the single-byte value, so
++ * detaching fails whenever the keyboard protocol is active (e.g. at a fish
++ * shell prompt, inside neovim, etc.).
++ *
++ * This adds a small matcher that recognizes the CSI u encoding of the
++ * configured detach key: ESC [ <base_codepoint> ; 5 u
++ * where base_codepoint is derived from KEY_DETACH.
++ */
++
++static char csi_detach_seq[16];
++static size_t csi_detach_len;
++
++static void init_csi_detach(void) {
++	/* Recover the base character from the control byte.
++	 * CTRL(k) = k & 0x1F, so base = KEY_DETACH | 0x40 for @[\]^_
++	 * and base = KEY_DETACH | 0x60 for letters (a-z).
++	 * The kitty protocol uses the lowercase codepoint for letters. */
++	unsigned char base;
++	if (KEY_DETACH >= 1 && KEY_DETACH <= 26) {
++		/* Ctrl-a through Ctrl-z */
++		base = KEY_DETACH + 0x60;
++	} else {
++		/* Ctrl-@, Ctrl-[, Ctrl-\, Ctrl-], Ctrl-^, Ctrl-_ */
++		base = KEY_DETACH + 0x40;
++	}
++	csi_detach_len = snprintf(csi_detach_seq, sizeof(csi_detach_seq),
++		"\033[%u;5u", (unsigned)base);
++}
++
++/* Check if buf[0..len) matches the CSI-encoded detach key.
++ * Returns true if the entire buffer is exactly the CSI detach sequence. */
++static bool is_csi_detach(const char *buf, ssize_t len) {
++	if (csi_detach_len == 0 || len < (ssize_t)csi_detach_len)
++		return false;
++	if ((size_t)len != csi_detach_len)
++		return false;
++	return memcmp(buf, csi_detach_seq, csi_detach_len) == 0;
++}
++
+ static int client_mainloop(void) {
+ 	sigset_t emptyset, blockset;
+ 	sigemptyset(&emptyset);
+@@ -62,6 +110,8 @@ static int client_mainloop(void) {
+ 	sigaddset(&blockset, SIGWINCH);
+ 	sigprocmask(SIG_BLOCK, &blockset, NULL);
+ 
++	init_csi_detach();
++
+ 	client.need_resize = true;
+ 	Packet pkt = {
+ 		.type = MSG_ATTACH,
+@@ -124,7 +174,7 @@ static int client_mainloop(void) {
+ 				pkt.len = len;
+ 				if (KEY_REDRAW && pkt.u.msg[0] == KEY_REDRAW) {
+ 					client.need_resize = true;
+-				} else if (pkt.u.msg[0] == KEY_DETACH) {
++				} else if (pkt.u.msg[0] == KEY_DETACH || is_csi_detach(pkt.u.msg, len)) {
+ 					pkt.type = MSG_DETACH;
+ 					pkt.len = 0;
+ 					client_send_packet(&pkt);
