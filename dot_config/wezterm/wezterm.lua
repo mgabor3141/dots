@@ -4,6 +4,7 @@ local config = wezterm.config_builder()
 -- Font
 config.font = wezterm.font({
 	family = "Fira Code",
+	weight = 450,
 	harfbuzz_features = { "liga", "calt", "cv02", "ss01", "ss03" },
 })
 config.font_size = 11
@@ -57,6 +58,10 @@ config.ssh_domains = {
 		multiplexing = "None",
 	},
 }
+
+-- Keyboard: enable kitty keyboard protocol so modifier+key combos
+-- (like Shift+Enter) are properly encoded and distinguishable.
+config.enable_kitty_keyboard = true
 
 -- macOS
 config.send_composed_key_when_left_alt_is_pressed = false
