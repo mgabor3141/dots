@@ -1,4 +1,3 @@
-abduco
 accountsservice
 adobe-source-han-sans-cn-fonts
 adobe-source-han-sans-jp-fonts
