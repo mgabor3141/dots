@@ -53,6 +53,11 @@ CLAUDE.md
 !.config/fish/**
 {{- end }}
 
+{{- if not .headless }}
+# Folders named "headless" anywhere
+**/headless/**
+{{- end }}
+
 {{- if ne .chezmoi.os "linux" }}
 # Folders named "linux" anywhere
 **/linux/**
