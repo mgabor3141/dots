@@ -1,0 +1,295 @@
+#!/usr/bin/env bash
+# session-manager — persistent terminal sessions pooled by directory
+#
+# Uses abduco for session persistence with pure escape-sequence passthrough
+# (no flicker in TUI apps). Sessions are grouped by the working directory
+# they were started in.
+#
+# Usage:
+#   session-manager              Pick/create session for $PWD
+#   session-manager [directory]  Pick/create session for given directory
+#   session-manager --all        Show all sessions across all pools
+#   session-manager --kill       Kill sessions interactively
+#
+# Session storage: ~/.abduco/pool/<sanitized-dir>/<N>@<hostname>
+#
+# Environment:
+#   ABDUCO_SESSION=1   Set inside managed sessions to prevent nesting
+
+set -Eeuo pipefail
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+# ── Config ──────────────────────────────────────────────────────────────────
+
+ABDUCO_DIR="$HOME/.abduco"
+POOL_DIR="$ABDUCO_DIR/pool"
+SHELL_CMD="${SHELL:-/bin/sh}"
+HOSTNAME="$(hostname 2>/dev/null || echo unknown)"
+
+# ── Path helpers ────────────────────────────────────────────────────────────
+
+# Convert a directory path to a pool name:  ~/projects/foo → projects--foo
+path_to_pool() {
+    if [[ "$1" == "$HOME" ]]; then
+        echo "home"
+    else
+        echo "${1#$HOME/}" | tr '/ ' '--'
+    fi
+}
+
+# Reverse: pool name → display path:  projects--foo → ~/projects/foo
+pool_to_path() {
+    if [[ "$1" == "home" ]]; then
+        echo "$HOME"
+    else
+        echo "$HOME/$(echo "$1" | sed 's/--/\//g')"
+    fi
+}
+
+shorten() { echo "${1/#$HOME/\~}"; }
+
+# ── Session discovery ───────────────────────────────────────────────────────
+
+# List sessions in a pool.  Output: abduco_name \t status \t display_name
+list_pool() {
+    local pool="$1"
+    local dir="$POOL_DIR/$pool"
+    [[ -d "$dir" ]] || return 0
+
+    for sock in "$dir"/*; do
+        [[ -S "$sock" ]] || continue
+        local n="${sock##*/}"; n="${n%@*}"
+        printf '%s\t%s\t%s\n' "pool/$pool/$n" "detached" "$pool/$n"
+    done
+}
+
+# List all managed sessions.  Output: abduco_name \t status \t display \t orig_path
+list_all() {
+    [[ -d "$POOL_DIR" ]] || return 0
+    find "$POOL_DIR" -type s 2>/dev/null | sort | while IFS= read -r sock; do
+        local rel="${sock#$POOL_DIR/}"
+        local pool="${rel%/*}"
+        local n="${rel##*/}"; n="${n%@*}"
+        printf '%s\t%s\t%s\t%s\n' \
+            "pool/$pool/$n" "detached" "$pool/$n" "$(pool_to_path "$pool")"
+    done
+}
+
+# ── Session lifecycle ───────────────────────────────────────────────────────
+
+# Create a detached session, print its abduco name.
+# Race-safe: abduco fails if the socket already exists.
+create() {
+    local pool_dir="$1"
+    local pool
+    pool="$(path_to_pool "$pool_dir")"
+    mkdir -p "$POOL_DIR/$pool"
+
+    local wrapper
+    wrapper="$(mktemp)"
+    cat >"$wrapper" <<-WRAPPER
+	#!/usr/bin/env bash
+	export ABDUCO_SESSION=1
+	cd $(printf '%q' "$pool_dir") 2>/dev/null
+	exec $SHELL_CMD
+	WRAPPER
+    chmod +x "$wrapper"
+
+    local n=1
+    while (( n <= 100 )); do
+        if [[ ! -e "$POOL_DIR/$pool/${n}@${HOSTNAME}" ]]; then
+            if abduco -n "pool/$pool/$n" "$wrapper" 2>/dev/null; then
+                (sleep 1; rm -f "$wrapper") & disown
+                echo "pool/$pool/$n"
+                return
+            fi
+        fi
+        (( n++ ))
+    done
+
+    rm -f "$wrapper"
+    echo "session-manager: could not create session after 100 attempts" >&2
+    return 1
+}
+
+attach() {
+    export ABDUCO_SESSION=1
+    exec abduco -a "$1"
+}
+
+create_and_attach() {
+    local name
+    name="$(create "$1")"
+    sleep 0.1          # let abduco set up the socket
+    attach "$name"
+}
+
+# ── fzf formatting ──────────────────────────────────────────────────────────
+
+fmt() {
+    local name="$1" status="$2" extra="${3:-}"
+    local dot
+    case "$status" in
+        attached) dot="\033[33m●\033[0m" ;;
+        *)        dot="\033[32m●\033[0m" ;;
+    esac
+    if [[ -n "$extra" ]]; then
+        printf '%b %-30s  %-10s  [%s]' "$dot" "$name" "$status" "$extra"
+    else
+        printf '%b %-30s  %s' "$dot" "$name" "$status"
+    fi
+}
+
+# Extract the abduco session name from a formatted fzf line
+extract_name() {
+    local display
+    display="$(echo "$1" | sed 's/^[^ ]* //' | awk '{print $1}')"
+    echo "pool/$display"
+}
+
+# ── Pickers ─────────────────────────────────────────────────────────────────
+
+pick_pool() {
+    local pool_dir="$1"
+    local -a entries=() detached=()
+
+    while IFS=$'\t' read -r name status display; do
+        [[ -z "$name" ]] && continue
+        entries+=("$(fmt "$display" "$status")")
+        [[ "$status" == "detached" ]] && detached+=("$name")
+    done < <(list_pool "$(path_to_pool "$pool_dir")")
+
+    # Fast paths
+    if (( ${#entries[@]} == 0 )); then
+        create_and_attach "$pool_dir"; return
+    fi
+    if (( ${#detached[@]} == 1 && ${#entries[@]} == 1 )); then
+        attach "${detached[0]}"; return
+    fi
+
+    local header="Sessions for $(shorten "$pool_dir") │ enter: attach │ ctrl-n: new │ ctrl-a: all │ ctrl-x: kill"
+    local new_entry="  + new session"
+    local sel key chosen
+
+    sel="$({
+        echo "$new_entry"
+        printf '%b\n' "${entries[@]}"
+    } | fzf --ansi --header="$header" \
+          --expect=ctrl-n,ctrl-a,ctrl-x \
+          --no-sort --reverse --height=~50%)" || true
+
+    key="$(head -1 <<<"$sel")"
+    chosen="$(tail -1 <<<"$sel")"
+
+    case "$key" in
+        ctrl-a) pick_all; return ;;
+        ctrl-x) kill_picker; return ;;
+        ctrl-n) create_and_attach "$pool_dir"; return ;;
+    esac
+
+    if [[ "$chosen" == "$new_entry" ]]; then
+        create_and_attach "$pool_dir"
+    elif [[ -n "$chosen" ]]; then
+        attach "$(extract_name "$chosen")"
+    fi
+}
+
+pick_all() {
+    local -a entries=()
+
+    while IFS=$'\t' read -r name status display orig; do
+        [[ -z "$name" ]] && continue
+        entries+=("$(fmt "$display" "$status" "$(shorten "$orig")")")
+    done < <(list_all)
+
+    if (( ${#entries[@]} == 0 )); then
+        echo "No sessions found."; return 1
+    fi
+
+    local header="All sessions │ enter: attach │ ctrl-x: kill"
+    local sel key chosen
+
+    sel="$(printf '%b\n' "${entries[@]}" \
+        | fzf --ansi --header="$header" \
+              --expect=ctrl-x \
+              --no-sort --reverse --height=~50%)" || true
+
+    key="$(head -1 <<<"$sel")"
+    chosen="$(tail -1 <<<"$sel")"
+
+    case "$key" in
+        ctrl-x) kill_picker; return ;;
+    esac
+
+    [[ -n "$chosen" ]] && attach "$(extract_name "$chosen")"
+}
+
+kill_picker() {
+    local -a entries=()
+
+    while IFS=$'\t' read -r name status display orig; do
+        [[ -z "$name" ]] && continue
+        entries+=("$(fmt "$display" "$status" "$(shorten "${orig:-?}")")")
+    done < <(list_all)
+
+    if (( ${#entries[@]} == 0 )); then
+        echo "No sessions to kill."; return
+    fi
+
+    local header="Kill sessions (tab: multi-select) │ enter: kill"
+    local sel
+    sel="$(printf '%b\n' "${entries[@]}" \
+        | fzf --ansi --header="$header" \
+              --multi --no-sort --reverse --height=~50%)" || true
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local name
+        name="$(extract_name "$line")"
+        local sock="$ABDUCO_DIR/${name}@${HOSTNAME}"
+        [[ -S "$sock" ]] && rm -f "$sock" && echo "Killed: $name"
+    done <<<"$sel"
+}
+
+# ── SSH agent ───────────────────────────────────────────────────────────────
+
+fixup_ssh_agent() {
+    if [[ -n "${SSH_AUTH_SOCK:-}" && "$SSH_AUTH_SOCK" != "$HOME/.ssh/agent.sock" ]]; then
+        ln -sf "$SSH_AUTH_SOCK" "$HOME/.ssh/agent.sock" 2>/dev/null || true
+    fi
+}
+
+# ── Main ────────────────────────────────────────────────────────────────────
+
+main() {
+    local mode="pool"
+    local pool_dir="$PWD"
+
+    while (( $# )); do
+        case "$1" in
+            -a|--all)  mode="all";  shift ;;
+            -k|--kill) mode="kill"; shift ;;
+            -h|--help)
+                cat <<-'EOF'
+				Usage: session-manager [options] [directory]
+
+				  session-manager              Pick/create session for $PWD
+				  session-manager <dir>        Pick/create session for <dir>
+				  session-manager --all        Show all sessions across all pools
+				  session-manager --kill       Kill sessions interactively
+				EOF
+                exit 0 ;;
+            *) pool_dir="$(cd "$1" && pwd)"; shift ;;
+        esac
+    done
+
+    fixup_ssh_agent
+
+    case "$mode" in
+        pool) pick_pool "$pool_dir" ;;
+        all)  pick_all ;;
+        kill) kill_picker ;;
+    esac
+}
+
+main "$@"
