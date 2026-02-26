@@ -1,6 +1,5 @@
 blackwidow-macro-git
 customizepkg-git
-fluxer-bin
 hyprwhspr
 ianny
 it87-dkms-git

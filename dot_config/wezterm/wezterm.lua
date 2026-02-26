@@ -37,7 +37,7 @@ config.colors = {
 		"#E5E9F0", -- white
 	},
 	brights = {
-		"#98969e", -- bright black (matches your kitty color8)
+		"#98969e", -- bright black (matches kitty color8)
 		"#BF616A", -- bright red
 		"#A3BE8C", -- bright green
 		"#EBCB8B", -- bright yellow
@@ -45,6 +45,16 @@ config.colors = {
 		"#B48EAD", -- bright magenta
 		"#8FBCBB", -- bright cyan
 		"#ECEFF4", -- bright white
+	},
+}
+
+-- SSH domain for unraid
+config.ssh_domains = {
+	{
+		name = "unraid",
+		remote_address = "unraid.local",
+		assume_shell = "Posix",
+		multiplexing = "None",
 	},
 }
 
