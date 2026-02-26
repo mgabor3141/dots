@@ -50,16 +50,12 @@ shorten() { echo "${1/#$HOME/\~}"; }
 
 # ── Session discovery ───────────────────────────────────────────────────────
 
-# Cache ss output once per invocation (fast: ~3ms)
-_SS_CACHE=""
-ss_cache() {
-    [[ -n "$_SS_CACHE" ]] || _SS_CACHE="$(ss -x 2>/dev/null)"
-    echo "$_SS_CACHE"
-}
-
-# Check if a socket has an attached client
+# Check if a socket has an attached client.
+# fuser returns all PIDs using the socket; >1 means server + client(s).
 is_attached() {
-    ss_cache | grep -q "$1"
+    local pids
+    pids="$(fuser "$1" 2>/dev/null)" || return 1
+    (( $(echo $pids | wc -w) > 1 ))
 }
 
 # List sessions in a pool.  Output: abduco_name \t status \t display_name
@@ -73,7 +69,7 @@ list_pool() {
         local basename_raw="${sock##*/}"
         local n="${basename_raw%@*}"
         local status="detached"
-        is_attached "$basename_raw" && status="attached"
+        is_attached "$sock" && status="attached"
         printf '%s\t%s\t%s\n' "pool/$pool/$n" "$status" "$pool/$n"
     done
 }
@@ -87,7 +83,7 @@ list_all() {
         local basename_raw="${rel##*/}"
         local n="${basename_raw%@*}"
         local status="detached"
-        is_attached "$basename_raw" && status="attached"
+        is_attached "$sock" && status="attached"
         printf '%s\t%s\t%s\t%s\n' \
             "pool/$pool/$n" "$status" "$pool/$n" "$(pool_to_path "$pool")"
     done
