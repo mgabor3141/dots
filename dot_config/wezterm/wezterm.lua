@@ -65,6 +65,18 @@ config.ssh_domains = {
 -- (like Shift+Enter) are properly encoded and distinguishable.
 config.enable_kitty_keyboard = true
 
+-- Key mappings
+config.keys = {
+	-- Spawn a tab without tmux (for TUI apps like pi that flicker in tmux)
+	{
+		key = "t",
+		mods = "CTRL|SHIFT|ALT",
+		action = wezterm.action.SpawnCommandInNewTab({
+			set_environment_variables = { TMS_SKIP = "1" },
+		}),
+	},
+}
+
 -- macOS
 config.send_composed_key_when_left_alt_is_pressed = false
 config.send_composed_key_when_right_alt_is_pressed = false
