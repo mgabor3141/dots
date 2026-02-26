@@ -3,7 +3,9 @@ set -eu
 
 KANATA="/opt/homebrew/bin/kanata"
 CONFIG_DIR="{{ .chezmoi.destDir }}/.config/kanata/1-configs"
-LOG_DIR="/tmp"
+# Use /Library/Logs for persistence across reboots (manager runs as root).
+# /tmp is cleared on reboot, which destroyed evidence of past incidents.
+LOG_DIR="/Library/Logs/kanata"
 POLL_INTERVAL=3
 # How many seconds a device must be absent before we stop its kanata instance.
 # Prevents BLE keyboards flapping from causing constant restarts, which
@@ -12,6 +14,9 @@ POLL_INTERVAL=3
 DISCONNECT_GRACE=15
 # Max log file size in bytes before rotation (~500KB)
 LOG_MAX_SIZE=512000
+# Wall-clock jump threshold for sleep detection (seconds).
+# If the gap between polls exceeds this, the system likely slept.
+SLEEP_THRESHOLD=30
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -87,13 +92,50 @@ stop_kanata() {
     rm -f "$(gone_file "$cfg")"
 }
 
+# Kill and restart all running kanata instances.
+# Used after sleep/wake to ensure a clean DriverKit connection.
+restart_all() {
+    reason="$1"
+    log "Restarting all kanata instances: $reason"
+    for cfg in $CONFIGS; do
+        if is_running "$cfg"; then
+            stop_kanata "$cfg"
+        fi
+    done
+    # Brief pause to let the Karabiner DriverKit daemon settle after wake
+    sleep 2
+    for cfg in $CONFIGS; do
+        dev=$(device_name "$cfg")
+        if device_connected "$dev"; then
+            start_kanata "$cfg"
+        fi
+    done
+}
+
 # --- Main ---
+mkdir -p "$LOG_DIR"
 log "Starting kanata-manager"
 pkill -x kanata 2>/dev/null || true
 
 CONFIGS="macbook-ansi.kbd razer.kbd go60.kbd"
+last_poll=$(date +%s)
 
 while true; do
+    now=$(date +%s)
+    elapsed=$((now - last_poll))
+    last_poll=$now
+
+    # --- Sleep/wake detection ---
+    # During sleep, wall-clock time advances but the process is frozen.
+    # A large gap between polls means the system slept. After wake, the
+    # Karabiner DriverKit connection is often broken (kanata holds the
+    # keyboard grab but can't output keystrokes), so we force-restart.
+    if [ "$elapsed" -gt "$SLEEP_THRESHOLD" ]; then
+        log "Wake detected (${elapsed}s gap, threshold ${SLEEP_THRESHOLD}s)"
+        restart_all "post-sleep recovery"
+        continue
+    fi
+
     for cfg in $CONFIGS; do
         dev=$(device_name "$cfg")
         connected=$(device_connected "$dev" && echo 1 || echo 0)
@@ -114,9 +156,9 @@ while true; do
             else
                 gone_since=$(cat "$gf")
                 now=$(date +%s)
-                elapsed=$((now - gone_since))
-                if [ "$elapsed" -ge "$DISCONNECT_GRACE" ]; then
-                    log "$cfg device absent for ${elapsed}s, stopping"
+                gap=$((now - gone_since))
+                if [ "$gap" -ge "$DISCONNECT_GRACE" ]; then
+                    log "$cfg device absent for ${gap}s, stopping"
                     stop_kanata "$cfg"
                 fi
             fi

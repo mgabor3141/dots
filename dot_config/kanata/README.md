@@ -75,12 +75,13 @@ All F13-F24 keysyms are defined in `dot_config/xkb/symbols/mysymbols` for Linux 
 **Problem discovered (Feb 2026):** Each time the manager starts/stops a kanata instance (e.g., Go60 BLE keyboard connecting/disconnecting), the new process initializes the Karabiner DriverKit client, which triggers `connected → driver_connected → virtual_hid_keyboard_ready` callbacks on ALL running kanata instances. The macbook-ansi instance sees a driver disconnection each time, enters recovery (releases keyboard grab, waits for reconnection, re-grabs). This creates a window where the keyboard can lock up if the recovery races badly between instances or the driver gets stuck.
 
 **Mitigations in the manager script:**
+- **Sleep/wake restart:** Detects sleep via wall-clock jump (process is frozen during sleep, so a >30s gap between 3s polls means we slept). Force-restarts all kanata instances after wake to ensure a fresh DriverKit connection. This is the most critical mitigation — the DriverKit virtual keyboard output often breaks after extended sleep, leaving kanata holding the keyboard grab but unable to output keystrokes.
 - **Disconnect debouncing (15s grace period):** BLE keyboards that briefly disappear don't trigger kanata restarts. This dramatically reduces the number of driver reconnection storms.
-- **Append logging with rotation:** Logs use `>>` instead of `>` so history is preserved across restarts (critical for post-incident debugging). Rotated at ~500KB with one `.old` backup.
+- **Persistent logging:** Logs go to `/Library/Logs/kanata/` (survives reboots, unlike `/tmp`). Uses append mode (`>>`) with rotation at ~500KB.
 - **`--nodelay` flag:** Eliminates the 2-second startup delay, reducing the window where keyboard is ungrabbed during restarts.
 - **Force-kill on stop:** After SIGTERM, waits 1 second then sends SIGKILL to prevent orphaned kanata processes holding exclusive keyboard grabs.
 
-**Kanata's built-in recovery:** When the DriverKit connection drops, kanata releases all seized input devices (physical keyboard works normally), polls every 500ms for recovery, then re-grabs after a 1-second settling delay. This is in `src/kanata/macos.rs`.
+**Kanata's built-in recovery:** When the DriverKit connection drops, kanata releases all seized input devices (physical keyboard works normally), polls every 500ms for recovery, then re-grabs after a 1-second settling delay. This is in `src/kanata/macos.rs`. However, this doesn't reliably work after system sleep — the DriverKit daemon may report "connected" via callbacks while the actual keyboard output path is broken.
 
 **If keyboard locks up:** The built-in escape hatch is `LCtrl+Space+Escape` (physical keys, before remapping). This force-exits kanata and the manager will restart it.
 
@@ -109,10 +110,10 @@ sudo launchctl print system/io.github.jtroo.kanata.manager
 Get logs
 
 ```sh
-cat /tmp/io.github.jtroo.kanata.manager.log        # manager log
-cat /tmp/io.github.jtroo.kanata.macbook-ansi.log    # per-keyboard kanata logs
-cat /tmp/io.github.jtroo.kanata.razer.log
-cat /tmp/io.github.jtroo.kanata.go60.log
+cat /tmp/io.github.jtroo.kanata.manager.log              # manager log (launchd stdout)
+cat /Library/Logs/kanata/io.github.jtroo.kanata.macbook-ansi.log  # per-keyboard kanata logs
+cat /Library/Logs/kanata/io.github.jtroo.kanata.razer.log
+cat /Library/Logs/kanata/io.github.jtroo.kanata.go60.log
 ```
 
 ## Linux
