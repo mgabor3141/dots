@@ -6,10 +6,10 @@
 {{- if eq .chezmoi.os "linux" }}
 [credential "https://github.com"]
 	helper =
-	helper = !/usr/bin/gh auth git-credential
+	helper = !/usr/bin/env gh auth git-credential
 [credential "https://gist.github.com"]
 	helper =
-	helper = !/usr/bin/gh auth git-credential
+	helper = !/usr/bin/env gh auth git-credential
 {{- end }}
 [push]
 	autoSetupRemote = true
