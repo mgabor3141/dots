@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# nvidia-resume-check service hash: {{ include "private_dot_local/bin/executable_gpu-resume-check" | sha256sum }}
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# Install a systemd service that checks GPU health after resume from suspend.
+# If the NVIDIA GPU failed (GSP boot failure), it inhibits auto-suspend and
+# attempts automatic recovery.
+
+if [ "$(id -u)" -ne 0 ]; then
+    sudo "$0" "$@"
+    exit $?
+fi
+
+cat << 'EOF' > /etc/systemd/system/nvidia-resume-check.service
+[Unit]
+Description=Check NVIDIA GPU health after resume and auto-recover
+After=nvidia-resume.service
+After=systemd-suspend.service
+After=systemd-hibernate.service
+
+[Service]
+Type=forking
+ExecStart={{ .chezmoi.homeDir }}/.local/bin/gpu-resume-check
+# Give it time — gpu-reset stops SDDM and reloads modules
+TimeoutStartSec=120
+
+[Install]
+WantedBy=systemd-suspend.service
+WantedBy=systemd-hibernate.service
+EOF
+
+systemctl daemon-reload
+systemctl enable nvidia-resume-check.service
+echo "✅ nvidia-resume-check.service installed and enabled"

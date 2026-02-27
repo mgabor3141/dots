@@ -6,9 +6,9 @@ set -Eeuo pipefail
 # manager. Use when the GPU fails to resume from suspend (black screen / no
 # signal) — SSH in from another machine and run this.
 #
-# Background: the NVIDIA open kernel modules have a sporadic bug where
-# nv_drm_atomic_commit hits a "Flip event timeout" on resume from S3 sleep,
-# leaving the display dead. A full module reload recovers it.
+# Background: the NVIDIA driver has a sporadic bug where the GSP (GPU System
+# Processor) fails to boot on resume from S3 sleep, leaving the display dead.
+# A full module reload recovers it.
 # See: https://github.com/NVIDIA/open-gpu-kernel-modules/issues/815
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -16,20 +16,39 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 echo "Stopping display manager..."
-systemctl stop sddm.service
+systemctl stop sddm.service 2>/dev/null || true
+
+# Stop the hung nvidia-resume service if it's still running
+if systemctl is-active --quiet nvidia-resume.service 2>/dev/null; then
+    echo "Stopping hung nvidia-resume.service..."
+    systemctl stop nvidia-resume.service 2>/dev/null || \
+        systemctl kill nvidia-resume.service 2>/dev/null || true
+fi
 
 echo "Killing remaining GPU processes..."
 if fuser /dev/nvidia* &>/dev/null; then
     fuser -k /dev/nvidia* 2>/dev/null || true
     sleep 2
+    # Force kill any stragglers
+    fuser -k -9 /dev/nvidia* 2>/dev/null || true
+    sleep 1
 fi
 
 echo "Unloading NVIDIA kernel modules..."
 for mod in nvidia_drm nvidia_modeset nvidia_uvm nvidia; do
     if lsmod | grep -q "^${mod} "; then
-        rmmod "$mod" && echo "  Unloaded $mod" || echo "  ⚠ Failed to unload $mod"
+        rmmod "$mod" && echo "  Unloaded $mod" || {
+            echo "  ⚠ rmmod $mod failed, trying force..."
+            rmmod -f "$mod" 2>/dev/null && echo "  Force-unloaded $mod" || echo "  ❌ Could not unload $mod"
+        }
     fi
 done
+
+# Verify modules are actually gone
+remaining=$(lsmod | grep -c '^nvidia' || true)
+if [ "$remaining" -gt 0 ]; then
+    echo "⚠ $remaining nvidia module(s) still loaded — reload may not fully recover"
+fi
 
 echo "Reloading NVIDIA kernel modules..."
 modprobe nvidia

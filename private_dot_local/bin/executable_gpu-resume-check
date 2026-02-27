@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# Post-resume GPU health check. Called by nvidia-resume-check.service.
+# If the NVIDIA GPU failed to resume (GSP boot failure), this script:
+#   1. Inhibits further auto-suspend (prevents the death spiral)
+#   2. Attempts automatic GPU recovery via gpu-reset
+#
+# The GSP boot failure is a sporadic NVIDIA driver bug where the GPU System
+# Processor fails to reinitialize after S3 resume, leaving the display dead.
+# When this happens, logind's IdleAction=suspend re-suspends after 5min of
+# "idle" (no display = no input), making the situation unrecoverable.
+
+LOG_TAG="gpu-resume-check"
+
+log() { logger -t "$LOG_TAG" "$*"; echo "$*"; }
+
+# Check if the NVIDIA GPU is healthy by querying nvidia-smi
+gpu_healthy() {
+    nvidia-smi --query-gpu=name --format=csv,noheader &>/dev/null
+}
+
+# Check recent kernel log for GSP boot failure (within last 60 seconds)
+gsp_boot_failed() {
+    journalctl -k --since "-60s" --no-pager -q 2>/dev/null | \
+        grep -q "GSP boot failed at resume" 2>/dev/null
+}
+
+if gpu_healthy && ! gsp_boot_failed; then
+    log "GPU healthy after resume"
+    exit 0
+fi
+
+log "⚠ GPU resume failure detected! Starting recovery..."
+
+# Step 1: Prevent logind from auto-suspending into broken GPU state.
+# Take an idle inhibitor lock that prevents IdleAction=suspend.
+log "Taking suspend inhibitor lock..."
+systemd-inhibit --what=idle:sleep --who="gpu-resume-check" \
+    --why="GPU failed to resume, recovery in progress" \
+    --mode=block \
+    sleep infinity &
+INHIBIT_PID=$!
+
+# Make sure we clean up the inhibitor on exit
+cleanup() { kill "$INHIBIT_PID" 2>/dev/null || true; }
+trap cleanup EXIT
+
+# Step 2: Wait a moment for things to settle
+sleep 3
+
+# Step 3: Attempt GPU reset
+log "Attempting GPU reset..."
+if gpu-reset; then
+    log "✅ GPU reset succeeded"
+else
+    log "❌ GPU reset failed — system may need manual intervention (SSH in and reboot)"
+    # Keep the inhibitor running so the system doesn't re-suspend
+    log "Suspend inhibitor active to prevent re-suspend. Will hold for 1 hour."
+    # Replace sleep infinity with a 1-hour timeout so we don't hold forever
+    kill "$INHIBIT_PID" 2>/dev/null || true
+    systemd-inhibit --what=idle:sleep --who="gpu-resume-check" \
+        --why="GPU recovery failed, preventing re-suspend" \
+        --mode=block \
+        sleep 3600 &
+    INHIBIT_PID=$!
+    wait "$INHIBIT_PID" || true
+fi
