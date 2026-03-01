@@ -62,6 +62,7 @@
       "show": "never"
     }
   },
+  "diff_view_style": "unified",
   "base_keymap": "None",
   "helix_mode": false,
   "vim": {
