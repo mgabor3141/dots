@@ -16,7 +16,7 @@
   "whisper_prompt": "Transcribe with proper capitalization, including sentence beginnings, proper nouns, titles, and standard English capitalization rules.",
   "clipboard_behavior": false,
   "clipboard_clear_delay": 5.0,
-  "paste_mode": "ctrl_shift",
+  "paste_mode": "ctrl",
   "shift_paste": true,
   "transcription_backend": "nvidia",
   "rest_endpoint_url": null,
