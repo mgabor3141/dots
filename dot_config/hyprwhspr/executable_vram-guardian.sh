@@ -10,7 +10,6 @@ POLL_INTERVAL=10          # seconds between checks
 STOP_THRESHOLD_PCT=75     # stop hyprwhspr when VRAM usage exceeds this %
 START_THRESHOLD_PCT=50    # restart hyprwhspr when VRAM usage drops below this %
 SERVICE="hyprwhspr.service"
-stopped_by_us=false
 
 get_vram_pct() {
     local stats
@@ -26,20 +25,27 @@ echo "VRAM Guardian started (stop>${STOP_THRESHOLD_PCT}% / restart<${START_THRES
 while true; do
     pct=$(get_vram_pct) || { sleep "$POLL_INTERVAL"; continue; }
 
-    if [[ "$stopped_by_us" == false ]]; then
-        if (( pct > STOP_THRESHOLD_PCT )); then
-            if systemctl --user is-active --quiet "$SERVICE" 2>/dev/null; then
-                echo "$(date '+%H:%M:%S') VRAM ${pct}% > ${STOP_THRESHOLD_PCT}% — stopping $SERVICE"
-                systemctl --user stop "$SERVICE"
-                stopped_by_us=true
-            fi
+    service_active=$(systemctl --user is-active "$SERVICE" 2>/dev/null || true)
+
+    if (( pct > STOP_THRESHOLD_PCT )); then
+        if [[ "$service_active" == "active" ]]; then
+            echo "$(date '+%H:%M:%S') VRAM ${pct}% > ${STOP_THRESHOLD_PCT}% — stopping $SERVICE"
+            systemctl --user stop "$SERVICE"
         fi
-    else
-        if (( pct < START_THRESHOLD_PCT )); then
+    elif (( pct < START_THRESHOLD_PCT )); then
+        if [[ "$service_active" != "active" ]]; then
             echo "$(date '+%H:%M:%S') VRAM ${pct}% < ${START_THRESHOLD_PCT}% — restarting $SERVICE"
+            # reset-failed clears error state; setting StartLimitBurst=0 via
+            # runtime override disables the rate limiter so our managed
+            # stop/start cycles never get blocked by systemd.
             systemctl --user reset-failed "$SERVICE" 2>/dev/null
-            systemctl --user start "$SERVICE"
-            stopped_by_us=false
+            systemctl --user start "$SERVICE" 2>/dev/null || {
+                echo "$(date '+%H:%M:%S') Start blocked by rate limit, resetting..."
+                systemctl --user stop "$SERVICE" 2>/dev/null
+                systemctl --user reset-failed "$SERVICE" 2>/dev/null
+                sleep 2
+                systemctl --user start "$SERVICE"
+            }
         fi
     fi
 
