@@ -29,8 +29,8 @@ disabled=(
 # --- Enabled hotkeys ---
 # Format: "ID  param1 param2 param3  # description"
 enabled=(
-    "31  53 23 1179648"     # Cmd+Shift+5 — screenshot to file
-    "184 52 21 1179648"     # Cmd+Shift+4 — screenshot and recording options
+    "31  49 18 1179648"     # Cmd+Shift+1 — screenshot to file
+    "184 50 19 1179648"     # Cmd+Shift+2 — screenshot and recording options
 )
 
 # Build PlistBuddy commands
