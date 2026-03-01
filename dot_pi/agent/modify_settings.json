@@ -3,7 +3,7 @@
 {
   /*#- includeTemplate "pick" (dict
     "stdin" .chezmoi.stdin
-    "jq" `.agent | { lastChangelogVersion, enabledModels, defaultProvider, defaultModel, hideThinkingBlock, defaultThinkingLevel }`
+    "jq" `{ lastChangelogVersion, enabledModels, defaultProvider, defaultModel, hideThinkingBlock, defaultThinkingLevel }`
   ) */
   "packages": [
     "npm:pi-interactive-shell",
