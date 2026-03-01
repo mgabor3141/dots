@@ -20,5 +20,5 @@ SleepOperation=suspend
 HandlePowerKey=ignore
 HandlePowerKeyLongPress=poweroff
 IdleAction=suspend
-IdleActionSec=5min
+IdleActionSec=35min
 EOF
