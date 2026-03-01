@@ -129,6 +129,7 @@ ufw
 unrar
 vlc-plugins-all
 wayland-protocols
+wtype
 xl2tpd
 xorg-xinit
 xorg-xinput
