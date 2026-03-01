@@ -1,3 +1,4 @@
 com.moonlight_stream.Moonlight
 com.rustdesk.RustDesk
+org.jellyfin.JellyfinDesktop
 org.telegram.desktop
