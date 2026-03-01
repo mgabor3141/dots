@@ -99,7 +99,6 @@ openai-codex
 opendesktop-fonts
 os-prober
 pamixer
-papirus-icon-theme
 parsec-bin
 partclone
 pavucontrol
