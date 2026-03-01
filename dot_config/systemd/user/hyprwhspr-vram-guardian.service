@@ -1,0 +1,15 @@
+[Unit]
+Description=VRAM Guardian — stops/restarts hyprwhspr under GPU memory pressure
+After=hyprwhspr.service
+Wants=hyprwhspr.service
+
+[Service]
+Type=simple
+ExecStart=%h/.config/hyprwhspr/vram-guardian.sh
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
