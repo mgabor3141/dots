@@ -11,8 +11,28 @@ exclude = ["scripts"]
 name = "{{ promptStringOnce . "git.name" "git name" }}"
 email = "{{ promptStringOnce . "git.email" "git email" }}"
 
-{{ if eq .chezmoi.os "darwin" -}}
+{{ range list "json" "jsonc" "json5" -}}
+[[textconv]]
+pattern = "**/*.{{ . }}"
+command = "biome"
+args = ["format", "--stdin-file-path", "file.jsonc"]
 
+{{ end -}}
+{{ range list "css" "js" "jsx" "ts" "tsx" -}}
+[[textconv]]
+pattern = "**/*.{{ . }}"
+command = "biome"
+args = ["format", "--stdin-file-path", "file.{{ . }}"]
+
+{{ end -}}
+{{ range list "yaml" "yml" "md" "mdx" -}}
+[[textconv]]
+pattern = "**/*.{{ . }}"
+command = "prettier"
+args = ["--stdin-filepath", "file.{{ . }}"]
+
+{{ end -}}
+{{ if eq .chezmoi.os "darwin" -}}
 [[textconv]]
 pattern = "**/*.plist"
 command = "plutil"
