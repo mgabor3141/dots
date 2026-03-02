@@ -1,15 +1,14 @@
 #!/bin/bash
 # Generate the mic-mute LED glow indicator image.
 #
-# Three composited layers (outer glow → mid glow → bright core) with gaussian
-# blur produce a glowing LED strip effect.
+# An SVG with gaussian-blur filters produces a glowing 3D pill LED strip:
+# glow layers (unmasked, bleed freely) + pill body with specular/rim reflections
+# (masked for horizontal edge fade). Rasterized to PNG for sketchybar (macOS).
 #
 # This is a run_onchange_ script: it only re-runs when the script content
-# changes (chezmoi tracks the hash). We can't use modify_ because ImageMagick's
-# blur produces non-deterministic output across process invocations (ASLR
-# affects floating-point rounding), causing chezmoi diff to always show changes.
+# changes (chezmoi tracks the hash).
 #
-# Requires: ImageMagick 7 (magick)
+# Requires: rsvg-convert (librsvg) for SVG→PNG rasterization
 #
 # Used by:
 #   - sketchybar (macOS): dot_config/sketchybar/items/executable_mic.sh
@@ -21,34 +20,77 @@ set -euo pipefail
 W=500   # image width  (should match item width in sketchybar/items/mic.sh and mute-indicator/mute-indicator.py)
 H=30    # image height
 
-# Derived coordinates — LED strip runs from 10% to 90% of width, centered vertically.
-margin=$((W / 10))
-
-# Outer glow
-ox1=$margin                 ox2=$((W - margin - 1))
-oy1=$((H * 7 / 30))        oy2=$((H * 22 / 30))
-
-# Mid glow (inset 3px from outer)
-mx1=$((margin + 3))         mx2=$((W - margin - 4))
-my1=$((H / 3))              my2=$((H * 19 / 30))
-
-# Bright core (inset 5px from outer)
-cx1=$((margin + 5))         cx2=$((W - margin - 6))
-cy1=$((H * 2 / 5))          cy2=$((H * 17 / 30))
-
 target="{{ .chezmoi.targetFile | dir }}"
 
-magick -size "${W}x${H}" xc:none \
-  \( -size "${W}x${H}" xc:none \
-     -fill "rgba(255,0,0,0.7)" -draw "roundrectangle $ox1,$oy1 $ox2,$oy2 8,8" \
-     -blur 12x9 \
-  \) -gravity center -composite \
-  \( -size "${W}x${H}" xc:none \
-     -fill "rgba(255,40,40,1)" -draw "roundrectangle $mx1,$my1 $mx2,$my2 5,5" \
-     -blur 8x4 \
-  \) -gravity center -composite \
-  \( -size "${W}x${H}" xc:none \
-     -fill "rgba(255,200,200,0.95)" -draw "roundrectangle $cx1,$cy1 $cx2,$cy2 3,3" \
-     -blur 6x1 \
-  \) -gravity center -composite \
-  "$target/mic_mute_led.png"
+cat > "$target/mic_mute_led.svg" <<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="$W" height="$H" viewBox="0 0 $W $H">
+  <defs>
+    <!-- Horizontal fade for pill edges -->
+    <linearGradient id="hfade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="white" stop-opacity="0" />
+      <stop offset="6%"   stop-color="white" stop-opacity="1" />
+      <stop offset="94%"  stop-color="white" stop-opacity="1" />
+      <stop offset="100%" stop-color="white" stop-opacity="0" />
+    </linearGradient>
+    <mask id="hmask">
+      <rect width="100%" height="100%" fill="url(#hfade)" />
+    </mask>
+
+    <!-- 3D pill gradient — subtle hotspot, asymmetric vertical -->
+    <linearGradient id="pill3d" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#ff8080" />
+      <stop offset="20%"  stop-color="#ffc0b0" />
+      <stop offset="38%"  stop-color="#ffd8d0" />
+      <stop offset="55%"  stop-color="#ff9080" />
+      <stop offset="80%"  stop-color="#ff2818" />
+      <stop offset="100%" stop-color="#bb0800" />
+    </linearGradient>
+
+    <!-- Top specular highlight -->
+    <linearGradient id="specular" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="white" stop-opacity="0.6" />
+      <stop offset="50%"  stop-color="white" stop-opacity="0.05" />
+      <stop offset="100%" stop-color="white" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Bottom rim reflection -->
+    <linearGradient id="bottomref" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="white" stop-opacity="0" />
+      <stop offset="75%"  stop-color="white" stop-opacity="0" />
+      <stop offset="100%" stop-color="white" stop-opacity="0.2" />
+    </linearGradient>
+
+    <!-- Glow filters — userSpaceOnUse to avoid clipping at canvas edges -->
+    <filter id="glow-wide" filterUnits="userSpaceOnUse" x="0" y="0" width="$W" height="$H">
+      <feGaussianBlur stdDeviation="8" />
+    </filter>
+    <filter id="glow-mid" filterUnits="userSpaceOnUse" x="0" y="0" width="$W" height="$H">
+      <feGaussianBlur stdDeviation="4" />
+    </filter>
+    <filter id="glow-tight" filterUnits="userSpaceOnUse" x="0" y="0" width="$W" height="$H">
+      <feGaussianBlur stdDeviation="1.5" />
+    </filter>
+  </defs>
+
+  <!-- Glow layers — NOT masked, bleed freely in all directions -->
+  <rect x="45" y="10" width="410" height="6" rx="3" ry="3"
+        fill="#ff0000" opacity="0.7" filter="url(#glow-wide)" />
+  <rect x="45" y="10" width="410" height="6" rx="3" ry="3"
+        fill="#ff1008" opacity="0.85" filter="url(#glow-mid)" />
+  <rect x="45" y="10" width="410" height="6" rx="3" ry="3"
+        fill="#ff3020" opacity="0.6" filter="url(#glow-tight)" />
+
+  <!-- Pill + reflections — masked for horizontal fade at ends -->
+  <g mask="url(#hmask)">
+    <rect x="45" y="10" width="410" height="6" rx="3" ry="3"
+          fill="url(#pill3d)" />
+    <rect x="48" y="10" width="404" height="3" rx="2" ry="1.5"
+          fill="url(#specular)" />
+    <rect x="48" y="12" width="404" height="4" rx="2" ry="2"
+          fill="url(#bottomref)" />
+  </g>
+</svg>
+SVG
+
+# Rasterize to PNG (needed by sketchybar on macOS)
+rsvg-convert "$target/mic_mute_led.svg" -o "$target/mic_mute_led.png"
