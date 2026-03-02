@@ -17,8 +17,37 @@
 set -euo pipefail
 
 # --- Tunables ---
-W=500   # image width  (should match item width in sketchybar/items/mic.sh and mute-indicator/mute-indicator.py)
-H=30    # image height
+W=500         # canvas width (match sketchybar/items/mic.sh and mute-indicator.py)
+H=30          # canvas height
+PILL_H=6      # pill thickness
+PILL_RX=3     # pill corner radius
+PILL_MARGIN=45  # horizontal margin from canvas edge to pill
+
+# Glow blur radii (uniform, isotropic)
+GLOW_WIDE_S=6
+GLOW_MID_S=4
+GLOW_TIGHT_S=1.5
+
+# Horizontal fade: pill fades in/out over this percentage from canvas edges
+FADE_IN=6     # percent
+FADE_OUT=94   # percent
+
+# --- Derived values ---
+PILL_Y=$(( (H - PILL_H) / 2 ))              # vertically centered
+PILL_W=$(( W - 2 * PILL_MARGIN ))            # pill width
+
+# Glow rects use the same geometry as the pill
+GW_X=$PILL_MARGIN; GW_W=$PILL_W
+GM_X=$PILL_MARGIN; GM_W=$PILL_W
+GT_X=$PILL_MARGIN; GT_W=$PILL_W
+
+# Specular/reflection inset from pill
+INSET=3
+SPEC_X=$(( PILL_MARGIN + INSET ))
+SPEC_W=$(( PILL_W - 2 * INSET ))
+SPEC_H=$(( PILL_H / 2 ))
+REF_Y=$(( PILL_Y + PILL_H / 3 ))
+REF_H=$(( PILL_H * 2 / 3 ))
 
 target="{{ .chezmoi.targetFile | dir }}"
 
@@ -28,8 +57,8 @@ cat > "$target/mic_mute_led.svg" <<SVG
     <!-- Horizontal fade for pill edges -->
     <linearGradient id="hfade" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%"   stop-color="white" stop-opacity="0" />
-      <stop offset="6%"   stop-color="white" stop-opacity="1" />
-      <stop offset="94%"  stop-color="white" stop-opacity="1" />
+      <stop offset="${FADE_IN}%"  stop-color="white" stop-opacity="1" />
+      <stop offset="${FADE_OUT}%" stop-color="white" stop-opacity="1" />
       <stop offset="100%" stop-color="white" stop-opacity="0" />
     </linearGradient>
     <mask id="hmask">
@@ -62,31 +91,32 @@ cat > "$target/mic_mute_led.svg" <<SVG
 
     <!-- Glow filters — userSpaceOnUse to avoid clipping at canvas edges -->
     <filter id="glow-wide" filterUnits="userSpaceOnUse" x="0" y="0" width="$W" height="$H">
-      <feGaussianBlur stdDeviation="8" />
+      <feGaussianBlur stdDeviation="$GLOW_WIDE_S" />
     </filter>
     <filter id="glow-mid" filterUnits="userSpaceOnUse" x="0" y="0" width="$W" height="$H">
-      <feGaussianBlur stdDeviation="4" />
+      <feGaussianBlur stdDeviation="$GLOW_MID_S" />
     </filter>
     <filter id="glow-tight" filterUnits="userSpaceOnUse" x="0" y="0" width="$W" height="$H">
-      <feGaussianBlur stdDeviation="1.5" />
+      <feGaussianBlur stdDeviation="$GLOW_TIGHT_S" />
     </filter>
   </defs>
 
-  <!-- Glow layers — NOT masked, bleed freely in all directions -->
-  <rect x="45" y="10" width="410" height="6" rx="3" ry="3"
+  <!-- Glow layers — NOT masked, bleed freely in all directions.
+       Each rect extended by its blur σ past the pill ends to keep glow uniform. -->
+  <rect x="$GW_X" y="$PILL_Y" width="$GW_W" height="$PILL_H" rx="$PILL_RX" ry="$PILL_RX"
         fill="#ff0000" opacity="0.7" filter="url(#glow-wide)" />
-  <rect x="45" y="10" width="410" height="6" rx="3" ry="3"
+  <rect x="$GM_X" y="$PILL_Y" width="$GM_W" height="$PILL_H" rx="$PILL_RX" ry="$PILL_RX"
         fill="#ff1008" opacity="0.85" filter="url(#glow-mid)" />
-  <rect x="45" y="10" width="410" height="6" rx="3" ry="3"
+  <rect x="$GT_X" y="$PILL_Y" width="$GT_W" height="$PILL_H" rx="$PILL_RX" ry="$PILL_RX"
         fill="#ff3020" opacity="0.6" filter="url(#glow-tight)" />
 
   <!-- Pill + reflections — masked for horizontal fade at ends -->
   <g mask="url(#hmask)">
-    <rect x="45" y="10" width="410" height="6" rx="3" ry="3"
+    <rect x="$PILL_MARGIN" y="$PILL_Y" width="$PILL_W" height="$PILL_H" rx="$PILL_RX" ry="$PILL_RX"
           fill="url(#pill3d)" />
-    <rect x="48" y="10" width="404" height="3" rx="2" ry="1.5"
+    <rect x="$SPEC_X" y="$PILL_Y" width="$SPEC_W" height="$SPEC_H" rx="2" ry="1.5"
           fill="url(#specular)" />
-    <rect x="48" y="12" width="404" height="4" rx="2" ry="2"
+    <rect x="$SPEC_X" y="$REF_Y" width="$SPEC_W" height="$REF_H" rx="2" ry="2"
           fill="url(#bottomref)" />
   </g>
 </svg>
