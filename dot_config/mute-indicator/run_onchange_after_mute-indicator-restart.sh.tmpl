@@ -9,9 +9,9 @@ set -Eeuo pipefail
 # {{ end }}
 
 systemctl --user daemon-reload
-systemctl --user restart waybar-mute-indicator.service
+systemctl --user restart mute-indicator.service
 
-echo "Restarted waybar-mute-indicator.service"
+echo "Restarted mute-indicator.service"
 echo "View logs with:"
-echo -e "\tjournalctl --user -xeu waybar-mute-indicator.service"
+echo -e "\tjournalctl --user -xeu mute-indicator.service"
  

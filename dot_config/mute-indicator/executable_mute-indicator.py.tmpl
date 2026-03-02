@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Mute indicator overlay using GTK4 + gtk4-layer-shell.
+
+Displays a red LED bar image at the top of the screen when the mic is muted.
+Uses exclusive_zone=-1 so it ignores other surfaces' exclusive zones (e.g. noctalia bar).
+
+Signals:
+  SIGUSR1 → show (muted)
+  SIGUSR2 → hide (unmuted)
+"""
+
+import signal
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gtk4LayerShell", "1.0")
+from gi.repository import Gtk, Gtk4LayerShell, GLib, Gdk
+
+IMAGE_PATH = "{{ joinPath .chezmoi.homeDir ".config/mute-led/mic_mute_led.png" }}"
+WIDTH = 500
+
+
+class MuteIndicator(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="com.local.mute-indicator")
+        self.window = None
+
+    def do_activate(self):
+        self.window = Gtk.ApplicationWindow(application=self)
+
+        # Layer shell setup
+        Gtk4LayerShell.init_for_window(self.window)
+        Gtk4LayerShell.set_layer(self.window, Gtk4LayerShell.Layer.OVERLAY)
+        Gtk4LayerShell.set_anchor(self.window, Gtk4LayerShell.Edge.TOP, True)
+        Gtk4LayerShell.set_exclusive_zone(self.window, -1)
+        Gtk4LayerShell.set_namespace(self.window, "mute-indicator")
+        Gtk4LayerShell.set_keyboard_mode(
+            self.window, Gtk4LayerShell.KeyboardMode.NONE
+        )
+
+        # Image
+        picture = Gtk.Picture.new_for_filename(IMAGE_PATH)
+        picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+        picture.set_size_request(WIDTH, -1)
+        self.window.set_child(picture)
+
+        # Transparent background
+        css = Gtk.CssProvider()
+        css.load_from_string("window { background: transparent; }")
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        # Start hidden
+        self.window.set_visible(False)
+
+        # Signal handlers
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, self._show)
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR2, self._hide)
+
+    def _show(self):
+        if self.window:
+            self.window.set_visible(True)
+        return GLib.SOURCE_CONTINUE
+
+    def _hide(self):
+        if self.window:
+            self.window.set_visible(False)
+        return GLib.SOURCE_CONTINUE
+
+
+if __name__ == "__main__":
+    app = MuteIndicator()
+    app.run()

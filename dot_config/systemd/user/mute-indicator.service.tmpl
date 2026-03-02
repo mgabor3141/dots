@@ -4,7 +4,8 @@ After=graphical-session.target
 Requisite=graphical-session.target
 
 [Service]
-ExecStart=/usr/bin/waybar -b mute --config {{ .chezmoi.destDir }}/.config/waybar-mute-indicator/config --style {{ .chezmoi.destDir }}/.config/waybar-mute-indicator/style.css
+Environment=LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so
+ExecStart={{ .chezmoi.destDir }}/.config/mute-indicator/mute-indicator.py
 Restart=on-failure
 
 [Install]

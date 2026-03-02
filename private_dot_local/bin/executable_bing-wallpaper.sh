@@ -32,14 +32,15 @@ exec 9>"$CACHE_DIR/.lock"
 flock -n 9 || { echo "Another instance is running." >&2; exit 0; }
 
 # Script arguments
-MKT="${1:-en-US}"
-DAYS_AGO="${2:-0}"
+REGION="${1:-global}"
+LANGUAGE="${2:-English}"
+DAYS_AGO="${3:-0}"
 
 # How often to check if it's a new day, this is the max delay after system resume
 TICK_SECONDS="${TICK_SECONDS:-30}"
 
-# API_URL="http://localhost:8080/api/colors?locale=${MKT}&daysAgo=${DAYS_AGO}"
-API_URL="https://dailyhues.up.railway.app/api/colors?locale=${MKT}&daysAgo=${DAYS_AGO}"
+# API_URL="http://localhost:8080/api/v2/colors?region=${REGION}&language=${LANGUAGE}&daysAgo=${DAYS_AGO}"
+API_URL="https://dailyhues.up.railway.app/api/v2/colors?region=${REGION}&language=${LANGUAGE}&daysAgo=${DAYS_AGO}"
 
 ONE_DAY=$((24 * 60 * 60))
 next_wallpaper=0
@@ -58,6 +59,7 @@ update_once() {
   startdate="$(jq -r '.startdate' <<<"$json")"
   fullstartdate="$(jq -r '.fullstartdate' <<<"$json")"
   title="$(jq -r '.title' <<<"$json")"
+  description="$(jq -r '.description' <<<"$json")"
   gradient_angle="$(jq -r '.colors.gradient_angle' <<<"$json")"
   gradient_from="$(jq -r '.colors.gradient_from' <<<"$json")"
   gradient_to="$(jq -r '.colors.gradient_to' <<<"$json")"
@@ -110,7 +112,7 @@ update_once() {
 
       # 3) Compose title/body as separate images so we can use different sizes
       cap_title="${title:-Bing Wallpaper}"
-      cap_body="${copyright:-}"
+      cap_body="${description:-${copyright:-}}"
 
       title_png="$tmpdir/title.png"
       body_png="$tmpdir/body.png"
@@ -194,9 +196,10 @@ update_once() {
       "$blurred"
   fi
 
-  printf "Setting wallpaper:\n\t%s\n\t%s\n\t%s\n" \
+  printf "Setting wallpaper:\n\t%s\n\t%s\n\t%s\n\t%s\n" \
     "${title:-$name}" \
-    "${copyright:-[No description]}" \
+    "${description:-[No description]}" \
+    "${copyright:-}" \
     "Applying colors: $gradient_from -> $gradient_to ($gradient_angle)"
 
   # Fall back to the plain wallpaper if annotation failed (e.g. missing ghostscript)
