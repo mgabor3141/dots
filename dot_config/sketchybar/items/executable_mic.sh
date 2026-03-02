@@ -12,7 +12,7 @@ sketchybar --add event mic_change \
         drawing=off \
         icon.drawing=off \
         label.drawing=off \
-        width=500 \
+        width=400 \
         padding_left=0 \
         padding_right=0 \
         background.drawing=on \
