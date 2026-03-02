@@ -21,7 +21,9 @@
             "dev.zed.Zed",
             "org.gnome.Nautilus",
             "discord",
-            "kitty"
+            "kitty",
+            "parsecd",
+            "zen"
         ],
         "position": "center",
         "screenshotAnnotationTool": "satty -f -",
@@ -125,11 +127,6 @@
                     "id": "NotificationHistory",
                     "showUnreadBadge": false,
                     "unreadBadgeColor": "primary"
-                },
-                {
-                    "iconColor": "none",
-                    "id": "KeepAwake",
-                    "textColor": "none"
                 },
                 {
                     "applyToAllMonitors": false,
