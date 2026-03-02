@@ -2,8 +2,10 @@
 # Generate the mic-mute LED glow indicator image.
 #
 # An SVG with gaussian-blur filters produces a glowing 3D pill LED strip:
-# glow layers (unmasked, bleed freely) + pill body with specular/rim reflections
-# (masked for horizontal edge fade). Rasterized to PNG for sketchybar (macOS).
+# - Pill body: single vertical gradient with baked-in specular, body, shadow, rim
+# - Edge shading: horizontal multiply overlay darkens the curved pill ends
+# - Glow layers (unmasked, bleed freely) for the ambient bloom
+# Rasterized to PNG for sketchybar (macOS).
 #
 # This is a run_onchange_ script: it only re-runs when the script content
 # changes (chezmoi tracks the hash).
@@ -19,7 +21,7 @@ set -euo pipefail
 # --- Tunables ---
 W=400          # canvas width (match sketchybar/items/mic.sh and mute-indicator.py)
 H=30           # canvas height
-PILL_H=6       # pill thicknes
+PILL_H=6       # pill thickness
 PILL_RX=3      # pill corner radius
 PILL_MARGIN=9  # horizontal margin from canvas edge to pill
 
@@ -28,50 +30,49 @@ GLOW_WIDE_S=4
 GLOW_MID_S=2
 GLOW_TIGHT_S=1
 
+# Edge shading: darkens pill ends with its own shadow color (no grey artifacts)
+EDGE_ZONE=2       # how far from pill ends the shading extends (px)
+EDGE_OPACITY=0.3  # shading intensity at the very ends
+
 # --- Derived values ---
-PILL_Y=$(( (H - PILL_H) / 2 ))              # vertically centered
-PILL_W=$(( W - 2 * PILL_MARGIN ))           # pill width
+PILL_Y=$(( (H - PILL_H) / 2 ))
+PILL_W=$(( W - 2 * PILL_MARGIN ))
 
 # Glow rects: wider blurs get a small extension to stay uniform at ends
 GW_X=$(( PILL_MARGIN - 2 )); GW_W=$(( PILL_W + 4 ))
 GM_X=$(( PILL_MARGIN - 1 )); GM_W=$(( PILL_W + 2 ))
-GT_X=$PILL_MARGIN;           GT_W=$PILL_W
+GT_X=$PILL_MARGIN;            GT_W=$PILL_W
 
-# Specular/reflection inset from pill
-INSET=3
-SPEC_X=$(( PILL_MARGIN + INSET ))
-SPEC_W=$(( PILL_W - 2 * INSET ))
-SPEC_H=$(( PILL_H / 2 ))
-REF_Y=$(( PILL_Y + PILL_H / 3 ))
-REF_H=$(( PILL_H * 2 / 3 ))
+# Edge shading gradient stops: fraction of pill width where darkening ends
+EDGE_LEFT_STOP=$(awk "BEGIN { printf \"%.1f\", ($EDGE_ZONE / $PILL_W) * 100 }")
+EDGE_RIGHT_STOP=$(awk "BEGIN { printf \"%.1f\", 100 - ($EDGE_ZONE / $PILL_W) * 100 }")
 
 target="{{ .chezmoi.targetFile | dir }}"
 
 cat > "$target/mic_mute_led.svg" <<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="$W" height="$H" viewBox="0 0 $W $H">
   <defs>
-    <!-- 3D pill gradient — subtle hotspot, asymmetric vertical -->
+    <!-- Pill body: single vertical gradient with all lighting baked in.
+         Top edge → specular highlight → body → shadow → rim reflection -->
     <linearGradient id="pill3d" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#ff8080" />
-      <stop offset="20%"  stop-color="#ffc0b0" />
-      <stop offset="38%"  stop-color="#ffd8d0" />
-      <stop offset="55%"  stop-color="#ff9080" />
-      <stop offset="80%"  stop-color="#ff2818" />
-      <stop offset="100%" stop-color="#bb0800" />
+      <stop offset="0%"   stop-color="#cc2010" />
+      <stop offset="10%"  stop-color="#ff9080" />
+      <stop offset="30%"  stop-color="#ffe0d4" />
+      <stop offset="42%"  stop-color="#ffc8b8" />
+      <stop offset="60%"  stop-color="#ff6040" />
+      <stop offset="82%"  stop-color="#dd1808" />
+      <stop offset="92%"  stop-color="#bb0800" />
+      <stop offset="100%" stop-color="#dd3020" />
     </linearGradient>
 
-    <!-- Top specular highlight -->
-    <linearGradient id="specular" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="white" stop-opacity="0.6" />
-      <stop offset="50%"  stop-color="white" stop-opacity="0.05" />
-      <stop offset="100%" stop-color="white" stop-opacity="0" />
-    </linearGradient>
-
-    <!-- Bottom rim reflection -->
-    <linearGradient id="bottomref" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="white" stop-opacity="0" />
-      <stop offset="75%"  stop-color="white" stop-opacity="0" />
-      <stop offset="100%" stop-color="white" stop-opacity="0.2" />
+    <!-- Edge shading: a dark-red overlay at the pill ends that matches the
+         pill's shadow color. Transparent in the middle, opaque at ends.
+         Uses the pill's own dark tones so highlights don't turn grey. -->
+    <linearGradient id="edgeshade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"                 stop-color="#880800" stop-opacity="$EDGE_OPACITY" />
+      <stop offset="${EDGE_LEFT_STOP}%"  stop-color="#880800" stop-opacity="0" />
+      <stop offset="${EDGE_RIGHT_STOP}%" stop-color="#880800" stop-opacity="0" />
+      <stop offset="100%"               stop-color="#880800" stop-opacity="$EDGE_OPACITY" />
     </linearGradient>
 
     <!-- Glow filters — userSpaceOnUse to avoid clipping at canvas edges -->
@@ -86,8 +87,7 @@ cat > "$target/mic_mute_led.svg" <<SVG
     </filter>
   </defs>
 
-  <!-- Glow layers — NOT masked, bleed freely in all directions.
-       Each rect extended by its blur σ past the pill ends to keep glow uniform. -->
+  <!-- Glow layers — NOT masked, bleed freely in all directions -->
   <rect x="$GW_X" y="$PILL_Y" width="$GW_W" height="$PILL_H" rx="$PILL_RX" ry="$PILL_RX"
         fill="#ff0000" opacity="0.7" filter="url(#glow-wide)" />
   <rect x="$GM_X" y="$PILL_Y" width="$GM_W" height="$PILL_H" rx="$PILL_RX" ry="$PILL_RX"
@@ -95,15 +95,13 @@ cat > "$target/mic_mute_led.svg" <<SVG
   <rect x="$GT_X" y="$PILL_Y" width="$GT_W" height="$PILL_H" rx="$PILL_RX" ry="$PILL_RX"
         fill="#ff3020" opacity="0.6" filter="url(#glow-tight)" />
 
-  <!-- Pill + reflections — masked for horizontal fade at ends -->
-  <g mask="url(#hmask)">
-    <rect x="$PILL_MARGIN" y="$PILL_Y" width="$PILL_W" height="$PILL_H" rx="$PILL_RX" ry="$PILL_RX"
-          fill="url(#pill3d)" />
-    <rect x="$SPEC_X" y="$PILL_Y" width="$SPEC_W" height="$SPEC_H" rx="2" ry="1.5"
-          fill="url(#specular)" />
-    <rect x="$SPEC_X" y="$REF_Y" width="$SPEC_W" height="$REF_H" rx="2" ry="2"
-          fill="url(#bottomref)" />
-  </g>
+  <!-- Pill body with baked-in vertical lighting -->
+  <rect x="$PILL_MARGIN" y="$PILL_Y" width="$PILL_W" height="$PILL_H" rx="$PILL_RX" ry="$PILL_RX"
+        fill="url(#pill3d)" />
+
+  <!-- Edge shading: dark-red overlay at pill ends for curved-surface illusion -->
+  <rect x="$PILL_MARGIN" y="$PILL_Y" width="$PILL_W" height="$PILL_H" rx="$PILL_RX" ry="$PILL_RX"
+        fill="url(#edgeshade)" />
 </svg>
 SVG
 
