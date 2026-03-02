@@ -87,7 +87,7 @@ binds {
     Mod+G                              hotkey-overlay-title="Open Launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
     Mod+SPACE                          hotkey-overlay-title="Open Launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
     Mod+Period                         hotkey-overlay-title="Emoji Picker" { spawn-sh "qs -c noctalia-shell ipc call launcher emoji"; }
-    Ctrl+Shift+V                       hotkey-overlay-title="Clipboard History" { spawn-sh "qs -c noctalia-shell ipc call launcher clipboard"; }
+    Ctrl+Shift+Alt+V                   hotkey-overlay-title="Clipboard History" { spawn-sh "qs -c noctalia-shell ipc call launcher clipboard"; }
 
     // ─── Audio Controls ───
     // Example volume keys mappings for PipeWire & WirePlumber.
@@ -180,7 +180,7 @@ binds {
     // MRU numbered workspace — move
     Mod+Shift+R                          { spawn-sh "~/.config/wm-scripts/last-numbered-ws.sh move"; }
 
-    Mod+F20                            { spawn-sh "niri msg action close-overview && niri msg action focus-workspace-previous"; }
+    Mod+F20                              { spawn-sh "niri msg action close-overview && niri msg action focus-workspace-previous"; }
 
     // ─── Layout Controls ───
     // Mod+CTRL+F                          { expand-column-to-available-width; }
