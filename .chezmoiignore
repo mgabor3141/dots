@@ -78,7 +78,7 @@ CLAUDE.md
 .config/hyprwhspr
 .config/systemd
 .config/qt5ct
-.config/waybar*
+.config/mute-indicator
 .config/xkb
 
 # Files
