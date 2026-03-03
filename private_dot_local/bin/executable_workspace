@@ -1018,24 +1018,26 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
                 bookmark_cursor = 0
             continue
 
-        # ── Repo tab bar ──
+        # ── Repo tab bar (hidden if 0-1 repos) ──
         tab_y = header_y + active_count + 1
         safe_addstr(tab_y, 0, "─" * max_x, curses.A_DIM)
         tab_y += 1
 
         if repos_with_commits:
-            tab_x = 1
-            for i, repo in enumerate(repos_with_commits):
-                label = f" {repo['name']} "
-                if i == col:
-                    attr = curses.A_BOLD | curses.A_REVERSE | curses.color_pair(4)
-                else:
-                    attr = curses.color_pair(2)
-                safe_addstr(tab_y, tab_x, label, attr)
-                tab_x += len(label) + 1
+            if len(repos_with_commits) > 1:
+                tab_x = 1
+                for i, repo in enumerate(repos_with_commits):
+                    label = f" {repo['name']} "
+                    if i == col:
+                        attr = curses.A_BOLD | curses.A_REVERSE | curses.color_pair(4)
+                    else:
+                        attr = curses.color_pair(2)
+                    safe_addstr(tab_y, tab_x, label, attr)
+                    tab_x += len(label) + 1
+                tab_y += 1
 
             # ── Commit list ──
-            list_y = tab_y + 1
+            list_y = tab_y
             safe_addstr(list_y, 0, "─" * max_x, curses.A_DIM)
             list_y += 1
 
