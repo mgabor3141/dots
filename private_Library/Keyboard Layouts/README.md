@@ -1,8 +1,12 @@
 # Keylayouts
 
+## Important: Logout Required
+
+macOS caches `.keylayout` files at login. After `chezmoi apply` deploys changes, **you must log out and back in** for the new layout to take effect. There is no way to reload keylayout files without relogging. A `run_onchange_after_` script warns about this automatically when the file changes.
+
 ## Instructions
 
-MacOS Shortcuts settings:
+macOS Shortcuts settings:
 
 Disable everything except screenshots. Note that input switching gets re-enabled whenever a second layout is added.
 

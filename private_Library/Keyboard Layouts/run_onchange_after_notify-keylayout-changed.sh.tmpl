@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# {{ include (joinPath (.chezmoi.sourceFile | dir) "QWERTY.keylayout") | sha256sum }}
+# Runs after QWERTY.keylayout changes — warn user to relog.
+
+set -Eeuo pipefail
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+echo ""
+echo "⚠️  Keyboard layout file changed: ~/Library/Keyboard Layouts/QWERTY.keylayout"
+echo "   macOS caches keylayout files at login. You must log out and back in for changes to take effect."
+echo ""
