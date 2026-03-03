@@ -487,6 +487,358 @@ def delete_workspace(config: dict, name: str | None) -> None:
     print(f"Deleted workspace: {workspace_dir}")
 
 
+def get_original_repo(workspace_repo_dir: Path) -> Path | None:
+    """Get the original repo root from a jj workspace directory.
+
+    Workspace .jj/repo contains the path to the original repo's .jj/repo.
+    """
+    repo_file = workspace_repo_dir / ".jj" / "repo"
+    if not repo_file.exists():
+        return None
+    original_jj_repo = repo_file.read_text().strip()
+    return Path(original_jj_repo).parent.parent
+
+
+def load_review_data(workspace_dir: Path) -> list[dict]:
+    """Gather jj commit data for each repo in the workspace.
+
+    Returns list of dicts with keys:
+        name, original_dir, commits (list), current_edit (change_id of default@)
+
+    Each commit dict has: change_id, description, empty, files
+    """
+    repos = []
+    for subdir in sorted(workspace_dir.iterdir()):
+        if not subdir.is_dir() or subdir.name.startswith("."):
+            continue
+        if not (subdir / ".jj").is_dir():
+            continue
+
+        name = subdir.name
+        original = get_original_repo(subdir)
+        if not original:
+            continue
+
+        # Get commits between trunk and workspace head
+        log_result = subprocess.run(
+            ["jj", "log", "--no-pager", "-r", f"trunk()..{name}@", "--no-graph",
+             "-T", 'change_id.shortest() ++ "\t"'
+                   '++ description.first_line() ++ "\t"'
+                   '++ if(empty, "empty", "changed") ++ "\n"'],
+            cwd=original, capture_output=True, text=True,
+        )
+
+        commits = []
+        if log_result.returncode == 0:
+            for line in log_result.stdout.strip().split("\n"):
+                if not line.strip():
+                    continue
+                parts = line.split("\t", 2)
+                if len(parts) < 3:
+                    continue
+                cid, desc, status = parts
+                # Get changed files for this commit
+                files_result = subprocess.run(
+                    ["jj", "diff", "--no-pager", "-r", cid.strip(), "--name-only"],
+                    cwd=original, capture_output=True, text=True,
+                )
+                files = []
+                if files_result.returncode == 0:
+                    files = [f for f in files_result.stdout.strip().split("\n") if f]
+                commits.append({
+                    "change_id": cid.strip(),
+                    "description": desc.strip() or "(no description)",
+                    "empty": status.strip() == "empty",
+                    "files": files,
+                })
+
+        # What is default@ currently pointing at?
+        cur_result = subprocess.run(
+            ["jj", "log", "--no-pager", "-r", "default@", "--no-graph",
+             "-T", "change_id.shortest()"],
+            cwd=original, capture_output=True, text=True,
+        )
+        current_edit = cur_result.stdout.strip() if cur_result.returncode == 0 else ""
+
+        repos.append({
+            "name": name,
+            "original_dir": original,
+            "commits": commits,
+            "current_edit": current_edit,
+        })
+
+    return repos
+
+
+
+
+
+# ── Review: open Zed ────────────────────────────────────────────────
+
+
+def review_open(config: dict, name: str | None) -> None:
+    """Open all original repos from a workspace in a single Zed window."""
+    workspace_dir = resolve_workspace_dir(config, name)
+
+    original_dirs = []
+    for subdir in sorted(workspace_dir.iterdir()):
+        if not subdir.is_dir() or subdir.name.startswith("."):
+            continue
+        if not (subdir / ".jj").is_dir():
+            continue
+        original = get_original_repo(subdir)
+        if original:
+            original_dirs.append(str(original))
+
+    if not original_dirs:
+        die(f"no jj repos found in {workspace_dir}")
+
+    print(f"Opening {len(original_dirs)} repo(s) in Zed...")
+    subprocess.run(["zed", "-n"] + original_dirs)
+    print(f"\nNow run `workspace review` in the Zed terminal to browse and switch commits.")
+
+
+# ── Review: TUI controller ──────────────────────────────────────────
+
+
+def jj_edit(original_dir: Path, change_id: str) -> bool:
+    """Run jj edit in the original repo. Returns True on success."""
+    result = subprocess.run(
+        ["jj", "edit", change_id],
+        cwd=original_dir, capture_output=True, text=True,
+    )
+    return result.returncode == 0
+
+
+def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
+    """TUI controller for reviewing workspace commits across repos."""
+    curses.curs_set(0)
+    curses.use_default_colors()
+
+    if curses.has_colors():
+        curses.init_pair(1, curses.COLOR_GREEN, -1)    # active/changed
+        curses.init_pair(2, curses.COLOR_WHITE, -1)     # normal
+        curses.init_pair(3, curses.COLOR_CYAN, -1)      # header/label
+        curses.init_pair(4, curses.COLOR_YELLOW, -1)    # selected tab
+        curses.init_pair(5, curses.COLOR_MAGENTA, -1)   # file paths
+
+    # Only repos with commits participate in the browser
+    repos_with_commits = [r for r in repos if r["commits"]]
+    all_repos = repos  # keep full list for header
+
+    col = 0  # selected repo column index (into repos_with_commits)
+    row = 0  # selected commit row within current column
+    status_msg = ""
+
+    def safe_addstr(y, x, text, attr=0):
+        max_y, max_x = stdscr.getmaxyx()
+        if y < 0 or y >= max_y or x >= max_x:
+            return
+        text = text[:max(0, max_x - x)]
+        if text:
+            try:
+                stdscr.addstr(y, x, text, attr)
+            except curses.error:
+                pass
+
+    def refresh_current_edit():
+        """Re-read default@ for the current repo column."""
+        if not repos_with_commits:
+            return
+        repo = repos_with_commits[col]
+        result = subprocess.run(
+            ["jj", "log", "--no-pager", "-r", "default@", "--no-graph",
+             "-T", "change_id.shortest()"],
+            cwd=repo["original_dir"], capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            repo["current_edit"] = result.stdout.strip()
+
+    def full_refresh():
+        """Reload all data from jj."""
+        nonlocal repos_with_commits, all_repos, col, row
+        ws_dir = Path(f"~/workspaces/{workspace_name}").expanduser()
+        new_repos = load_review_data(ws_dir)
+        all_repos[:] = new_repos
+        repos_with_commits[:] = [r for r in new_repos if r["commits"]]
+        if col >= len(repos_with_commits):
+            col = max(0, len(repos_with_commits) - 1)
+        if repos_with_commits and row >= len(repos_with_commits[col]["commits"]):
+            row = max(0, len(repos_with_commits[col]["commits"]) - 1)
+
+    while True:
+        stdscr.clear()
+        max_y, max_x = stdscr.getmaxyx()
+
+        # ── Title bar ──
+        title = f" review: {workspace_name} "
+        safe_addstr(0, 0, title, curses.A_BOLD | curses.A_REVERSE)
+
+        # ── Active diffs header ──
+        safe_addstr(2, 0, " ACTIVE DIFFS", curses.A_BOLD | curses.color_pair(3))
+
+        header_y = 3
+        active_count = 0
+        for repo in all_repos:
+            if not repo["commits"]:
+                continue
+            # Find which commit is currently checked out in the original
+            cur = repo["current_edit"]
+            desc = "(at trunk)"
+            active = False
+            for c in repo["commits"]:
+                if c["change_id"] == cur:
+                    desc = c["description"]
+                    active = True
+                    break
+
+            if active:
+                attr = curses.color_pair(1)
+                marker = "●"
+            else:
+                attr = curses.color_pair(2) | curses.A_DIM
+                marker = "○"
+
+            line = f"  {marker} {repo['name']:<24s} {desc}"
+            safe_addstr(header_y + active_count, 0, line[:max_x - 1], attr)
+            active_count += 1
+
+        if active_count == 0:
+            safe_addstr(header_y, 0, "  (no repos with changes)", curses.A_DIM)
+            active_count = 1
+
+        # ── Repo tab bar ──
+        tab_y = header_y + active_count + 1
+        safe_addstr(tab_y, 0, "─" * max_x, curses.A_DIM)
+        tab_y += 1
+
+        if repos_with_commits:
+            tab_x = 1
+            for i, repo in enumerate(repos_with_commits):
+                label = f" {repo['name']} "
+                if i == col:
+                    attr = curses.A_BOLD | curses.A_REVERSE | curses.color_pair(4)
+                else:
+                    attr = curses.color_pair(2)
+                safe_addstr(tab_y, tab_x, label, attr)
+                tab_x += len(label) + 1
+
+            # ── Commit list for selected repo ──
+            list_y = tab_y + 1
+            safe_addstr(list_y, 0, "─" * max_x, curses.A_DIM)
+            list_y += 1
+
+            repo = repos_with_commits[col]
+            commits = repo["commits"]
+
+            # Clamp row
+            if row >= len(commits):
+                row = max(0, len(commits) - 1)
+
+            y = list_y
+            for ci, commit in enumerate(commits):
+                if y >= max_y - 2:
+                    break
+
+                is_cursor = ci == row
+                is_active = commit["change_id"] == repo["current_edit"]
+
+                if is_active:
+                    marker = "●"
+                    attr = curses.color_pair(1)
+                else:
+                    marker = "○"
+                    attr = curses.color_pair(2)
+
+                pointer = "▸" if is_cursor else " "
+                if is_cursor:
+                    attr |= curses.A_BOLD
+
+                cid = commit["change_id"]
+                desc = commit["description"]
+                line = f" {pointer}{marker} {desc}"
+                tag = f"[{cid}]"
+
+                # Right-align the change_id tag
+                available = max_x - 2
+                if len(line) + len(tag) + 1 <= available:
+                    padding = available - len(line) - len(tag)
+                    line = line + " " * padding + tag
+                else:
+                    line = line[:available - len(tag) - 1] + "… " + tag
+
+                safe_addstr(y, 0, line[:max_x - 1], attr)
+                y += 1
+
+                # Expand files under cursor commit
+                if is_cursor and commit["files"]:
+                    for fpath in commit["files"]:
+                        if y >= max_y - 2:
+                            break
+                        # Show just the filename, dimmed
+                        display = f"     {fpath}"
+                        safe_addstr(y, 0, display[:max_x - 1],
+                                    curses.color_pair(5) | curses.A_DIM)
+                        y += 1
+        else:
+            safe_addstr(tab_y, 1, "(no repos with commits)", curses.A_DIM)
+
+        # ── Status / help bar ──
+        help_line = " h/l:repos  j/k:commits  space:edit  r:refresh  q:quit"
+        if status_msg:
+            help_line = f" {status_msg}"
+            status_msg = ""
+        safe_addstr(max_y - 1, 0, help_line[:max_x - 1], curses.A_DIM | curses.A_REVERSE)
+
+        stdscr.refresh()
+        key = stdscr.getch()
+
+        if key == ord("q"):
+            return
+        elif key in (ord("h"), curses.KEY_LEFT):
+            if repos_with_commits and col > 0:
+                col -= 1
+                row = 0
+        elif key in (ord("l"), curses.KEY_RIGHT):
+            if repos_with_commits and col < len(repos_with_commits) - 1:
+                col += 1
+                row = 0
+        elif key in (ord("k"), curses.KEY_UP):
+            if row > 0:
+                row -= 1
+        elif key in (ord("j"), curses.KEY_DOWN):
+            if repos_with_commits and row < len(repos_with_commits[col]["commits"]) - 1:
+                row += 1
+        elif key == ord(" "):
+            if repos_with_commits:
+                repo = repos_with_commits[col]
+                commit = repo["commits"][row]
+                ok = jj_edit(repo["original_dir"], commit["change_id"])
+                if ok:
+                    repo["current_edit"] = commit["change_id"]
+                    status_msg = f"✓ jj edit {commit['change_id']} in {repo['name']}"
+                else:
+                    status_msg = f"✗ jj edit failed for {repo['name']}"
+        elif key == ord("r"):
+            status_msg = "refreshing..."
+            stdscr.clear()
+            safe_addstr(max_y // 2, max_x // 2 - 7, "Refreshing...", curses.A_BOLD)
+            stdscr.refresh()
+            full_refresh()
+            status_msg = "✓ refreshed"
+
+
+def review_tui(config: dict, name: str | None) -> None:
+    """Launch the review TUI controller for a workspace."""
+    workspace_dir = resolve_workspace_dir(config, name)
+    repos = load_review_data(workspace_dir)
+
+    if not repos:
+        die(f"no jj repos found in {workspace_dir}")
+
+    curses.wrapper(tui_review, repos, workspace_dir.name)
+
+
 def list_workspaces(config: dict) -> None:
     workspace_root = Path(config["workspace_root"]).expanduser()
     if not workspace_root.exists():
@@ -540,6 +892,14 @@ def parse_args() -> argparse.Namespace:
     # delete
     del_p = sub.add_parser("delete", help="Delete a workspace")
     del_p.add_argument("name", nargs="?", help="Workspace name (or auto-detect from cwd, with confirmation)")
+
+    # review-open
+    ro_p = sub.add_parser("review-open", help="Open original repos in Zed for reviewing workspace changes")
+    ro_p.add_argument("name", nargs="?", help="Workspace name (or auto-detect from cwd)")
+
+    # review
+    rev_p = sub.add_parser("review", help="TUI controller for browsing and switching workspace commits")
+    rev_p.add_argument("name", nargs="?", help="Workspace name (or auto-detect from cwd)")
 
     # list
     sub.add_parser("list", help="List existing workspaces")
@@ -625,6 +985,10 @@ def main() -> None:
         update_workspace(config, args.name)
     elif args.command == "delete":
         delete_workspace(config, args.name)
+    elif args.command == "review-open":
+        review_open(config, args.name)
+    elif args.command == "review":
+        review_tui(config, args.name)
     elif args.command == "list":
         list_workspaces(config)
 
