@@ -5,7 +5,7 @@ name = "{{ .git.name }}"
 email = "{{ .git.email }}"
 
 [ui]
-editor = ["zed", "--wait"]
+editor = "true"  # no-op so agents/scripts don't hang; fish wrapper sets JJ_EDITOR for interactive use
 default-command = ["log", "--no-pager", "--reversed"]
 diff-formatter = "difft"
 merge-editor = "meld"
