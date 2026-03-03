@@ -1,0 +1,633 @@
+#!/usr/bin/env python3.13
+"""Create workspaces from jj repos with moon task runner integration."""
+
+import argparse
+import curses
+import json
+import shutil
+import subprocess
+import sys
+import textwrap
+import tomllib
+from pathlib import Path
+
+CONFIG_PATH = Path("~/.config/workspaces/config.toml").expanduser()
+
+
+def die(msg: str) -> None:
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def load_config() -> dict:
+    if not CONFIG_PATH.exists():
+        die(f"config not found: {CONFIG_PATH}")
+    with open(CONFIG_PATH, "rb") as f:
+        return tomllib.load(f)
+
+
+def get_groups(repos: list[dict]) -> dict[str, list[int]]:
+    """Return {group_name: [repo_indices]} from repos' groups fields."""
+    groups: dict[str, list[int]] = {}
+    for i, repo in enumerate(repos):
+        for g in repo.get("groups", []):
+            groups.setdefault(g, []).append(i)
+    return dict(sorted(groups.items()))
+
+
+def validate_name(name: str) -> str | None:
+    """Return error message if name is invalid, None if ok."""
+    if not name.strip():
+        return "Cannot be empty."
+    if not all(c.isalnum() or c in "-_" for c in name):
+        return "Use only alphanumeric, hyphens, underscores."
+    return None
+
+
+# ── TUI ─────────────────────────────────────────────────────────────────
+
+
+def tui_input(stdscr, prompt: str, validator=None) -> str:
+    """Single-line text input with validation."""
+    curses.curs_set(1)
+    curses.use_default_colors()
+    stdscr.clear()
+    buf = ""
+    error = ""
+
+    while True:
+        stdscr.clear()
+        stdscr.addstr(0, 0, prompt, curses.A_BOLD)
+        stdscr.addstr(1, 0, "> " + buf)
+        if error:
+            stdscr.addstr(3, 0, error, curses.A_DIM)
+        stdscr.refresh()
+
+        ch = stdscr.get_wch()
+        if ch == "\n":
+            if validator:
+                err = validator(buf)
+                if err:
+                    error = err
+                    continue
+            if buf.strip():
+                return buf.strip()
+            error = "Cannot be empty."
+        elif ch in ("\x7f", "\b", curses.KEY_BACKSPACE):
+            buf = buf[:-1]
+            error = ""
+        elif ch == "\x1b":  # ESC
+            return ""
+        elif isinstance(ch, str) and ch.isprintable():
+            buf += ch
+            error = ""
+
+
+# Row types for the unified list
+ROW_GROUP_HEADER = "group"
+ROW_REPO = "repo"
+
+
+def build_rows(repos: list[dict]) -> list[tuple[str, str, list[int] | int]]:
+    """Build a flat list of rows: group headers + repo items, grouped by group.
+
+    Returns [(type, label, payload), ...] where:
+      - group header: (ROW_GROUP_HEADER, group_name, [repo_indices])
+      - repo item:    (ROW_REPO, repo_name, repo_index)
+
+    Repos not in any group go under "ungrouped".
+    """
+    groups = get_groups(repos)
+    grouped_indices: set[int] = set()
+    rows: list[tuple] = []
+
+    for group_name, indices in groups.items():
+        rows.append((ROW_GROUP_HEADER, group_name, indices))
+        for i in indices:
+            rows.append((ROW_REPO, repos[i]["name"], i))
+            grouped_indices.add(i)
+
+    # Ungrouped repos
+    ungrouped = [i for i in range(len(repos)) if i not in grouped_indices]
+    if ungrouped:
+        rows.append((ROW_GROUP_HEADER, "ungrouped", ungrouped))
+        for i in ungrouped:
+            rows.append((ROW_REPO, repos[i]["name"], i))
+
+    return rows
+
+
+def tui_select_repos(stdscr, repos: list[dict]) -> list[dict] | None:
+    """Unified TUI: grouped list with group headers as select-all toggles."""
+    curses.curs_set(0)
+    curses.use_default_colors()
+
+    if curses.has_colors():
+        curses.init_pair(1, curses.COLOR_GREEN, -1)   # selected
+        curses.init_pair(2, curses.COLOR_WHITE, -1)    # unselected
+        curses.init_pair(3, curses.COLOR_CYAN, -1)     # group header
+        curses.init_pair(4, curses.COLOR_YELLOW, -1)   # cursor
+
+    rows = build_rows(repos)
+    selected: set[int] = set()
+    cursor = 0
+
+    while True:
+        stdscr.clear()
+        stdscr.addstr(0, 0, "Select repos", curses.A_BOLD)
+        stdscr.addstr(1, 0, "↑↓ navigate  space toggle  enter confirm  a all  n none  q quit", curses.A_DIM)
+
+        for row_idx, (rtype, label, payload) in enumerate(rows):
+            y = row_idx + 3
+            is_cur = row_idx == cursor
+
+            if rtype == ROW_GROUP_HEADER:
+                group_indices = payload
+                all_sel = all(i in selected for i in group_indices)
+                any_sel = any(i in selected for i in group_indices)
+
+                if all_sel:
+                    marker = "●"
+                elif any_sel:
+                    marker = "◐"
+                else:
+                    marker = "○"
+
+                pointer = "▸" if is_cur else " "
+                count = f"{sum(1 for i in group_indices if i in selected)}/{len(group_indices)}"
+                attr = curses.color_pair(3) | curses.A_BOLD
+                stdscr.addstr(y, 0, f" {pointer} {marker} {label} ({count})", attr)
+
+            else:  # ROW_REPO
+                repo_idx = payload
+                is_sel = repo_idx in selected
+
+                if is_sel:
+                    marker = "●"
+                    name_attr = curses.color_pair(1)
+                else:
+                    marker = "○"
+                    name_attr = curses.color_pair(2)
+
+                if is_cur:
+                    pointer = "▸"
+                    name_attr |= curses.A_BOLD
+                else:
+                    pointer = " "
+
+                stdscr.addstr(y, 0, f" {pointer}   {marker} {label}", name_attr)
+
+        count_y = len(rows) + 4
+        stdscr.addstr(count_y, 0, f"  {len(selected)}/{len(repos)} selected", curses.A_DIM)
+
+        stdscr.refresh()
+        key = stdscr.getch()
+
+        if key in (curses.KEY_UP, ord("k")):
+            cursor = max(0, cursor - 1)
+        elif key in (curses.KEY_DOWN, ord("j")):
+            cursor = min(len(rows) - 1, cursor + 1)
+        elif key == ord(" "):
+            rtype, _, payload = rows[cursor]
+            if rtype == ROW_GROUP_HEADER:
+                group_indices = payload
+                if all(i in selected for i in group_indices):
+                    selected -= set(group_indices)
+                else:
+                    selected |= set(group_indices)
+            else:
+                selected.symmetric_difference_update({payload})
+        elif key == ord("\n"):
+            if not selected:
+                stdscr.addstr(count_y + 1, 0, "  Select at least one repo.", curses.A_BOLD)
+                stdscr.refresh()
+                stdscr.getch()
+                continue
+            return [repos[i] for i in sorted(selected)]
+        elif key == ord("a"):
+            selected = set(range(len(repos)))
+        elif key == ord("n"):
+            selected = set()
+        elif key == ord("q"):
+            return None
+
+
+# ── Moon integration ─────────────────────────────────────────────────
+
+
+def generate_moon_config(workspace_dir: Path, selected_repos: list[dict]) -> None:
+    """Generate .moon/workspace.yml at root and moon.yml per project with tasks.
+
+    Per-project moon.yml is ignored by jj via workspace-scoped snapshot.auto-track.
+    """
+    moon_dir = workspace_dir / ".moon"
+    moon_dir.mkdir(parents=True, exist_ok=True)
+
+    # .moon/workspace.yml — project mapping
+    lines = ["projects:"]
+    for repo in selected_repos:
+        lines.append(f'  {repo["name"]}: "{repo["name"]}"')
+    (moon_dir / "workspace.yml").write_text("\n".join(lines) + "\n")
+
+    # Per-project moon.yml with tasks + jj ignore
+    for repo in selected_repos:
+        tasks = repo.get("tasks", {})
+        if not tasks:
+            continue
+
+        repo_dir = workspace_dir / repo["name"]
+
+        # Generate moon.yml
+        moon_yml_lines = ["tasks:"]
+        for task_name, task_config in tasks.items():
+            moon_yml_lines.append(f"  {task_name}:")
+            moon_yml_lines.append(f'    command: "{task_config["command"]}"')
+            if "deps" in task_config:
+                moon_yml_lines.append("    deps:")
+                for dep in task_config["deps"]:
+                    moon_yml_lines.append(f"      - {dep}")
+        (repo_dir / "moon.yml").write_text("\n".join(moon_yml_lines) + "\n")
+
+        # Tell jj to ignore moon.yml in this workspace
+        subprocess.run(
+            [
+                "jj", "config", "set", "--workspace",
+                "snapshot.auto-track",
+                '"all() & ~glob:\\"moon.yml\\""',
+            ],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+        )
+
+
+def generate_zed_tasks(workspace_dir: Path, selected_repos: list[dict]) -> None:
+    """Generate .zed/tasks.json with moon run commands for all tasks."""
+    all_task_names: set[str] = set()
+    for repo in selected_repos:
+        for task_name in repo.get("tasks", {}):
+            all_task_names.add(task_name)
+
+    zed_tasks = []
+
+    # Workspace management
+    ws_name = workspace_dir.name
+    zed_tasks.append({
+        "label": "workspace: update configs",
+        "command": "workspace update",
+        "use_new_terminal": False,
+        "allow_concurrent_runs": False,
+        "reveal": "always",
+        "hide": "on_success",
+    })
+    zed_tasks.append({
+        "label": "workspace: delete",
+        "command": "workspace delete",
+        "use_new_terminal": False,
+        "allow_concurrent_runs": False,
+        "reveal": "always",
+        "hide": "never",
+    })
+
+    if not all_task_names:
+        zed_dir = workspace_dir / ".zed"
+        zed_dir.mkdir(parents=True, exist_ok=True)
+        (zed_dir / "tasks.json").write_text(json.dumps(zed_tasks, indent=2) + "\n")
+        return
+
+    # Global tasks (run across all projects)
+    for task_name in sorted(all_task_names):
+        zed_tasks.append({
+            "label": f"all: {task_name}",
+            "command": f"moon run :{task_name}",
+            "use_new_terminal": False,
+            "allow_concurrent_runs": False,
+            "reveal": "always",
+            "hide": "on_success" if task_name != "dev" else "never",
+        })
+
+    # Per-project tasks
+    for repo in selected_repos:
+        for task_name in repo.get("tasks", {}):
+            zed_tasks.append({
+                "label": f"{repo['name']}: {task_name}",
+                "command": f"moon run {repo['name']}:{task_name}",
+                "use_new_terminal": False,
+                "allow_concurrent_runs": False,
+                "reveal": "always",
+                "hide": "on_success" if task_name != "dev" else "never",
+            })
+
+    zed_dir = workspace_dir / ".zed"
+    zed_dir.mkdir(parents=True, exist_ok=True)
+    (zed_dir / "tasks.json").write_text(json.dumps(zed_tasks, indent=2) + "\n")
+
+
+# ── Core logic ───────────────────────────────────────────────────────
+
+
+def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        die(f"command failed: {' '.join(cmd)}\n{stderr}")
+    return result
+
+
+def create_workspace(config: dict, name: str, selected_repos: list[dict],
+                     skip_install: bool = False, skip_zed: bool = False) -> None:
+    workspace_root = Path(config["workspace_root"]).expanduser()
+    workspace_dir = workspace_root / name
+
+    if workspace_dir.exists():
+        die(f"workspace already exists: {workspace_dir}")
+
+    workspace_dir.mkdir(parents=True)
+    print(f"\nCreating workspace: {workspace_dir}\n")
+
+    for repo in selected_repos:
+        repo_name = repo["name"]
+        local_path = Path(repo["local_path"]).expanduser()
+        revision = repo.get("revision", "trunk()")
+        dest = workspace_dir / repo_name
+
+        if not local_path.exists():
+            die(f"repo not found: {local_path}")
+
+        print(f"  {repo_name}: creating jj workspace...")
+        run(["jj", "workspace", "add", "--revision", revision, str(dest)], cwd=local_path)
+
+    regenerate_configs(config, workspace_dir, selected_repos)
+
+    # Open workspace folder in Zed (before install so it's ready while deps install)
+    if not skip_zed:
+        print(f"  Opening in Zed...")
+        subprocess.run(["zed", "-n", str(workspace_dir)])
+
+    # Run install tasks via moon if any project has one
+    has_install = any(repo.get("tasks", {}).get("install") for repo in selected_repos)
+    if has_install and not skip_install:
+        print(f"\n  Running install via moon...\n")
+        result = subprocess.run(
+            ["moon", "run", ":install"],
+            cwd=workspace_dir,
+        )
+        if result.returncode != 0:
+            print(f"  warning: moon run :install had failures", file=sys.stderr)
+
+    print(f"\nWorkspace ready: {workspace_dir}")
+    print(f"  Run tasks:  cd {workspace_dir} && moon run :<task>")
+
+
+def regenerate_configs(config: dict, workspace_dir: Path, selected_repos: list[dict]) -> None:
+    """Regenerate moon, zed, and AGENTS.md configs for a workspace."""
+    generate_moon_config(workspace_dir, selected_repos)
+    print(f"  Generated moon config")
+
+    # Assemble AGENTS.md
+    agents_parts = [config.get("agents_md", {}).get("template", "").strip()]
+    for repo in selected_repos:
+        section = repo.get("agents_md", "").strip()
+        if section:
+            agents_parts.append(section)
+
+    agents_content = "\n\n".join(part for part in agents_parts if part) + "\n"
+    agents_path = workspace_dir / "AGENTS.md"
+    agents_path.write_text(agents_content)
+    print(f"  Wrote {agents_path}")
+
+    generate_zed_tasks(workspace_dir, selected_repos)
+    print(f"  Generated .zed/tasks.json")
+
+
+def resolve_workspace_dir(config: dict, name: str | None) -> Path:
+    """Resolve workspace directory from name or cwd."""
+    workspace_root = Path(config["workspace_root"]).expanduser()
+
+    if name:
+        workspace_dir = workspace_root / name
+    else:
+        # Try to detect from cwd
+        cwd = Path.cwd()
+        if cwd.parent == workspace_root:
+            workspace_dir = cwd
+        elif cwd == workspace_root:
+            die("run from inside a workspace directory, or pass a name")
+        else:
+            # Check if cwd is inside a workspace (e.g. in a repo subdir)
+            for parent in cwd.parents:
+                if parent.parent == workspace_root:
+                    workspace_dir = parent
+                    break
+            else:
+                die("not inside a workspace — pass a name or cd into one")
+
+    if not workspace_dir.exists():
+        die(f"workspace not found: {workspace_dir}")
+
+    return workspace_dir
+
+
+def detect_workspace_repos(config: dict, workspace_dir: Path) -> list[dict]:
+    """Detect which configured repos are present in a workspace directory."""
+    all_repos = config.get("repos", [])
+    repo_by_name = {r["name"]: r for r in all_repos}
+    selected = []
+    for subdir in sorted(workspace_dir.iterdir()):
+        if subdir.is_dir() and not subdir.name.startswith(".") and subdir.name in repo_by_name:
+            selected.append(repo_by_name[subdir.name])
+    return selected
+
+
+def update_workspace(config: dict, name: str | None) -> None:
+    workspace_dir = resolve_workspace_dir(config, name)
+    selected_repos = detect_workspace_repos(config, workspace_dir)
+
+    if not selected_repos:
+        die(f"no configured repos found in {workspace_dir}")
+
+    print(f"Updating workspace: {workspace_dir}\n")
+    regenerate_configs(config, workspace_dir, selected_repos)
+    print(f"\nWorkspace updated.")
+
+
+def delete_workspace(config: dict, name: str | None) -> None:
+    if name:
+        workspace_root = Path(config["workspace_root"]).expanduser()
+        workspace_dir = workspace_root / name
+    else:
+        workspace_dir = resolve_workspace_dir(config, None)
+        confirm = input(f"Delete workspace {workspace_dir.name}? [y/N] ").strip()
+        if confirm.lower() != "y":
+            print("Cancelled.")
+            return
+
+    if not workspace_dir.exists():
+        die(f"workspace not found: {workspace_dir}")
+
+    repos = config.get("repos", [])
+    repo_dirs = {r["name"]: Path(r["local_path"]).expanduser() for r in repos}
+
+    for subdir in sorted(workspace_dir.iterdir()):
+        if not subdir.is_dir() or subdir.name.startswith("."):
+            continue
+        if subdir.name in repo_dirs:
+            local_path = repo_dirs[subdir.name]
+            print(f"  {subdir.name}: forgetting jj workspace")
+            result = subprocess.run(
+                ["jj", "workspace", "forget", subdir.name],
+                cwd=local_path,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                print(f"  warning: jj workspace forget failed for {subdir.name}: {result.stderr.strip()}")
+
+    shutil.rmtree(workspace_dir)
+    print(f"Deleted workspace: {workspace_dir}")
+
+
+def list_workspaces(config: dict) -> None:
+    workspace_root = Path(config["workspace_root"]).expanduser()
+    if not workspace_root.exists():
+        print("No workspaces directory.")
+        return
+
+    workspaces = sorted(d for d in workspace_root.iterdir() if d.is_dir())
+    if not workspaces:
+        print("No workspaces.")
+        return
+
+    for ws in workspaces:
+        repos = [d.name for d in sorted(ws.iterdir()) if d.is_dir() and not d.name.startswith(".")]
+        print(f"  {ws.name}: {', '.join(repos) if repos else '(empty)'}")
+
+
+# ── CLI ──────────────────────────────────────────────────────────────
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="workspace",
+        description="Create and manage multi-repo workspaces with jj and moon.",
+    )
+    sub = parser.add_subparsers(dest="command", metavar="command")
+
+    # create
+    create_p = sub.add_parser("create", help="Create a new workspace")
+    create_p.add_argument("name", nargs="?", help="Workspace name")
+    create_p.add_argument(
+        "-g", "--group", action="append", dest="groups", default=[],
+        help="Select all repos in this group (repeatable)",
+    )
+    create_p.add_argument(
+        "-r", "--repo", action="append", dest="repos", default=[],
+        help="Select a specific repo by name (repeatable)",
+    )
+    create_p.add_argument(
+        "--no-install", action="store_true",
+        help="Skip running install tasks",
+    )
+    create_p.add_argument(
+        "--no-zed", action="store_true",
+        help="Don't open in Zed",
+    )
+
+    # update
+    update_p = sub.add_parser("update", help="Regenerate configs from current config.toml")
+    update_p.add_argument("name", nargs="?", help="Workspace name (or auto-detect from cwd)")
+
+    # delete
+    del_p = sub.add_parser("delete", help="Delete a workspace")
+    del_p.add_argument("name", nargs="?", help="Workspace name (or auto-detect from cwd, with confirmation)")
+
+    # list
+    sub.add_parser("list", help="List existing workspaces")
+
+    args = parser.parse_args()
+
+    # Default to create when no subcommand
+    if args.command is None:
+        args.command = "create"
+        args.name = None
+        args.groups = []
+        args.repos = []
+        args.no_install = False
+        args.no_zed = False
+
+    return args
+
+
+def resolve_repos_from_args(
+    all_repos: list[dict],
+    group_names: list[str],
+    repo_names: list[str],
+) -> list[dict]:
+    """Resolve repos from --group and --repo flags."""
+    groups = get_groups(all_repos)
+    selected_indices: set[int] = set()
+
+    for g in group_names:
+        if g not in groups:
+            die(f"unknown group: {g} (available: {', '.join(groups)})")
+        selected_indices |= set(groups[g])
+
+    repo_name_map = {r["name"]: i for i, r in enumerate(all_repos)}
+    for r in repo_names:
+        if r not in repo_name_map:
+            die(f"unknown repo: {r} (available: {', '.join(repo_name_map)})")
+        selected_indices.add(repo_name_map[r])
+
+    return [all_repos[i] for i in sorted(selected_indices)]
+
+
+def main() -> None:
+    config = load_config()
+    args = parse_args()
+
+    if args.command == "create":
+        all_repos = config.get("repos", [])
+        if not all_repos:
+            die("no repos configured in config.toml")
+
+        # Resolve name
+        name = args.name
+        if not name:
+            name = curses.wrapper(tui_input, "Workspace name:", validate_name)
+            if not name:
+                print("Cancelled.")
+                sys.exit(0)
+        else:
+            err = validate_name(name)
+            if err:
+                die(err)
+
+        workspace_root = Path(config["workspace_root"]).expanduser()
+        if (workspace_root / name).exists():
+            die(f"workspace already exists: {workspace_root / name}")
+
+        # Resolve repo selection
+        if args.groups or args.repos:
+            selected = resolve_repos_from_args(all_repos, args.groups, args.repos)
+            if not selected:
+                die("no repos matched the given groups/repos")
+        else:
+            selected = curses.wrapper(tui_select_repos, all_repos)
+            if not selected:
+                print("Cancelled.")
+                sys.exit(0)
+
+        create_workspace(config, name, selected,
+                         skip_install=args.no_install,
+                         skip_zed=args.no_zed)
+
+    elif args.command == "update":
+        update_workspace(config, args.name)
+    elif args.command == "delete":
+        delete_workspace(config, args.name)
+    elif args.command == "list":
+        list_workspaces(config)
+
+
+if __name__ == "__main__":
+    main()

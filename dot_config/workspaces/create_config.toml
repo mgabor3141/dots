@@ -1,0 +1,43 @@
+# Workspace Configuration
+#
+# workspace_root: where workspaces are created
+# agents_md.template: written to every workspace's AGENTS.md
+#
+# [[repos]]: each repo that can be included in a workspace
+#   name        - identifier and subdirectory name
+#   local_path  - path to the existing local jj repo
+#   revision    - starting revision (default: "trunk()")
+#   groups      - list of group names this repo belongs to
+#   agents_md   - extra content appended to the auto-generated AGENTS.md section
+#               (heading and GIT_DIR line are generated automatically)
+#
+#   [repos.tasks.<name>] - moon tasks generated into the repo's moon.yml
+#     command  - shell command to run
+#     deps     - list of task dependencies (optional)
+
+workspace_root = "~/workspaces"
+
+[agents_md]
+template = """
+# Workspace AGENTS.md
+
+This workspace contains the following repositories.
+Each has its own jj workspace linked to the main repo.
+"""
+
+# Example repo configuration:
+#
+# [[repos]]
+# name = "my-app"
+# local_path = "~/dev/my-app"
+# groups = ["team"]
+# agents_md = """
+# Node.js/TypeScript monorepo (pnpm + Nx).
+# - `pnpm nx run <project>:<target>` for specific packages.
+# """
+#
+# [repos.tasks.install]
+# command = "pnpm install"
+#
+# [repos.tasks.lint]
+# command = "pnpm lint"
