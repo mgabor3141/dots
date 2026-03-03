@@ -504,9 +504,10 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
 
     Returns list of dicts with keys:
         name, original_dir, commits (list, oldest first),
-        current_edit (change_id of default@), temp_commits (list of change_ids)
+        current_edit (full change_id of default@), temp_commit, active_range
 
-    Each commit dict has: change_id, description, empty, files, bookmarks
+    Each commit dict has: change_id (full), short_id, description, empty,
+        files, bookmarks
     """
     repos = []
     for subdir in sorted(workspace_dir.iterdir()):
@@ -523,7 +524,8 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
         # Get commits between trunk and workspace head (newest first from jj)
         log_result = subprocess.run(
             ["jj", "log", "--no-pager", "-r", f"trunk()..{name}@", "--no-graph",
-             "-T", 'change_id.shortest() ++ "\t"'
+             "-T", 'change_id ++ "\t"'
+                   '++ change_id.shortest() ++ "\t"'
                    '++ description.first_line() ++ "\t"'
                    '++ if(empty, "empty", "changed") ++ "\t"'
                    '++ bookmarks.join(",") ++ "\n"'],
@@ -535,25 +537,27 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
             for line in log_result.stdout.strip().split("\n"):
                 if not line.strip():
                     continue
-                parts = line.split("\t", 3)
-                if len(parts) < 3:
+                parts = line.split("\t", 4)
+                if len(parts) < 4:
                     continue
-                cid = parts[0].strip()
-                desc = parts[1].strip() or "(no description)"
-                status = parts[2].strip()
-                bookmarks_str = parts[3].strip() if len(parts) > 3 else ""
+                full_cid = parts[0].strip()
+                short_cid = parts[1].strip()
+                desc = parts[2].strip() or "(no description)"
+                status = parts[3].strip()
+                bookmarks_str = parts[4].strip() if len(parts) > 4 else ""
                 bookmarks = [b for b in bookmarks_str.split(",") if b] if bookmarks_str else []
 
                 # Get changed files for this commit
                 files_result = subprocess.run(
-                    ["jj", "diff", "--no-pager", "-r", cid, "--name-only"],
+                    ["jj", "diff", "--no-pager", "-r", full_cid, "--name-only"],
                     cwd=original, capture_output=True, text=True,
                 )
                 files = []
                 if files_result.returncode == 0:
                     files = [f for f in files_result.stdout.strip().split("\n") if f]
                 commits.append({
-                    "change_id": cid,
+                    "change_id": full_cid,
+                    "short_id": short_cid,
                     "description": desc,
                     "empty": status == "empty",
                     "files": files,
@@ -563,10 +567,10 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
         # Reverse so oldest is first (index 0 = closest to trunk)
         commits.reverse()
 
-        # What is default@ currently pointing at?
+        # What is default@ currently pointing at? (full change_id)
         cur_result = subprocess.run(
             ["jj", "log", "--no-pager", "-r", "default@", "--no-graph",
-             "-T", "change_id.shortest()"],
+             "-T", "change_id"],
             cwd=original, capture_output=True, text=True,
         )
         current_edit = cur_result.stdout.strip() if cur_result.returncode == 0 else ""
@@ -613,10 +617,10 @@ def jj_create_temp_squash(original_dir: Path, bottom_cid: str, top_cid: str) -> 
     if result.returncode != 0:
         return None
 
-    # Get the new commit's change_id (it's now default@)
+    # Get the new commit's full change_id (it's now default@)
     cid_result = subprocess.run(
         ["jj", "log", "--no-pager", "-r", "default@", "--no-graph",
-         "-T", "change_id.shortest()"],
+         "-T", "change_id"],
         cwd=original_dir, capture_output=True, text=True,
     )
     if cid_result.returncode != 0:
@@ -635,6 +639,33 @@ def jj_create_temp_squash(original_dir: Path, bottom_cid: str, top_cid: str) -> 
         return None
 
     return temp_cid
+
+
+def jj_resolve_successor(original_dir: Path, full_cid: str) -> str | None:
+    """Try to find the successor of a change via evolog.
+
+    If the change was rewritten (rebased, amended, squashed), the latest
+    version in the evolog has a different commit_id but the same change_id.
+    If the change was abandoned and its content moved to a new change,
+    we check if the evolog's latest predecessor points to a successor.
+
+    Returns the full change_id of the successor, or None if not found.
+    """
+    # First: does the change_id still resolve at all?
+    result = subprocess.run(
+        ["jj", "log", "--no-pager", "-r", full_cid, "--no-graph",
+         "-T", "change_id"],
+        cwd=original_dir, capture_output=True, text=True,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        # Change still exists — return it (might have been rebased but same id)
+        return result.stdout.strip()
+
+    # Change doesn't resolve. Check evolog for what happened.
+    # The evolog shows the history of a change. If abandoned, there might be
+    # a successor hint. But jj doesn't have a native successor concept,
+    # so if the change_id is truly gone, we can't recover.
+    return None
 
 
 def jj_abandon_temp(repo: dict) -> None:
@@ -711,29 +742,29 @@ def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
         if ok:
             repo["current_edit"] = commit["change_id"]
             repo["active_range"] = commit["change_id"]
-            return f"✓ jj edit {commit['change_id']} in {repo['name']}"
+            return f"✓ jj edit {commit['short_id']} in {repo['name']}"
         return f"✗ jj edit failed for {repo['name']}"
 
     # Range: oldest is lower index, newest is higher index
     lo = min(row, visual_anchor)
     hi = max(row, visual_anchor)
-    bottom_cid = commits[lo]["change_id"]  # oldest (closest to trunk)
-    top_cid = commits[hi]["change_id"]     # newest (closest to head)
+    bottom = commits[lo]
+    top = commits[hi]
 
     if lo == hi:
-        ok = jj_edit(original, bottom_cid)
+        ok = jj_edit(original, bottom["change_id"])
         if ok:
-            repo["current_edit"] = bottom_cid
-            repo["active_range"] = bottom_cid
-            return f"✓ jj edit {bottom_cid} in {repo['name']}"
+            repo["current_edit"] = bottom["change_id"]
+            repo["active_range"] = bottom["change_id"]
+            return f"✓ jj edit {bottom['short_id']} in {repo['name']}"
         return f"✗ jj edit failed for {repo['name']}"
 
-    temp_cid = jj_create_temp_squash(original, bottom_cid, top_cid)
+    temp_cid = jj_create_temp_squash(original, bottom["change_id"], top["change_id"])
     if temp_cid:
         repo["temp_commit"] = temp_cid
         repo["current_edit"] = temp_cid
-        repo["active_range"] = (bottom_cid, top_cid)
-        return f"✓ squash {bottom_cid}..{top_cid} → {temp_cid} in {repo['name']}"
+        repo["active_range"] = (bottom["change_id"], top["change_id"])
+        return f"✓ squash {bottom['short_id']}..{top['short_id']} in {repo['name']}"
     return f"✗ squash failed for {repo['name']}"
 
 
@@ -842,25 +873,41 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
             row = max(0, len(repos_with_commits[col]["commits"]) - 1)
         visual_anchor = None
 
-        # Re-apply saved ranges where the change_ids still exist
+        # Re-apply saved ranges, resolving successors if needed
         for repo in all_repos:
             ar = saved_ranges.get(repo["name"])
             if ar is None:
                 continue
             cids = {c["change_id"] for c in repo["commits"]}
+
+            def resolve(cid: str) -> str | None:
+                """Resolve a change_id, trying successor if not in range."""
+                if cid in cids:
+                    return cid
+                succ = jj_resolve_successor(repo["original_dir"], cid)
+                return succ if succ and succ in cids else None
+
             if isinstance(ar, tuple):
-                bottom_cid, top_cid = ar
-                if bottom_cid in cids and top_cid in cids:
-                    temp_cid = jj_create_temp_squash(
-                        repo["original_dir"], bottom_cid, top_cid)
-                    if temp_cid:
-                        repo["temp_commit"] = temp_cid
-                        repo["current_edit"] = temp_cid
-                        repo["active_range"] = ar
-            elif ar in cids:
-                jj_edit(repo["original_dir"], ar)
-                repo["current_edit"] = ar
-                repo["active_range"] = ar
+                bottom = resolve(ar[0])
+                top = resolve(ar[1])
+                if bottom and top:
+                    if bottom == top:
+                        jj_edit(repo["original_dir"], bottom)
+                        repo["current_edit"] = bottom
+                        repo["active_range"] = bottom
+                    else:
+                        temp_cid = jj_create_temp_squash(
+                            repo["original_dir"], bottom, top)
+                        if temp_cid:
+                            repo["temp_commit"] = temp_cid
+                            repo["current_edit"] = temp_cid
+                            repo["active_range"] = (bottom, top)
+            else:
+                resolved = resolve(ar)
+                if resolved:
+                    jj_edit(repo["original_dir"], resolved)
+                    repo["current_edit"] = resolved
+                    repo["active_range"] = resolved
 
     def get_filtered_bookmarks() -> list[tuple[str, list[tuple[str, int]]]]:
         bm = collect_bookmarks(repos_with_commits)
@@ -1027,14 +1074,14 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
                 if is_cursor:
                     attr |= curses.A_BOLD
 
-                cid = commit["change_id"]
+                short = commit["short_id"]
                 desc = commit["description"]
                 bm_tag = ""
                 if commit["bookmarks"]:
                     bm_tag = " ⊘ " + ",".join(commit["bookmarks"])
 
                 line = f" {pointer}{marker} {desc}"
-                tag = f"{bm_tag} [{cid}]"
+                tag = f"{bm_tag} [{short}]"
 
                 available = max_x - 2
                 if len(line) + len(tag) + 1 <= available:
