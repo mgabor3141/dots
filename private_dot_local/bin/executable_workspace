@@ -117,7 +117,7 @@ def build_rows(repos: list[dict]) -> list[tuple[str, str, list[int] | int]]:
     return rows
 
 
-def tui_select_repos(stdscr, repos: list[dict]) -> list[dict] | None:
+def tui_select_repos(stdscr, repos: list[dict], preselected: list[dict] | None = None) -> list[dict] | None:
     """Unified TUI: grouped list with group headers as select-all toggles."""
     curses.curs_set(0)
     curses.use_default_colors()
@@ -130,6 +130,9 @@ def tui_select_repos(stdscr, repos: list[dict]) -> list[dict] | None:
 
     rows = build_rows(repos)
     selected: set[int] = set()
+    if preselected:
+        pre_names = {r["name"] for r in preselected}
+        selected = {i for i, r in enumerate(repos) if r["name"] in pre_names}
     cursor = 0
 
     while True:
@@ -354,8 +357,10 @@ def create_workspace(config: dict, name: str, selected_repos: list[dict],
         if not local_path.exists():
             die(f"repo not found: {local_path}")
 
-        print(f"  {repo_name}: creating jj workspace...")
-        run(["jj", "workspace", "add", "--revision", revision, str(dest)], cwd=local_path)
+        jj_ws_name = f"{name}-{repo_name}"
+        print(f"  {repo_name}: fetching and creating jj workspace...")
+        subprocess.run(["jj", "git", "fetch"], cwd=local_path, capture_output=True, text=True)
+        run(["jj", "workspace", "add", "--name", jj_ws_name, "--revision", revision, str(dest)], cwd=local_path)
 
     regenerate_configs(config, workspace_dir, selected_repos)
 
@@ -385,12 +390,45 @@ def regenerate_configs(config: dict, workspace_dir: Path, selected_repos: list[d
     print(f"  Generated moon config")
 
     # Assemble AGENTS.md
+    home = Path.home()
     agents_parts = [config.get("agents_md", {}).get("template", "").strip()]
-    for repo in selected_repos:
-        section = repo.get("agents_md", "").strip()
-        if section:
-            agents_parts.append(section)
 
+    # Build per-repo GIT_DIR table and sections
+    git_dir_lines = []
+    repo_sections = []
+    for repo in selected_repos:
+        local_path = Path(repo["local_path"]).expanduser()
+        git_dir = local_path / ".git"
+        # Use ~/... path when possible
+        try:
+            tilde_git_dir = "~/" + str(git_dir.relative_to(home))
+        except ValueError:
+            tilde_git_dir = str(git_dir)
+        git_dir_lines.append(f"- **{repo['name']}**: `GIT_DIR={tilde_git_dir}`")
+
+        # Auto-generate heading from folder name
+        section_lines = [f"## {repo['name']}"]
+        # Append any custom agents_md content
+        custom = repo.get("agents_md", "").strip()
+        # Strip leading heading if it matches the auto-generated one
+        if custom:
+            lines = custom.split("\n")
+            if lines and lines[0].strip().lower() == f"## {repo['name']}".lower():
+                lines = lines[1:]
+            custom = "\n".join(lines).strip()
+        if custom:
+            section_lines.append(custom)
+        repo_sections.append("\n".join(section_lines))
+
+    if git_dir_lines:
+        agents_parts.append(
+            "### Using the `gh` CLI\n\n"
+            "Each subdirectory is a jj workspace, not a full git clone. "
+            "Set the `GIT_DIR` environment variable so `gh` can find the git repo:\n\n"
+            + "\n".join(git_dir_lines)
+        )
+
+    agents_parts.extend(repo_sections)
     agents_content = "\n\n".join(part for part in agents_parts if part) + "\n"
     agents_path = workspace_dir / "AGENTS.md"
     agents_path.write_text(agents_content)
@@ -439,12 +477,76 @@ def detect_workspace_repos(config: dict, workspace_dir: Path) -> list[dict]:
     return selected
 
 
-def update_workspace(config: dict, name: str | None) -> None:
+def update_workspace(config: dict, name: str | None, edit: bool = False,
+                     add_repos: list[str] | None = None,
+                     add_groups: list[str] | None = None) -> None:
     workspace_dir = resolve_workspace_dir(config, name)
-    selected_repos = detect_workspace_repos(config, workspace_dir)
+    all_repos = config.get("repos", [])
+    current_repos = detect_workspace_repos(config, workspace_dir)
 
-    if not selected_repos:
+    if not current_repos and not edit and not add_repos and not add_groups:
         die(f"no configured repos found in {workspace_dir}")
+
+    if add_repos or add_groups:
+        # CLI-based add: merge current + new
+        extra = resolve_repos_from_args(all_repos, add_groups or [], add_repos or [])
+        current_names = {r["name"] for r in current_repos}
+        merged = list(current_repos)
+        for r in extra:
+            if r["name"] not in current_names:
+                merged.append(r)
+        selected_repos = merged
+    elif edit:
+        selected_repos = curses.wrapper(tui_select_repos, all_repos, current_repos)
+        if selected_repos is None:
+            print("Cancelled.")
+            return
+    else:
+        selected_repos = current_repos
+
+    current_names = {r["name"] for r in current_repos}
+    new_names = {r["name"] for r in selected_repos}
+
+    ws_name = workspace_dir.name
+
+    # Add new repos
+    for repo in selected_repos:
+        if repo["name"] not in current_names:
+            local_path = Path(repo["local_path"]).expanduser()
+            revision = repo.get("revision", "trunk()")
+            dest = workspace_dir / repo["name"]
+            jj_ws_name = f"{ws_name}-{repo['name']}"
+            if not local_path.exists():
+                die(f"repo not found: {local_path}")
+            print(f"  {repo['name']}: fetching and creating jj workspace...")
+            subprocess.run(["jj", "git", "fetch"], cwd=local_path, capture_output=True, text=True)
+            run(["jj", "workspace", "add", "--name", jj_ws_name, "--revision", revision, str(dest)], cwd=local_path)
+
+    # Remove repos no longer selected
+    for repo in current_repos:
+        if repo["name"] not in new_names:
+            local_path = Path(repo["local_path"]).expanduser()
+            jj_ws_name = f"{ws_name}-{repo['name']}"
+            print(f"  {repo['name']}: forgetting jj workspace")
+            result = subprocess.run(
+                ["jj", "workspace", "forget", jj_ws_name],
+                cwd=local_path,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                # Try old naming for backward compat
+                result = subprocess.run(
+                    ["jj", "workspace", "forget", repo["name"]],
+                    cwd=local_path,
+                    capture_output=True,
+                    text=True,
+                )
+            if result.returncode != 0:
+                print(f"  warning: jj workspace forget failed: {result.stderr.strip()}")
+            dest = workspace_dir / repo["name"]
+            if dest.exists():
+                shutil.rmtree(dest)
 
     print(f"Updating workspace: {workspace_dir}\n")
     regenerate_configs(config, workspace_dir, selected_repos)
@@ -468,18 +570,28 @@ def delete_workspace(config: dict, name: str | None) -> None:
     repos = config.get("repos", [])
     repo_dirs = {r["name"]: Path(r["local_path"]).expanduser() for r in repos}
 
+    ws_name = workspace_dir.name
     for subdir in sorted(workspace_dir.iterdir()):
         if not subdir.is_dir() or subdir.name.startswith("."):
             continue
         if subdir.name in repo_dirs:
             local_path = repo_dirs[subdir.name]
+            jj_ws_name = f"{ws_name}-{subdir.name}"
             print(f"  {subdir.name}: forgetting jj workspace")
             result = subprocess.run(
-                ["jj", "workspace", "forget", subdir.name],
+                ["jj", "workspace", "forget", jj_ws_name],
                 cwd=local_path,
                 capture_output=True,
                 text=True,
             )
+            if result.returncode != 0:
+                # Try old naming (repo name only) for backward compat
+                result = subprocess.run(
+                    ["jj", "workspace", "forget", subdir.name],
+                    cwd=local_path,
+                    capture_output=True,
+                    text=True,
+                )
             if result.returncode != 0:
                 print(f"  warning: jj workspace forget failed for {subdir.name}: {result.stderr.strip()}")
 
@@ -509,6 +621,7 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
     Each commit dict has: change_id (full), short_id, description, empty,
         files, bookmarks
     """
+    ws_name = workspace_dir.name
     repos = []
     for subdir in sorted(workspace_dir.iterdir()):
         if not subdir.is_dir() or subdir.name.startswith("."):
@@ -517,13 +630,30 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
             continue
 
         name = subdir.name
+        jj_ws_name = f"{ws_name}-{name}"
         original = get_original_repo(subdir)
         if not original:
             continue
 
+        # All jj operations run against the original repo. We manipulate default@
+        # there so the user can view diffs in the editor, leaving workspace copies
+        # untouched for the agent. Read-only ops use --ignore-working-copy to
+        # avoid stale errors; mutations use jj_update_stale() first instead.
+
+        # Detect jj workspace name: try new format (ws-repo) first, fall back to old (repo)
+        detect_result = subprocess.run(
+            ["jj", "log", "--no-pager", "--ignore-working-copy",
+             "-r", f"{jj_ws_name}@", "--no-graph", "-T", "change_id"],
+            cwd=original, capture_output=True, text=True,
+        )
+        if detect_result.returncode != 0 or not detect_result.stdout.strip():
+            # Fall back to old naming (repo name only)
+            jj_ws_name = name
+
         # Get commits between trunk and workspace head (newest first from jj)
         log_result = subprocess.run(
-            ["jj", "log", "--no-pager", "-r", f"trunk()..{name}@", "--no-graph",
+            ["jj", "log", "--no-pager", "--ignore-working-copy",
+             "-r", f"trunk()..{jj_ws_name}@", "--no-graph",
              "-T", 'change_id ++ "\t"'
                    '++ change_id.shortest() ++ "\t"'
                    '++ description.first_line() ++ "\t"'
@@ -549,7 +679,8 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
 
                 # Get changed files for this commit
                 files_result = subprocess.run(
-                    ["jj", "diff", "--no-pager", "-r", full_cid, "--name-only"],
+                    ["jj", "diff", "--no-pager", "--ignore-working-copy",
+                     "-r", full_cid, "--name-only"],
                     cwd=original, capture_output=True, text=True,
                 )
                 files = []
@@ -567,15 +698,28 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
         # Reverse so oldest is first, drop empty commits
         commits = [c for c in reversed(commits) if not c["empty"]]
 
-        # What is default@ currently pointing at? (full change_id)
+        # What is default@ currently pointing at? (full change_id + description)
         cur_result = subprocess.run(
-            ["jj", "log", "--no-pager", "-r", "default@", "--no-graph",
-             "-T", "change_id"],
+            ["jj", "log", "--no-pager", "--ignore-working-copy",
+             "-r", "default@", "--no-graph",
+             "-T", 'change_id ++ "\t" ++ description.first_line()'],
             cwd=original, capture_output=True, text=True,
         )
-        current_edit = cur_result.stdout.strip() if cur_result.returncode == 0 else ""
+        current_edit = ""
+        if cur_result.returncode == 0:
+            parts = cur_result.stdout.strip().split("\t", 1)
+            current_edit = parts[0]
+            cur_desc = parts[1] if len(parts) > 1 else ""
+            # Clean up orphaned temp commits from previous sessions
+            if cur_desc.startswith("temp: reviewing"):
+                jj_update_stale(original)
+                subprocess.run(
+                    ["jj", "abandon", current_edit],
+                    cwd=original, capture_output=True, text=True,
+                )
+                current_edit = ""
 
-        repos.append({
+        repo_data = {
             "name": name,
             "original_dir": original,
             "commits": commits,
@@ -583,9 +727,32 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
             "temp_commit": None,
             # Active range as (bottom_cid, top_cid) or single cid string, or None
             "active_range": None,
-        })
+        }
+
+        repos.append(repo_data)
 
     return repos
+
+
+def auto_select_full_ranges(repos: list[dict]) -> None:
+    """Auto-select the full commit range for repos that have commits but no active range."""
+    for repo in repos:
+        if repo["active_range"] is not None or not repo["commits"]:
+            continue
+        commits = repo["commits"]
+        if len(commits) == 1:
+            cid = commits[0]["change_id"]
+            if jj_edit(repo["original_dir"], cid):
+                repo["current_edit"] = cid
+                repo["active_range"] = cid
+        else:
+            bottom_cid = commits[0]["change_id"]
+            top_cid = commits[-1]["change_id"]
+            temp_cid = jj_create_temp_squash(repo["original_dir"], bottom_cid, top_cid)
+            if temp_cid:
+                repo["temp_commit"] = temp_cid
+                repo["current_edit"] = temp_cid
+                repo["active_range"] = (bottom_cid, top_cid)
 
 
 def collect_bookmarks(repos: list[dict]) -> dict[str, list[tuple[str, int]]]:
@@ -608,6 +775,9 @@ def jj_create_temp_squash(original_dir: Path, bottom_cid: str, top_cid: str) -> 
     The temp commit's parent is parents(bottom_cid), its tree is top_cid's tree.
     Returns the temp commit's change_id, or None on failure.
     """
+    # Fix staleness before mutating
+    jj_update_stale(original_dir)
+
     # Create new commit as child of bottom's parent
     result = subprocess.run(
         ["jj", "new", f"parents({bottom_cid})",
@@ -653,7 +823,8 @@ def jj_resolve_successor(original_dir: Path, full_cid: str) -> str | None:
     """
     # First: does the change_id still resolve at all?
     result = subprocess.run(
-        ["jj", "log", "--no-pager", "-r", full_cid, "--no-graph",
+        ["jj", "log", "--no-pager", "--ignore-working-copy",
+         "-r", full_cid, "--no-graph",
          "-T", "change_id"],
         cwd=original_dir, capture_output=True, text=True,
     )
@@ -671,6 +842,7 @@ def jj_resolve_successor(original_dir: Path, full_cid: str) -> str | None:
 def jj_abandon_temp(repo: dict) -> None:
     """Abandon the active temp commit for a repo, if any."""
     if repo.get("temp_commit"):
+        jj_update_stale(repo["original_dir"])
         subprocess.run(
             ["jj", "abandon", repo["temp_commit"]],
             cwd=repo["original_dir"], capture_output=True, text=True,
@@ -715,8 +887,17 @@ def review_open(config: dict, name: str | None) -> None:
 # ── Review: TUI controller ──────────────────────────────────────────
 
 
+def jj_update_stale(original_dir: Path) -> None:
+    """Fix stale working copy if needed (no-op if already current)."""
+    subprocess.run(
+        ["jj", "workspace", "update-stale"],
+        cwd=original_dir, capture_output=True, text=True,
+    )
+
+
 def jj_edit(original_dir: Path, change_id: str) -> bool:
-    """Run jj edit in the original repo. Returns True on success."""
+    """Run jj edit in the original repo, updating working copy files. Returns True on success."""
+    jj_update_stale(original_dir)
     result = subprocess.run(
         ["jj", "edit", change_id],
         cwd=original_dir, capture_output=True, text=True,
@@ -909,6 +1090,10 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
                     repo["current_edit"] = resolved
                     repo["active_range"] = resolved
 
+        # Auto-select full range for repos with commits but no active range
+        auto_select_full_ranges(all_repos)
+        repos_with_commits[:] = [r for r in all_repos if r["commits"]]
+
     def get_filtered_bookmarks() -> list[tuple[str, list[tuple[str, int]]]]:
         bm = collect_bookmarks(repos_with_commits)
         if not bookmark_filter:
@@ -933,21 +1118,25 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
         for repo in all_repos:
             if not repo["commits"]:
                 continue
-            cur = repo["current_edit"]
-            desc = "(at trunk)"
-            active = False
-            for c in repo["commits"]:
-                if c["change_id"] == cur:
-                    desc = c["description"]
-                    active = True
-                    break
-            # Also check if current_edit is a temp commit
-            if not active and cur == repo.get("temp_commit"):
-                desc = "(squashed range)"
-                active = True
-
-            if not active:
+            ar = repo.get("active_range")
+            if ar is None:
                 continue
+
+            if isinstance(ar, tuple):
+                # Find descriptions for range bounds
+                bottom_desc = top_desc = "?"
+                for c in repo["commits"]:
+                    if c["change_id"] == ar[0]:
+                        bottom_desc = c["short_id"]
+                    if c["change_id"] == ar[1]:
+                        top_desc = c["short_id"]
+                desc = f"{bottom_desc}..{top_desc} (squashed range)"
+            else:
+                desc = "(at trunk)"
+                for c in repo["commits"]:
+                    if c["change_id"] == ar:
+                        desc = c["description"]
+                        break
 
             attr = curses.color_pair(1)
             line = f"  ● {repo['name']:<24s} {desc}"
@@ -1042,6 +1231,20 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
             if row >= len(commits):
                 row = max(0, len(commits) - 1)
 
+            # Compute active set (which commits are in the active range)
+            ar = repo.get("active_range")
+            if ar is None:
+                active_set = set()
+            elif isinstance(ar, tuple):
+                bottom_idx = next((i for i, c in enumerate(commits) if c["change_id"] == ar[0]), None)
+                top_idx = next((i for i, c in enumerate(commits) if c["change_id"] == ar[1]), None)
+                if bottom_idx is not None and top_idx is not None:
+                    active_set = {commits[i]["change_id"] for i in range(bottom_idx, top_idx + 1)}
+                else:
+                    active_set = set()
+            else:
+                active_set = {ar}
+
             # Compute visual range
             vis_lo = vis_hi = None
             if visual_anchor is not None:
@@ -1054,7 +1257,9 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
                     break
 
                 is_cursor = ci == row
-                is_active = commit["change_id"] == repo["current_edit"]
+                cid = commit["change_id"]
+                # Check if this commit is in the active range
+                is_active = cid in active_set
                 in_range = vis_lo is not None and vis_lo <= ci <= vis_hi
 
                 if in_range:
@@ -1102,14 +1307,13 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
                         safe_addstr(y, 0, display[:max_x - 1], fattr)
                         y += 1
         else:
-            tab_y += 1
-            safe_addstr(tab_y, 1, "(no repos with commits)", curses.A_DIM)
+            safe_addstr(list_y + 1, 1, "(no repos with commits)", curses.A_DIM)
 
         # ── Help bar ──
         if visual_anchor is not None:
             help_line = " VISUAL: j/k:extend  space/enter:apply range  v/esc:cancel"
         else:
-            help_line = " h/l:repos  j/k:commits  space/enter:edit  v:range  b:bookmarks  r:refresh  q:quit"
+            help_line = " h/l:repos  j/k:commits  space/enter:edit  v:range  a:all  b:bookmarks  r:refresh  q:quit"
         if status_msg:
             help_line = f" {status_msg}"
             status_msg = ""
@@ -1144,6 +1348,27 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
                 status_msg = apply_edit_or_range(
                     repos_with_commits[col], row, visual_anchor)
                 visual_anchor = None
+        elif key == ord("a"):
+            if repos_with_commits:
+                repo = repos_with_commits[col]
+                commits = repo["commits"]
+                if commits:
+                    jj_abandon_temp(repo)
+                    if len(commits) == 1:
+                        cid = commits[0]["change_id"]
+                        if jj_edit(repo["original_dir"], cid):
+                            repo["current_edit"] = cid
+                            repo["active_range"] = cid
+                            status_msg = f"✓ selected all in {repo['name']}"
+                    else:
+                        bottom_cid = commits[0]["change_id"]
+                        top_cid = commits[-1]["change_id"]
+                        temp_cid = jj_create_temp_squash(repo["original_dir"], bottom_cid, top_cid)
+                        if temp_cid:
+                            repo["temp_commit"] = temp_cid
+                            repo["current_edit"] = temp_cid
+                            repo["active_range"] = (bottom_cid, top_cid)
+                            status_msg = f"✓ selected all in {repo['name']}"
         elif key == ord("b"):
             bookmark_mode = True
             bookmark_filter = ""
@@ -1164,6 +1389,8 @@ def review_tui(config: dict, name: str | None) -> None:
 
     if not repos:
         die(f"no jj repos found in {workspace_dir}")
+
+    auto_select_full_ranges(repos)
 
     try:
         curses.wrapper(tui_review, repos, workspace_dir.name)
@@ -1222,6 +1449,15 @@ def parse_args() -> argparse.Namespace:
     # update
     update_p = sub.add_parser("update", help="Regenerate configs from current config.toml")
     update_p.add_argument("name", nargs="?", help="Workspace name (or auto-detect from cwd)")
+    update_p.add_argument("-e", "--edit", action="store_true", help="Add/remove repos via TUI")
+    update_p.add_argument(
+        "-a", "--add", action="append", dest="add_repos", default=[],
+        help="Add a repo by name (repeatable)",
+    )
+    update_p.add_argument(
+        "--add-group", action="append", dest="add_groups", default=[],
+        help="Add all repos in a group (repeatable)",
+    )
 
     # delete
     del_p = sub.add_parser("delete", help="Delete a workspace")
@@ -1316,7 +1552,8 @@ def main() -> None:
                          skip_zed=args.no_zed)
 
     elif args.command == "update":
-        update_workspace(config, args.name)
+        update_workspace(config, args.name, edit=args.edit,
+                         add_repos=args.add_repos, add_groups=args.add_groups)
     elif args.command == "delete":
         delete_workspace(config, args.name)
     elif args.command == "review-open":
