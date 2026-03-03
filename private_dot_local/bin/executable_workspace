@@ -1118,7 +1118,7 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
         stdscr.refresh()
         key = stdscr.getch()
 
-        if key == ord("q"):
+        if key in (ord("q"), 27):  # q or ESC
             return
         elif key in (ord("h"), curses.KEY_LEFT):
             if visual_anchor is None and repos_with_commits and col > 0:
@@ -1167,6 +1167,8 @@ def review_tui(config: dict, name: str | None) -> None:
 
     try:
         curses.wrapper(tui_review, repos, workspace_dir.name)
+    except KeyboardInterrupt:
+        pass
     finally:
         jj_abandon_all_temps(repos)
 
