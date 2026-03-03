@@ -564,8 +564,8 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
                     "bookmarks": bookmarks,
                 })
 
-        # Reverse so oldest is first (index 0 = closest to trunk)
-        commits.reverse()
+        # Reverse so oldest is first, drop empty commits
+        commits = [c for c in reversed(commits) if not c["empty"]]
 
         # What is default@ currently pointing at? (full change_id)
         cur_result = subprocess.run(
