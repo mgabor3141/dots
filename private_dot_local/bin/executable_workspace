@@ -577,6 +577,8 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
             "commits": commits,
             "current_edit": current_edit,
             "temp_commit": None,
+            # Active range as (bottom_cid, top_cid) or single cid string, or None
+            "active_range": None,
         })
 
     return repos
@@ -694,7 +696,8 @@ def jj_edit(original_dir: Path, change_id: str) -> bool:
 def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
     """Apply jj edit for a single commit or a squashed range.
 
-    Abandons any existing temp commit first. Returns a status message.
+    Abandons any existing temp commit first. Records the active range.
+    Returns a status message.
     """
     jj_abandon_temp(repo)
 
@@ -707,6 +710,7 @@ def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
         ok = jj_edit(original, commit["change_id"])
         if ok:
             repo["current_edit"] = commit["change_id"]
+            repo["active_range"] = commit["change_id"]
             return f"✓ jj edit {commit['change_id']} in {repo['name']}"
         return f"✗ jj edit failed for {repo['name']}"
 
@@ -717,10 +721,10 @@ def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
     top_cid = commits[hi]["change_id"]     # newest (closest to head)
 
     if lo == hi:
-        # Degenerate range — single commit
         ok = jj_edit(original, bottom_cid)
         if ok:
             repo["current_edit"] = bottom_cid
+            repo["active_range"] = bottom_cid
             return f"✓ jj edit {bottom_cid} in {repo['name']}"
         return f"✗ jj edit failed for {repo['name']}"
 
@@ -728,6 +732,7 @@ def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
     if temp_cid:
         repo["temp_commit"] = temp_cid
         repo["current_edit"] = temp_cid
+        repo["active_range"] = (bottom_cid, top_cid)
         return f"✓ squash {bottom_cid}..{top_cid} → {temp_cid} in {repo['name']}"
     return f"✗ squash failed for {repo['name']}"
 
@@ -762,6 +767,7 @@ def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
             ok = jj_edit(repo["original_dir"], cid)
             if ok:
                 repo["current_edit"] = cid
+                repo["active_range"] = cid
                 results.append(f"{repo_name}:{cid}")
             else:
                 results.append(f"{repo_name}:✗")
@@ -773,6 +779,7 @@ def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
             if temp_cid:
                 repo["temp_commit"] = temp_cid
                 repo["current_edit"] = temp_cid
+                repo["active_range"] = (bottom_cid, top_cid)
                 results.append(f"{repo_name}:{temp_cid}")
             else:
                 results.append(f"{repo_name}:✗")
@@ -818,7 +825,13 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
     def full_refresh():
         nonlocal repos_with_commits, all_repos, col, row, visual_anchor
         ws_dir = Path(f"~/workspaces/{workspace_name}").expanduser()
-        # Abandon all temps before refresh — underlying data may have changed
+
+        # Save active ranges before teardown
+        saved_ranges: dict[str, str | tuple[str, str] | None] = {}
+        for r in all_repos:
+            saved_ranges[r["name"]] = r.get("active_range")
+
+        # Abandon all temps and reload
         jj_abandon_all_temps(all_repos)
         new_repos = load_review_data(ws_dir)
         all_repos[:] = new_repos
@@ -828,6 +841,26 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
         if repos_with_commits and row >= len(repos_with_commits[col]["commits"]):
             row = max(0, len(repos_with_commits[col]["commits"]) - 1)
         visual_anchor = None
+
+        # Re-apply saved ranges where the change_ids still exist
+        for repo in all_repos:
+            ar = saved_ranges.get(repo["name"])
+            if ar is None:
+                continue
+            cids = {c["change_id"] for c in repo["commits"]}
+            if isinstance(ar, tuple):
+                bottom_cid, top_cid = ar
+                if bottom_cid in cids and top_cid in cids:
+                    temp_cid = jj_create_temp_squash(
+                        repo["original_dir"], bottom_cid, top_cid)
+                    if temp_cid:
+                        repo["temp_commit"] = temp_cid
+                        repo["current_edit"] = temp_cid
+                        repo["active_range"] = ar
+            elif ar in cids:
+                jj_edit(repo["original_dir"], ar)
+                repo["current_edit"] = ar
+                repo["active_range"] = ar
 
     def get_filtered_bookmarks() -> list[tuple[str, list[tuple[str, int]]]]:
         bm = collect_bookmarks(repos_with_commits)
