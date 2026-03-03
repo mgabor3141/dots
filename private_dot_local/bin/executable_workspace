@@ -503,9 +503,10 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
     """Gather jj commit data for each repo in the workspace.
 
     Returns list of dicts with keys:
-        name, original_dir, commits (list), current_edit (change_id of default@)
+        name, original_dir, commits (list, oldest first),
+        current_edit (change_id of default@), temp_commits (list of change_ids)
 
-    Each commit dict has: change_id, description, empty, files
+    Each commit dict has: change_id, description, empty, files, bookmarks
     """
     repos = []
     for subdir in sorted(workspace_dir.iterdir()):
@@ -519,12 +520,13 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
         if not original:
             continue
 
-        # Get commits between trunk and workspace head
+        # Get commits between trunk and workspace head (newest first from jj)
         log_result = subprocess.run(
             ["jj", "log", "--no-pager", "-r", f"trunk()..{name}@", "--no-graph",
              "-T", 'change_id.shortest() ++ "\t"'
                    '++ description.first_line() ++ "\t"'
-                   '++ if(empty, "empty", "changed") ++ "\n"'],
+                   '++ if(empty, "empty", "changed") ++ "\t"'
+                   '++ bookmarks.join(",") ++ "\n"'],
             cwd=original, capture_output=True, text=True,
         )
 
@@ -533,24 +535,33 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
             for line in log_result.stdout.strip().split("\n"):
                 if not line.strip():
                     continue
-                parts = line.split("\t", 2)
+                parts = line.split("\t", 3)
                 if len(parts) < 3:
                     continue
-                cid, desc, status = parts
+                cid = parts[0].strip()
+                desc = parts[1].strip() or "(no description)"
+                status = parts[2].strip()
+                bookmarks_str = parts[3].strip() if len(parts) > 3 else ""
+                bookmarks = [b for b in bookmarks_str.split(",") if b] if bookmarks_str else []
+
                 # Get changed files for this commit
                 files_result = subprocess.run(
-                    ["jj", "diff", "--no-pager", "-r", cid.strip(), "--name-only"],
+                    ["jj", "diff", "--no-pager", "-r", cid, "--name-only"],
                     cwd=original, capture_output=True, text=True,
                 )
                 files = []
                 if files_result.returncode == 0:
                     files = [f for f in files_result.stdout.strip().split("\n") if f]
                 commits.append({
-                    "change_id": cid.strip(),
-                    "description": desc.strip() or "(no description)",
-                    "empty": status.strip() == "empty",
+                    "change_id": cid,
+                    "description": desc,
+                    "empty": status == "empty",
                     "files": files,
+                    "bookmarks": bookmarks,
                 })
+
+        # Reverse so oldest is first (index 0 = closest to trunk)
+        commits.reverse()
 
         # What is default@ currently pointing at?
         cur_result = subprocess.run(
@@ -565,9 +576,74 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
             "original_dir": original,
             "commits": commits,
             "current_edit": current_edit,
+            "temp_commits": [],
         })
 
     return repos
+
+
+def collect_bookmarks(repos: list[dict]) -> dict[str, list[tuple[str, int]]]:
+    """Collect bookmarks across all repos.
+
+    Returns {bookmark_name: [(repo_name, commit_index), ...]} sorted by name.
+    Only includes repos that have commits.
+    """
+    bookmarks: dict[str, list[tuple[str, int]]] = {}
+    for repo in repos:
+        for ci, commit in enumerate(repo["commits"]):
+            for bm in commit["bookmarks"]:
+                bookmarks.setdefault(bm, []).append((repo["name"], ci))
+    return dict(sorted(bookmarks.items()))
+
+
+def jj_create_temp_squash(original_dir: Path, bottom_cid: str, top_cid: str) -> str | None:
+    """Create a temporary squashed commit covering a range of commits.
+
+    The temp commit's parent is parents(bottom_cid), its tree is top_cid's tree.
+    Returns the temp commit's change_id, or None on failure.
+    """
+    # Create new commit as child of bottom's parent
+    result = subprocess.run(
+        ["jj", "new", f"parents({bottom_cid})",
+         "-m", f"temp: reviewing {bottom_cid}..{top_cid}"],
+        cwd=original_dir, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return None
+
+    # Get the new commit's change_id (it's now default@)
+    cid_result = subprocess.run(
+        ["jj", "log", "--no-pager", "-r", "default@", "--no-graph",
+         "-T", "change_id.shortest()"],
+        cwd=original_dir, capture_output=True, text=True,
+    )
+    if cid_result.returncode != 0:
+        return None
+    temp_cid = cid_result.stdout.strip()
+
+    # Restore tree from the top of the range
+    result = subprocess.run(
+        ["jj", "restore", "--from", top_cid],
+        cwd=original_dir, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        # Clean up the empty temp commit
+        subprocess.run(["jj", "abandon", temp_cid],
+                       cwd=original_dir, capture_output=True, text=True)
+        return None
+
+    return temp_cid
+
+
+def jj_abandon_temp_commits(repos: list[dict]) -> None:
+    """Abandon all temporary squash commits across repos."""
+    for repo in repos:
+        for temp_cid in repo["temp_commits"]:
+            subprocess.run(
+                ["jj", "abandon", temp_cid],
+                cwd=repo["original_dir"], capture_output=True, text=True,
+            )
+        repo["temp_commits"].clear()
 
 
 
@@ -610,6 +686,91 @@ def jj_edit(original_dir: Path, change_id: str) -> bool:
     return result.returncode == 0
 
 
+def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
+    """Apply jj edit for a single commit or a squashed range.
+
+    Returns a status message string.
+    """
+    original = repo["original_dir"]
+    commits = repo["commits"]
+
+    if visual_anchor is None:
+        # Single commit
+        commit = commits[row]
+        ok = jj_edit(original, commit["change_id"])
+        if ok:
+            repo["current_edit"] = commit["change_id"]
+            return f"✓ jj edit {commit['change_id']} in {repo['name']}"
+        return f"✗ jj edit failed for {repo['name']}"
+
+    # Range: oldest is lower index, newest is higher index
+    lo = min(row, visual_anchor)
+    hi = max(row, visual_anchor)
+    bottom_cid = commits[lo]["change_id"]  # oldest (closest to trunk)
+    top_cid = commits[hi]["change_id"]     # newest (closest to head)
+
+    if lo == hi:
+        # Degenerate range — single commit
+        ok = jj_edit(original, bottom_cid)
+        if ok:
+            repo["current_edit"] = bottom_cid
+            return f"✓ jj edit {bottom_cid} in {repo['name']}"
+        return f"✗ jj edit failed for {repo['name']}"
+
+    temp_cid = jj_create_temp_squash(original, bottom_cid, top_cid)
+    if temp_cid:
+        repo["temp_commits"].append(temp_cid)
+        repo["current_edit"] = temp_cid
+        return f"✓ squash {bottom_cid}..{top_cid} → {temp_cid} in {repo['name']}"
+    return f"✗ squash failed for {repo['name']}"
+
+
+def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
+                   bookmark_map: dict[str, list[tuple[str, int]]]) -> str:
+    """Navigate to a bookmark across all repos that have it.
+
+    For single-commit bookmarks, does a plain jj edit.
+    For bookmarks at the top of a multi-commit stack, squashes trunk..bookmark.
+    Returns a status message.
+    """
+    entries = bookmark_map.get(bookmark, [])
+    if not entries:
+        return f"✗ bookmark {bookmark} not found"
+
+    repo_by_name = {r["name"]: r for r in repos_with_commits}
+    results = []
+
+    for repo_name, commit_idx in entries:
+        repo = repo_by_name.get(repo_name)
+        if not repo:
+            continue
+
+        # The bookmark is on commits[commit_idx].
+        # Range is from index 0 (oldest, closest to trunk) to commit_idx.
+        if commit_idx == 0:
+            # Single commit or first commit — plain edit
+            cid = repo["commits"][commit_idx]["change_id"]
+            ok = jj_edit(repo["original_dir"], cid)
+            if ok:
+                repo["current_edit"] = cid
+                results.append(f"{repo_name}:{cid}")
+            else:
+                results.append(f"{repo_name}:✗")
+        else:
+            # Squash from oldest (0) to bookmark commit
+            bottom_cid = repo["commits"][0]["change_id"]
+            top_cid = repo["commits"][commit_idx]["change_id"]
+            temp_cid = jj_create_temp_squash(repo["original_dir"], bottom_cid, top_cid)
+            if temp_cid:
+                repo["temp_commits"].append(temp_cid)
+                repo["current_edit"] = temp_cid
+                results.append(f"{repo_name}:{temp_cid}")
+            else:
+                results.append(f"{repo_name}:✗")
+
+    return f"✓ bookmark {bookmark} → {', '.join(results)}"
+
+
 def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
     """TUI controller for reviewing workspace commits across repos."""
     curses.curs_set(0)
@@ -621,14 +782,18 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
         curses.init_pair(3, curses.COLOR_CYAN, -1)      # header/label
         curses.init_pair(4, curses.COLOR_YELLOW, -1)    # selected tab
         curses.init_pair(5, curses.COLOR_MAGENTA, -1)   # file paths
+        curses.init_pair(6, curses.COLOR_RED, -1)       # visual range
 
-    # Only repos with commits participate in the browser
     repos_with_commits = [r for r in repos if r["commits"]]
-    all_repos = repos  # keep full list for header
+    all_repos = repos
 
-    col = 0  # selected repo column index (into repos_with_commits)
-    row = 0  # selected commit row within current column
+    col = 0      # selected repo column
+    row = 0      # selected commit row
+    visual_anchor: int | None = None  # None = not in visual mode
     status_msg = ""
+    bookmark_mode = False
+    bookmark_filter = ""
+    bookmark_cursor = 0
 
     def safe_addstr(y, x, text, attr=0):
         max_y, max_x = stdscr.getmaxyx()
@@ -641,30 +806,29 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
             except curses.error:
                 pass
 
-    def refresh_current_edit():
-        """Re-read default@ for the current repo column."""
-        if not repos_with_commits:
-            return
-        repo = repos_with_commits[col]
-        result = subprocess.run(
-            ["jj", "log", "--no-pager", "-r", "default@", "--no-graph",
-             "-T", "change_id.shortest()"],
-            cwd=repo["original_dir"], capture_output=True, text=True,
-        )
-        if result.returncode == 0:
-            repo["current_edit"] = result.stdout.strip()
-
     def full_refresh():
-        """Reload all data from jj."""
-        nonlocal repos_with_commits, all_repos, col, row
+        nonlocal repos_with_commits, all_repos, col, row, visual_anchor
         ws_dir = Path(f"~/workspaces/{workspace_name}").expanduser()
+        # Preserve temp_commits across refresh
+        old_temps = {r["name"]: r["temp_commits"] for r in all_repos}
         new_repos = load_review_data(ws_dir)
+        for r in new_repos:
+            r["temp_commits"] = old_temps.get(r["name"], [])
         all_repos[:] = new_repos
         repos_with_commits[:] = [r for r in new_repos if r["commits"]]
         if col >= len(repos_with_commits):
             col = max(0, len(repos_with_commits) - 1)
         if repos_with_commits and row >= len(repos_with_commits[col]["commits"]):
             row = max(0, len(repos_with_commits[col]["commits"]) - 1)
+        visual_anchor = None
+
+    def get_filtered_bookmarks() -> list[tuple[str, list[tuple[str, int]]]]:
+        bm = collect_bookmarks(repos_with_commits)
+        if not bookmark_filter:
+            return list(bm.items())
+        filt = bookmark_filter.lower()
+        return [(name, entries) for name, entries in bm.items()
+                if filt in name.lower()]
 
     while True:
         stdscr.clear()
@@ -682,7 +846,6 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
         for repo in all_repos:
             if not repo["commits"]:
                 continue
-            # Find which commit is currently checked out in the original
             cur = repo["current_edit"]
             desc = "(at trunk)"
             active = False
@@ -691,21 +854,82 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
                     desc = c["description"]
                     active = True
                     break
+            # Also check if current_edit is a temp commit
+            if not active and cur in repo["temp_commits"]:
+                desc = "(squashed range)"
+                active = True
 
-            if active:
-                attr = curses.color_pair(1)
-                marker = "●"
-            else:
-                attr = curses.color_pair(2) | curses.A_DIM
-                marker = "○"
+            if not active:
+                continue
 
-            line = f"  {marker} {repo['name']:<24s} {desc}"
+            attr = curses.color_pair(1)
+            line = f"  ● {repo['name']:<24s} {desc}"
             safe_addstr(header_y + active_count, 0, line[:max_x - 1], attr)
             active_count += 1
 
         if active_count == 0:
-            safe_addstr(header_y, 0, "  (no repos with changes)", curses.A_DIM)
+            safe_addstr(header_y, 0, "  (no active diffs)", curses.A_DIM)
             active_count = 1
+
+        # ── Bookmark picker overlay ──
+        if bookmark_mode:
+            filtered = get_filtered_bookmarks()
+            if bookmark_cursor >= len(filtered):
+                bookmark_cursor = max(0, len(filtered) - 1)
+
+            overlay_y = header_y + active_count + 1
+            safe_addstr(overlay_y, 0, " BOOKMARKS (type to filter, enter to select, esc to cancel)",
+                        curses.A_BOLD | curses.color_pair(3))
+            overlay_y += 1
+            safe_addstr(overlay_y, 0, f" > {bookmark_filter}█", curses.A_BOLD)
+            overlay_y += 1
+            safe_addstr(overlay_y, 0, "─" * max_x, curses.A_DIM)
+            overlay_y += 1
+
+            for bi, (bm_name, bm_entries) in enumerate(filtered):
+                if overlay_y >= max_y - 2:
+                    break
+                is_cur = bi == bookmark_cursor
+                repo_names = ", ".join(rn for rn, _ in bm_entries)
+                pointer = "▸" if is_cur else " "
+                attr = curses.A_BOLD if is_cur else 0
+                line = f" {pointer} {bm_name}  ({repo_names})"
+                safe_addstr(overlay_y, 0, line[:max_x - 1], attr | curses.color_pair(2))
+                overlay_y += 1
+
+            if not filtered:
+                safe_addstr(overlay_y, 0, "   (no matching bookmarks)", curses.A_DIM)
+
+            safe_addstr(max_y - 1, 0, " type:filter  ↑↓:navigate  enter:select  esc:cancel",
+                        curses.A_DIM | curses.A_REVERSE)
+            stdscr.refresh()
+
+            key = stdscr.getch()
+            if key == 27:  # ESC
+                bookmark_mode = False
+                bookmark_filter = ""
+                bookmark_cursor = 0
+            elif key in (curses.KEY_UP,):
+                if bookmark_cursor > 0:
+                    bookmark_cursor -= 1
+            elif key in (curses.KEY_DOWN,):
+                if bookmark_cursor < len(filtered) - 1:
+                    bookmark_cursor += 1
+            elif key in (curses.KEY_BACKSPACE, 127, ord("\b")):
+                bookmark_filter = bookmark_filter[:-1]
+                bookmark_cursor = 0
+            elif key in (ord("\n"), curses.KEY_ENTER):
+                if filtered:
+                    bm_name, _ = filtered[bookmark_cursor]
+                    bm_map = collect_bookmarks(repos_with_commits)
+                    status_msg = apply_bookmark(repos_with_commits, bm_name, bm_map)
+                bookmark_mode = False
+                bookmark_filter = ""
+                bookmark_cursor = 0
+            elif 32 <= key < 127:
+                bookmark_filter += chr(key)
+                bookmark_cursor = 0
+            continue
 
         # ── Repo tab bar ──
         tab_y = header_y + active_count + 1
@@ -723,7 +947,7 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
                 safe_addstr(tab_y, tab_x, label, attr)
                 tab_x += len(label) + 1
 
-            # ── Commit list for selected repo ──
+            # ── Commit list ──
             list_y = tab_y + 1
             safe_addstr(list_y, 0, "─" * max_x, curses.A_DIM)
             list_y += 1
@@ -731,9 +955,14 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
             repo = repos_with_commits[col]
             commits = repo["commits"]
 
-            # Clamp row
             if row >= len(commits):
                 row = max(0, len(commits) - 1)
+
+            # Compute visual range
+            vis_lo = vis_hi = None
+            if visual_anchor is not None:
+                vis_lo = min(row, visual_anchor)
+                vis_hi = max(row, visual_anchor)
 
             y = list_y
             for ci, commit in enumerate(commits):
@@ -742,8 +971,12 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
 
                 is_cursor = ci == row
                 is_active = commit["change_id"] == repo["current_edit"]
+                in_range = vis_lo is not None and vis_lo <= ci <= vis_hi
 
-                if is_active:
+                if in_range:
+                    attr = curses.color_pair(6) | curses.A_BOLD
+                    marker = "▮" if is_active else "▯"
+                elif is_active:
                     marker = "●"
                     attr = curses.color_pair(1)
                 else:
@@ -756,10 +989,13 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
 
                 cid = commit["change_id"]
                 desc = commit["description"]
-                line = f" {pointer}{marker} {desc}"
-                tag = f"[{cid}]"
+                bm_tag = ""
+                if commit["bookmarks"]:
+                    bm_tag = " ⊘ " + ",".join(commit["bookmarks"])
 
-                # Right-align the change_id tag
+                line = f" {pointer}{marker} {desc}"
+                tag = f"{bm_tag} [{cid}]"
+
                 available = max_x - 2
                 if len(line) + len(tag) + 1 <= available:
                     padding = available - len(line) - len(tag)
@@ -770,21 +1006,26 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
                 safe_addstr(y, 0, line[:max_x - 1], attr)
                 y += 1
 
-                # Expand files under cursor commit
+                # Expand files under cursor
                 if is_cursor and commit["files"]:
                     for fpath in commit["files"]:
                         if y >= max_y - 2:
                             break
-                        # Show just the filename, dimmed
                         display = f"     {fpath}"
-                        safe_addstr(y, 0, display[:max_x - 1],
-                                    curses.color_pair(5) | curses.A_DIM)
+                        fattr = curses.color_pair(5) | curses.A_DIM
+                        if in_range:
+                            fattr = curses.color_pair(6) | curses.A_DIM
+                        safe_addstr(y, 0, display[:max_x - 1], fattr)
                         y += 1
         else:
+            tab_y += 1
             safe_addstr(tab_y, 1, "(no repos with commits)", curses.A_DIM)
 
-        # ── Status / help bar ──
-        help_line = " h/l:repos  j/k:commits  space:edit  r:refresh  q:quit"
+        # ── Help bar ──
+        if visual_anchor is not None:
+            help_line = " VISUAL: j/k:extend  space/enter:apply range  v/esc:cancel"
+        else:
+            help_line = " h/l:repos  j/k:commits  space/enter:edit  v:range  b:bookmarks  r:refresh  q:quit"
         if status_msg:
             help_line = f" {status_msg}"
             status_msg = ""
@@ -796,11 +1037,11 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
         if key == ord("q"):
             return
         elif key in (ord("h"), curses.KEY_LEFT):
-            if repos_with_commits and col > 0:
+            if visual_anchor is None and repos_with_commits and col > 0:
                 col -= 1
                 row = 0
         elif key in (ord("l"), curses.KEY_RIGHT):
-            if repos_with_commits and col < len(repos_with_commits) - 1:
+            if visual_anchor is None and repos_with_commits and col < len(repos_with_commits) - 1:
                 col += 1
                 row = 0
         elif key in (ord("k"), curses.KEY_UP):
@@ -809,16 +1050,20 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
         elif key in (ord("j"), curses.KEY_DOWN):
             if repos_with_commits and row < len(repos_with_commits[col]["commits"]) - 1:
                 row += 1
-        elif key == ord(" "):
+        elif key == ord("v"):
+            if visual_anchor is None:
+                visual_anchor = row
+            else:
+                visual_anchor = None
+        elif key in (ord(" "), ord("\n"), curses.KEY_ENTER):
             if repos_with_commits:
-                repo = repos_with_commits[col]
-                commit = repo["commits"][row]
-                ok = jj_edit(repo["original_dir"], commit["change_id"])
-                if ok:
-                    repo["current_edit"] = commit["change_id"]
-                    status_msg = f"✓ jj edit {commit['change_id']} in {repo['name']}"
-                else:
-                    status_msg = f"✗ jj edit failed for {repo['name']}"
+                status_msg = apply_edit_or_range(
+                    repos_with_commits[col], row, visual_anchor)
+                visual_anchor = None
+        elif key == ord("b"):
+            bookmark_mode = True
+            bookmark_filter = ""
+            bookmark_cursor = 0
         elif key == ord("r"):
             status_msg = "refreshing..."
             stdscr.clear()
@@ -836,7 +1081,11 @@ def review_tui(config: dict, name: str | None) -> None:
     if not repos:
         die(f"no jj repos found in {workspace_dir}")
 
-    curses.wrapper(tui_review, repos, workspace_dir.name)
+    try:
+        curses.wrapper(tui_review, repos, workspace_dir.name)
+    finally:
+        # Clean up temp commits on exit
+        jj_abandon_temp_commits(repos)
 
 
 def list_workspaces(config: dict) -> None:
