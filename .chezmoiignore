@@ -64,6 +64,7 @@ CLAUDE.md
 
 # Folders
 .config/autostart
+.config/environment.d
 .config/gtk-3.0
 .config/gtk-4.0
 .config/io.github.zefr0x.ianny
