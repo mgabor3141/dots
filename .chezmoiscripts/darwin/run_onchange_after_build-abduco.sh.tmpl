@@ -1,0 +1,23 @@
+{{- if eq .chezmoi.os "darwin" -}}
+#!/usr/bin/env bash
+# abduco-version: 0.6-git-latest
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+DEST="{{ .chezmoi.homeDir }}/.local/bin"
+mkdir -p "$DEST"
+
+BUILDDIR="$(mktemp -d)"
+trap 'rm -rf "$BUILDDIR"' EXIT
+
+echo "Building abduco from git..."
+git clone --depth 1 https://github.com/martanne/abduco.git "$BUILDDIR/abduco"
+cd "$BUILDDIR/abduco"
+./configure
+make -j"$(sysctl -n hw.ncpu)"
+
+cp abduco "$DEST/abduco"
+chmod +x "$DEST/abduco"
+
+echo "✅ abduco installed: $("$DEST/abduco" -v 2>&1)"
+{{- end }}
