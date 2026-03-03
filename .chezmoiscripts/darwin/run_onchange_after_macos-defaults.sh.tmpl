@@ -1,0 +1,15 @@
+{{- if eq .chezmoi.os "darwin" -}}
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+echo "Applying macOS defaults..."
+
+# Finder: show hidden files
+defaults write com.apple.finder AppleShowAllFiles -bool true
+
+# Restart Finder to pick up changes
+killall Finder || true
+
+echo "macOS defaults applied."
+{{- end }}
