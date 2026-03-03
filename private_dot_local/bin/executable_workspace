@@ -576,7 +576,7 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
             "original_dir": original,
             "commits": commits,
             "current_edit": current_edit,
-            "temp_commits": [],
+            "temp_commit": None,
         })
 
     return repos
@@ -635,15 +635,20 @@ def jj_create_temp_squash(original_dir: Path, bottom_cid: str, top_cid: str) -> 
     return temp_cid
 
 
-def jj_abandon_temp_commits(repos: list[dict]) -> None:
-    """Abandon all temporary squash commits across repos."""
+def jj_abandon_temp(repo: dict) -> None:
+    """Abandon the active temp commit for a repo, if any."""
+    if repo.get("temp_commit"):
+        subprocess.run(
+            ["jj", "abandon", repo["temp_commit"]],
+            cwd=repo["original_dir"], capture_output=True, text=True,
+        )
+        repo["temp_commit"] = None
+
+
+def jj_abandon_all_temps(repos: list[dict]) -> None:
+    """Abandon all active temp commits across repos."""
     for repo in repos:
-        for temp_cid in repo["temp_commits"]:
-            subprocess.run(
-                ["jj", "abandon", temp_cid],
-                cwd=repo["original_dir"], capture_output=True, text=True,
-            )
-        repo["temp_commits"].clear()
+        jj_abandon_temp(repo)
 
 
 
@@ -689,8 +694,10 @@ def jj_edit(original_dir: Path, change_id: str) -> bool:
 def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
     """Apply jj edit for a single commit or a squashed range.
 
-    Returns a status message string.
+    Abandons any existing temp commit first. Returns a status message.
     """
+    jj_abandon_temp(repo)
+
     original = repo["original_dir"]
     commits = repo["commits"]
 
@@ -719,7 +726,7 @@ def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
 
     temp_cid = jj_create_temp_squash(original, bottom_cid, top_cid)
     if temp_cid:
-        repo["temp_commits"].append(temp_cid)
+        repo["temp_commit"] = temp_cid
         repo["current_edit"] = temp_cid
         return f"✓ squash {bottom_cid}..{top_cid} → {temp_cid} in {repo['name']}"
     return f"✗ squash failed for {repo['name']}"
@@ -729,8 +736,8 @@ def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
                    bookmark_map: dict[str, list[tuple[str, int]]]) -> str:
     """Navigate to a bookmark across all repos that have it.
 
-    For single-commit bookmarks, does a plain jj edit.
-    For bookmarks at the top of a multi-commit stack, squashes trunk..bookmark.
+    Abandons existing temp commits first. For single-commit bookmarks, does a
+    plain jj edit. For multi-commit stacks, squashes trunk..bookmark.
     Returns a status message.
     """
     entries = bookmark_map.get(bookmark, [])
@@ -744,6 +751,8 @@ def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
         repo = repo_by_name.get(repo_name)
         if not repo:
             continue
+
+        jj_abandon_temp(repo)
 
         # The bookmark is on commits[commit_idx].
         # Range is from index 0 (oldest, closest to trunk) to commit_idx.
@@ -762,7 +771,7 @@ def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
             top_cid = repo["commits"][commit_idx]["change_id"]
             temp_cid = jj_create_temp_squash(repo["original_dir"], bottom_cid, top_cid)
             if temp_cid:
-                repo["temp_commits"].append(temp_cid)
+                repo["temp_commit"] = temp_cid
                 repo["current_edit"] = temp_cid
                 results.append(f"{repo_name}:{temp_cid}")
             else:
@@ -809,11 +818,9 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
     def full_refresh():
         nonlocal repos_with_commits, all_repos, col, row, visual_anchor
         ws_dir = Path(f"~/workspaces/{workspace_name}").expanduser()
-        # Preserve temp_commits across refresh
-        old_temps = {r["name"]: r["temp_commits"] for r in all_repos}
+        # Abandon all temps before refresh — underlying data may have changed
+        jj_abandon_all_temps(all_repos)
         new_repos = load_review_data(ws_dir)
-        for r in new_repos:
-            r["temp_commits"] = old_temps.get(r["name"], [])
         all_repos[:] = new_repos
         repos_with_commits[:] = [r for r in new_repos if r["commits"]]
         if col >= len(repos_with_commits):
@@ -855,7 +862,7 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
                     active = True
                     break
             # Also check if current_edit is a temp commit
-            if not active and cur in repo["temp_commits"]:
+            if not active and cur == repo.get("temp_commit"):
                 desc = "(squashed range)"
                 active = True
 
@@ -1084,8 +1091,7 @@ def review_tui(config: dict, name: str | None) -> None:
     try:
         curses.wrapper(tui_review, repos, workspace_dir.name)
     finally:
-        # Clean up temp commits on exit
-        jj_abandon_temp_commits(repos)
+        jj_abandon_all_temps(repos)
 
 
 def list_workspaces(config: dict) -> None:
