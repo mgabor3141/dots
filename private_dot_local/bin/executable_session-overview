@@ -1,103 +1,118 @@
 #!/usr/bin/env bash
-# session-overview — open all active abduco sessions in a kitty split grid
+# session-overview — kitty split grid for all active abduco sessions
+#
+# Opens each session as a split pane in the current tab, then watches
+# for new sessions and adds them automatically.
 #
 # Usage:
 #   session-overview              Local sessions only
-#   session-overview --hosts      Include remote sessions (via SSH)
+#   session-overview --hosts      Include remote sessions via SSH
 #
-# Each session gets its own kitty split pane. The layout is a grid:
-# columns fill left-to-right, then wrap to next row.
+# The current window becomes a small watcher pane showing status.
+# Press Ctrl-C to stop watching (sessions keep running in their panes).
+# Close the tab to end everything.
 #
-# Requires: kitty with allow_remote_control=socket-only and listen_on set.
+# Requires: kitty with allow_remote_control=socket-only, listen_on,
+#           and enabled_layouts including splits.
 
 set -Eeuo pipefail
 trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 
-# ── Collect sessions ────────────────────────────────────────────────────────
+POLL_INTERVAL=3
+
+# ── Args ────────────────────────────────────────────────────────────────────
 
 include_hosts=false
 [[ "${1:-}" == "--hosts" || "${1:-}" == "-H" ]] && include_hosts=true
 
-# Collect local sessions: name \t attach_cmd \t label
-sessions=()
+# ── Tracking ────────────────────────────────────────────────────────────────
 
-while IFS=$'\t' read -r name status process cwd; do
-    [[ -z "$name" ]] && continue
-    label="$name"
-    [[ -n "$cwd" ]] && label="$label  ›  ${cwd/#$HOME/\~}"
-    [[ -n "$process" && "$process" != "-" ]] && label="$label  ›  $process"
-    sessions+=("$name"$'\t'"abduco -a $name"$'\t'"$label")
-done < <(session-manager --list-all-raw 2>/dev/null)
+tracker=$(mktemp)
+trap 'rm -f "$tracker"' EXIT
 
-# Collect remote sessions if requested
-if $include_hosts; then
-    while IFS=$'\t' read -r host name status process cwd; do
-        [[ -z "$host" || -z "$name" ]] && continue
-        label="$host:$name"
-        [[ -n "$cwd" ]] && label="$label  ›  ${cwd/#$HOME/\~}"
-        [[ -n "$process" && "$process" != "-" ]] && label="$label  ›  $process"
-        sessions+=("$name@$host"$'\t'"ssh -t $host abduco -a $name"$'\t'"$label")
-    done < <(session-manager --list-hosts-raw 2>/dev/null || true)
-fi
+is_tracked() { grep -qxF "$1" "$tracker" 2>/dev/null; }
+track()      { echo "$1" >> "$tracker"; }
 
-count=${#sessions[@]}
-if (( count == 0 )); then
-    echo "session-overview: no active sessions" >&2
-    exit 0
-fi
+# ── Kitty checks ───────────────────────────────────────────────────────────
 
-# ── Check kitty remote control ─────────────────────────────────────────────
-
-if ! kitty @ --help &>/dev/null; then
+if ! kitty @ ls &>/dev/null; then
     echo "session-overview: kitty remote control not available" >&2
-    echo "  Set allow_remote_control and listen_on in kitty.conf" >&2
+    echo "  Requires: allow_remote_control socket-only, listen_on" >&2
+    echo "  These settings require a kitty restart after changing." >&2
     exit 1
 fi
 
-# ── Calculate grid layout ──────────────────────────────────────────────────
+# ── Session discovery ───────────────────────────────────────────────────────
 
-# Aim for roughly square grid, slightly wider than tall
-cols=$(( count <= 1 ? 1 : count <= 4 ? 2 : count <= 9 ? 3 : 4 ))
-rows=$(( (count + cols - 1) / cols ))
+# Outputs: key \t attach_cmd \t label
+# key is unique: "name" for local, "name@host" for remote
+discover_sessions() {
+    while IFS=$'\t' read -r name status process cwd; do
+        [[ -z "$name" ]] && continue
+        local label="$name"
+        [[ -n "$cwd" ]] && label="$label  ›  ${cwd/#$HOME/\~}"
+        [[ -n "$process" && "$process" != "-" ]] && label="$label  ›  $process"
+        printf '%s\t%s\t%s\n' "$name" "abduco -a '$name'" "$label"
+    done < <(session-manager --list-all-raw 2>/dev/null)
 
-# ── Create kitty tab + splits ──────────────────────────────────────────────
-
-# Open a new tab for the overview
-first_cmd="$(echo "${sessions[0]}" | cut -f2)"
-first_label="$(echo "${sessions[0]}" | cut -f3)"
-
-# Launch first session in a new tab
-first_window=$(kitty @ launch --type=tab --tab-title="session-overview" \
-    --title="$first_label" \
-    --cwd=current \
-    bash -c "$first_cmd; echo '[session ended — press enter]'; read")
-
-# Track window IDs per grid position for focus management
-windows=("$first_window")
-
-for (( i = 1; i < count; i++ )); do
-    cmd="$(echo "${sessions[$i]}" | cut -f2)"
-    label="$(echo "${sessions[$i]}" | cut -f3)"
-
-    row=$(( i / cols ))
-    col=$(( i % cols ))
-
-    if (( col == 0 )); then
-        # First column of a new row: split the first window horizontally
-        location="hsplit"
-        target="$first_window"
-    else
-        # Subsequent column: split the previous window vertically
-        location="vsplit"
-        target="${windows[$i-1]}"
+    if $include_hosts; then
+        while IFS=$'\t' read -r host name status process cwd; do
+            [[ -z "$host" || -z "$name" ]] && continue
+            local label="$host:$name"
+            [[ -n "$cwd" ]] && label="$label  ›  ${cwd/#$HOME/\~}"
+            [[ -n "$process" && "$process" != "-" ]] && label="$label  ›  $process"
+            printf '%s\t%s\t%s\n' "$name@$host" "ssh -t '$host' abduco -a '$name'" "$label"
+        done < <(session-manager --list-hosts-raw 2>/dev/null || true)
     fi
+}
 
-    wid=$(kitty @ launch --type=window --location="$location" \
-        --target-window="$target" \
-        --title="$label" \
-        --cwd=current \
-        bash -c "$cmd; echo '[session ended — press enter]'; read")
-    windows+=("$wid")
+# ── Launch / refresh ────────────────────────────────────────────────────────
+
+# Add splits for any sessions not already tracked.
+# Returns 0 if any new sessions were added.
+add_new_sessions() {
+    local added=0
+    while IFS=$'\t' read -r key cmd label; do
+        [[ -z "$key" ]] && continue
+        is_tracked "$key" && continue
+        track "$key"
+
+        kitty @ launch --type=window --location=split \
+            --title="$label" --cwd=current \
+            bash -c "$cmd; printf '\\n\\033[2m[session ended — press enter]\\033[0m'; read" \
+            >/dev/null
+
+        (( added++ )) || true
+    done < <(discover_sessions)
+    return $(( added == 0 ))
+}
+
+# ── Main ────────────────────────────────────────────────────────────────────
+
+# Switch to splits layout in current tab
+kitty @ goto-layout splits >/dev/null 2>&1 || true
+
+# Initial population
+add_new_sessions || true
+count=$(wc -l < "$tracker")
+
+if (( count == 0 )); then
+    echo "session-overview: no active sessions, watching for new ones..."
+fi
+
+# Minimize the watcher pane
+kitty @ resize-window --axis=vertical --increment=-100 >/dev/null 2>&1 || true
+
+# Watch loop — adds new sessions as they appear
+trap 'printf "\r\033[K\033[2mstopped\033[0m\n"; exit 0' INT
+printf '\033[?25l'  # hide cursor
+
+while true; do
+    count=$(wc -l < "$tracker")
+    printf '\r\033[K\033[2msession-overview: %d session(s) · watching…\033[0m' "$count"
+    sleep "$POLL_INTERVAL"
+    if add_new_sessions; then
+        count=$(wc -l < "$tracker")
+        printf '\r\033[K\033[2msession-overview: %d session(s) · watching…\033[0m' "$count"
+    fi
 done
-
-echo "session-overview: opened $count session(s) in ${cols}x${rows} grid"
