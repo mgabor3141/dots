@@ -1,8 +1,8 @@
 {{- if eq .chezmoi.os "darwin" -}}
 #!/usr/bin/env bash
 # abduco-version: 0.6-git-latest
-# patches: {{ include (joinPath (.chezmoi.sourceFile | dir) "../../dot_config/customizepkg/abduco-git.files/kitty-keyboard-protocol.patch") | sha256sum }}
-# patches: {{ include (joinPath (.chezmoi.sourceFile | dir) "../../dot_config/customizepkg/abduco-git.files/no-alternate-screen.patch") | sha256sum }}
+# patches: {{ include (joinPath .chezmoi.sourceDir "dot_config/customizepkg/abduco-git.files/kitty-keyboard-protocol.patch") | sha256sum }}
+# patches: {{ include (joinPath .chezmoi.sourceDir "dot_config/customizepkg/abduco-git.files/no-alternate-screen.patch") | sha256sum }}
 trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
