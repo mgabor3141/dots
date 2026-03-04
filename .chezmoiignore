@@ -39,10 +39,14 @@ CLAUDE.md
 !.config/gh
 !.config/gh/**
 
-# Local bin (has its own .chezmoiignore for per-system filtering)
+# Local bin (headless allowlist here; darwin blocklist in bin/.chezmoiignore)
 !.local
 !.local/bin
-!.local/bin/**
+!.local/bin/cols
+!.local/bin/cz
+!.local/bin/persist
+!.local/bin/session-manager
+!.local/bin/yeet
 
 # Fish shell config
 !.config/fish
