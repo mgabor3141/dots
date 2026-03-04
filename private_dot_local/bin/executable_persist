@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# persist — run a command inside a persistent abduco session
+#
+# Usage:
+#   persist <command> [args...]     Create session and attach
+#   persist -d <command> [args...]  Create session detached (background)
+#
+# Session naming: <command>:<N>  (e.g., pi:1, pi:2)
+# Detach with Ctrl-\ to return to your shell; the process keeps running.
+# Reattach with: session-manager
+#
+# If already inside an abduco session, runs the command directly (no nesting).
+
+set -Eeuo pipefail
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+HOSTNAME="$(hostname 2>/dev/null || echo unknown)"
+
+sock_for() { echo "$HOME/.abduco/${1}@${HOSTNAME}"; }
+
+main() {
+    local detached=false
+
+    while (( $# )); do
+        case "$1" in
+            -d|--detach) detached=true; shift ;;
+            -h|--help)
+                cat <<-'EOF'
+				Usage: persist [-d] <command> [args...]
+
+				Run a command inside a persistent abduco session.
+
+				  -d, --detach   Start detached (background)
+
+				Session naming: <command>:<N>  (e.g., pi:1)
+				Detach with Ctrl-\ to return to your shell.
+				Reattach with: session-manager
+				EOF
+                exit 0 ;;
+            --) shift; break ;;
+            -*) echo "persist: unknown option: $1" >&2; exit 1 ;;
+            *) break ;;
+        esac
+    done
+
+    if (( $# == 0 )); then
+        echo "persist: no command specified" >&2
+        exit 1
+    fi
+
+    if ! command -v abduco &>/dev/null; then
+        echo "persist: abduco not found" >&2
+        exit 1
+    fi
+
+    # If already inside an abduco session, just run directly (no nesting)
+    if [[ -n "${ABDUCO_SESSION:-}" ]]; then
+        exec "$@"
+    fi
+
+    local cmd_name="${1##*/}"  # basename of command
+    mkdir -p "$HOME/.abduco"
+
+    # Find next available session number.
+    # Uses abduco -n (create-only) which fails if the socket already exists,
+    # making this race-safe against concurrent invocations.
+    local n=1
+    while (( n <= 100 )); do
+        local name="${cmd_name}:${n}"
+        local sock
+        sock="$(sock_for "$name")"
+
+        if [[ ! -e "$sock" ]]; then
+            if abduco -n "$name" env ABDUCO_SESSION=1 "$@" 2>/dev/null; then
+                if $detached; then
+                    echo "persist: session '$name' started (detached)"
+                    return
+                fi
+                # Wait for socket before attaching
+                local i=0
+                while [[ ! -S "$sock" ]] && (( i++ < 50 )); do sleep 0.01; done
+                exec abduco -a "$name"
+            fi
+            # abduco -n failed (race: someone else grabbed this name) — try next
+        fi
+
+        (( n++ ))
+    done
+
+    echo "persist: could not create session after 100 attempts" >&2
+    return 1
+}
+
+main "$@"
