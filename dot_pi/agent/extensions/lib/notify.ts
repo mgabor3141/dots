@@ -1,24 +1,24 @@
 /**
- * Cross-platform notification helper with window-level focus tracking.
+ * Cross-platform notification helper.
  *
- * Call captureWindowId() once at session start (while the terminal is focused)
- * to grab the compositor window ID. Subsequent notifications use that ID for:
- *   - Foreground suppression (skip notification if our window is focused)
- *   - Click-to-focus (focus our exact window, not just the app)
+ * Uses terminal focus tracking (DECSET 1004 via lib/focus.ts) to suppress
+ * notifications when the terminal is focused. On notification click, focuses
+ * the compositor window captured at session start.
  *
- * Falls back to app-level matching when window ID is unavailable.
+ * - Linux: notify-send with compositor-specific click-to-focus
+ * - macOS: terminal-notifier with -activate / -execute
  */
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { isTerminalFocused } from "./focus.js";
 
 const execFileAsync = promisify(execFile);
 
-// ── Window ID capture ────────────────────────────────────────────────────────
+// ── Window ID for click-to-focus ─────────────────────────────────────────────
 
 interface WindowHandle {
 	compositor: "niri" | "sway" | "hyprland" | "macos";
-	/** Compositor-specific window identifier */
 	id: string;
 }
 
@@ -26,12 +26,11 @@ let capturedWindow: WindowHandle | null = null;
 
 /**
  * Capture the currently focused window's ID from the compositor.
- * Call this at session start when the terminal is guaranteed to be focused.
+ * Call at session start when the terminal is guaranteed to be focused.
  */
 export async function captureWindowId(): Promise<void> {
 	try {
 		if (process.platform === "darwin") {
-			// On macOS, we use the bundle ID + window ID via AppleScript
 			const bundleId = process.env.__CFBundleIdentifier;
 			if (bundleId) {
 				capturedWindow = { compositor: "macos", id: bundleId };
@@ -61,39 +60,6 @@ export async function captureWindowId(): Promise<void> {
 	} catch {}
 }
 
-// ── Foreground detection ─────────────────────────────────────────────────────
-
-async function isForeground(): Promise<boolean> {
-	if (!capturedWindow) return false;
-
-	try {
-		switch (capturedWindow.compositor) {
-			case "niri": {
-				const { stdout } = await execFileAsync("niri", ["msg", "--json", "focused-window"], { timeout: 2000 });
-				return String(JSON.parse(stdout).id) === capturedWindow.id;
-			}
-			case "sway": {
-				const { stdout } = await execFileAsync("swaymsg", ["-t", "get_tree"], { timeout: 2000 });
-				const focused = findFocused(JSON.parse(stdout));
-				return String(focused?.id) === capturedWindow.id;
-			}
-			case "hyprland": {
-				const { stdout } = await execFileAsync("hyprctl", ["activewindow", "-j"], { timeout: 2000 });
-				return JSON.parse(stdout).address === capturedWindow.id;
-			}
-			case "macos": {
-				const { stdout } = await execFileAsync("osascript", [
-					"-e",
-					'tell application "System Events" to return bundle identifier of first application process whose frontmost is true',
-				], { timeout: 2000 });
-				return stdout.trim() === capturedWindow.id;
-			}
-		}
-	} catch {}
-
-	return false;
-}
-
 // ── Focus window ─────────────────────────────────────────────────────────────
 
 function focusWindow(): void {
@@ -118,8 +84,6 @@ function focusWindow(): void {
 		}
 	} catch {}
 }
-
-// ── Sway tree walker ─────────────────────────────────────────────────────────
 
 function findFocused(node: any): any {
 	if (node.focused) return node;
@@ -181,14 +145,14 @@ export interface NotifyOptions {
 	body: string;
 	/** cwd for macOS click-to-focus (defaults to process.cwd()) */
 	cwd?: string;
-	/** Skip notification if our window is focused (default true) */
-	skipIfForeground?: boolean;
+	/** Skip notification if terminal is focused (default true) */
+	skipIfFocused?: boolean;
 }
 
 export async function sendNotification(opts: NotifyOptions): Promise<void> {
-	const { title, body, cwd = process.cwd(), skipIfForeground = true } = opts;
+	const { title, body, cwd = process.cwd(), skipIfFocused = true } = opts;
 
-	if (skipIfForeground && (await isForeground())) return;
+	if (skipIfFocused && isTerminalFocused()) return;
 
 	if (process.platform === "darwin") {
 		await notifyMacOS(title, body, cwd);
