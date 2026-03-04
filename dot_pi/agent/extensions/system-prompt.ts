@@ -73,9 +73,7 @@ Non-obvious tool notes:
 - Use read to examine files, not cat or sed.
 - edit oldText must match exactly — read first to verify.
 - interactive_shell instead of bash for: sudo, interactive prompts, GUI apps, long-running processes.
-- brave_search / librarian: prefer over assumptions for external tools, libraries, or error messages.
-
-Be concise for code tasks, thorough for design/planning. When asked for opinions, be direct and structured.`;
+- brave_search / librarian: prefer over assumptions for external tools, libraries, or error messages.`;
 
 /**
  * Extract the dynamic tail from the built-in prompt.
