@@ -413,6 +413,7 @@ main() {
             --kill-session-any)   [[ -n "${2:-}" ]] && kill_session_any "$2"; exit ;;
             --list-all-fmt)       list_all_fmt; exit ;;
             --list-all-raw)       _ABDUCO_CACHED=false; parse_sessions; exit ;;
+            --list-hosts-raw)     _ABDUCO_CACHED=false; query_remote_hosts; exit ;;
             --list-hosts-fmt)     list_hosts_fmt; exit ;;
             *) echo "session-manager: unknown option: $1" >&2; exit 1 ;;
         esac
