@@ -6,8 +6,8 @@ This is a **public** dotfiles repository managed by chezmoi. It supports multipl
 ## Agent Instructions
 1. **Read README files first** before working in any subdirectory. They contain domain-specific context, design decisions, and gotchas.
 2. **Documentation goes in subdirectory READMEs**, not here. This file is a high-level index only. Cross-cutting discoveries that affect multiple areas go in each relevant README.
-3. **Open draft/temporary files** for the user — run `zed <filepath>` after writing them so they open automatically. This does not apply to config files or code you're editing in place.
-4. **Keep docs up to date.** When you discover non-obvious information (gotchas, design decisions, benchmarks, why one approach beat another), write it in the relevant README. The code shows *what*; READMEs capture *why* and *what was learned*. Focus on concepts and reasoning, not cataloging files or flags.
+3. **Open draft/temporary files** for the user — run `$EDITOR <filepath>` after writing them so they open automatically. This does not apply to config files or code you're editing in place.
+4. **Keep docs up to date.** Document if you had to search, experiment, or were surprised. Don't document what's self-explanatory from the code. The code shows *what*; READMEs capture *why* and *what was learned*.
 
 ## Chezmoi Workflow
 Edit source files in this repo → `chezmoi diff` → `chezmoi apply` → done. Trust that apply worked; don't verify target files.

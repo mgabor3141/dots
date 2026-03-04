@@ -115,7 +115,11 @@ export default function (pi: ExtensionAPI) {
 	pi.on("before_agent_start", async (event, ctx) => {
 		const dynamicTail = extractDynamicTail(event.systemPrompt);
 
+		const os = process.platform === "darwin" ? "macOS" : process.platform;
+		const arch = process.arch;
+
 		const notes: string[] = [
+			`OS: ${os} (${arch}).`,
 			`Tool calls run relative to the working directory. Use relative paths and do not cd unless you need a different directory.`,
 		];
 
