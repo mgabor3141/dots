@@ -1,6 +1,16 @@
 diff --git a/src/niri.rs b/src/niri.rs
+index 414f702..e088153 100644
 --- a/src/niri.rs
 +++ b/src/niri.rs
+@@ -1366,7 +1366,7 @@ impl State {
+     }
+ 
+     /// Loads the xkb keymap from a file config setting.
+-    fn set_xkb_file(&mut self, xkb_file: String) -> anyhow::Result<()> {
++    pub(crate) fn set_xkb_file(&mut self, xkb_file: String) -> anyhow::Result<()> {
+         let xkb_file = PathBuf::from(xkb_file);
+         let xkb_file = expand_home(&xkb_file)
+             .context("failed to expand ~")?
 @@ -1374,10 +1374,19 @@ impl State {
  
          let keymap = std::fs::read_to_string(xkb_file).context("failed to read xkb_file")?;
