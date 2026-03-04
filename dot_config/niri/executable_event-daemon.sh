@@ -441,13 +441,13 @@ while IFS= read -r line; do
             title=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.title')
             workspace_id=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.workspace_id')
 
-            # Nudge every new Zed window exactly once (rendering bug workaround).
-            # Works on blade (≤0.224.8) but not wgpu 0.225.12. See niri#2335,
-            # zed-industries/zed#50734.
-            if [ -z "${NUDGED[$wid]:-}" ]; then
-                NUDGED[$wid]=1
-                nudge_zed_window "$wid" &
-            fi
+            # Nudge workaround for niri freeze — no longer needed as of Zed 0.225.13
+            # (fixed by zed-industries/zed#50640). See niri#2335, zed#50734.
+            # Keeping the function around in case of future regressions.
+            # if [ -z "${NUDGED[$wid]:-}" ]; then
+            #     NUDGED[$wid]=1
+            #     nudge_zed_window "$wid" &
+            # fi
 
             if [ -z "${SEEN[$wid]:-}" ]; then
                 handle_new_window "$wid" "$title" "$workspace_id"
