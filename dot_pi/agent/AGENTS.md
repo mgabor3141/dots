@@ -45,6 +45,10 @@ Refer to the `interactive-shell` skill for complex operations (multi-turn sessio
 
 **Prefer `brave_search` and `librarian`** over assumptions when dealing with external tools, libraries, system configuration, or error messages. Training data may be outdated — verify with live sources first.
 
+## Verify, Don't Assume
+
+When working on a service or system, don't stop at "it's running". Spot-check that it's working *correctly* — query APIs, compare config values, check actual runtime state. Flag discrepancies even if they're outside the immediate task scope.
+
 ## System Configuration
 
 System-level config (packages, PAM, systemd drop-ins, etc.) is managed via chezmoi in `~/.local/share/chezmoi/`. Look there before making ad-hoc system changes. Key areas:
