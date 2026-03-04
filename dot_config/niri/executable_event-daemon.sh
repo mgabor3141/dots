@@ -442,7 +442,8 @@ while IFS= read -r line; do
             workspace_id=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.workspace_id')
 
             # Nudge every new Zed window exactly once (rendering bug workaround).
-            # This fires even for "empty project" (SSH pending) windows.
+            # Works on blade (≤0.224.8) but not wgpu 0.225.12. See niri#2335,
+            # zed-industries/zed#50734.
             if [ -z "${NUDGED[$wid]:-}" ]; then
                 NUDGED[$wid]=1
                 nudge_zed_window "$wid" &
