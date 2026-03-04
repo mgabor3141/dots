@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# .pacman-ignorepkg.txt hash: {{ include "pacman/.pacman-ignorepkg.txt" | sha256sum }}
+
+IGNOREPKG_FILE="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-ignorepkg.txt"
+
+# Build space-separated list from the file (one package per line)
+PKGS=$(tr '\n' ' ' < "$IGNOREPKG_FILE" | sed 's/ *$//')
+
+if [[ -z "$PKGS" ]]; then
+    # Empty list: comment out the IgnorePkg line
+    sudo sed -i 's/^IgnorePkg\s*=.*/#IgnorePkg   =/' /etc/pacman.conf
+else
+    # If there's an active IgnorePkg line, replace it; otherwise uncomment the default
+    if grep -q '^IgnorePkg' /etc/pacman.conf; then
+        sudo sed -i "s/^IgnorePkg\s*=.*/IgnorePkg   = $PKGS/" /etc/pacman.conf
+    else
+        sudo sed -i "s/^#IgnorePkg\s*=.*/IgnorePkg   = $PKGS/" /etc/pacman.conf
+    fi
+fi
+
+echo "✅ IgnorePkg updated: $PKGS"
