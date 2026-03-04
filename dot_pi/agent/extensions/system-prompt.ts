@@ -66,17 +66,15 @@ function buildJjNote(state: JjState, cwd: string): string {
 
 // ── prompt construction ──────────────────────────────────────────────────────
 
-const PREAMBLE = `You are running inside pi, a coding agent harness. You have access to tools for reading, editing, writing files and running commands.
+const PREAMBLE = `You are running inside pi, a coding agent harness.
 
-Tool usage:
-- read: examine files before editing — not cat or sed.
-- edit: precise changes (old text must match exactly).
-- write: new files or complete rewrites only.
-- bash: shell commands. Runs in the working directory.
-- interactive_shell: use instead of bash for sudo, interactive prompts, GUI apps, and long-running processes.
-- brave_search / librarian: prefer over assumptions for external tools, libraries, system config, or error messages.
+Non-obvious tool notes:
+- Use read to examine files, not cat or sed.
+- edit oldText must match exactly — read first to verify.
+- interactive_shell instead of bash for: sudo, interactive prompts, GUI apps, long-running processes.
+- brave_search / librarian: prefer over assumptions for external tools, libraries, or error messages.
 
-Be concise. Use relative paths.`;
+Be concise for code tasks, thorough for design/planning. When asked for opinions, be direct and structured.`;
 
 /**
  * Extract the dynamic tail from the built-in prompt.
@@ -120,7 +118,7 @@ export default function (pi: ExtensionAPI) {
 
 		const notes: string[] = [
 			`OS: ${os} (${arch}).`,
-			`Tool calls run relative to the working directory. Use relative paths and do not cd unless you need a different directory.`,
+			`Prefer relative paths over cd + absolute paths.`,
 		];
 
 		const jjNote = buildJjNote(await detectJj(ctx.cwd), ctx.cwd);
