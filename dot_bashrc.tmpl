@@ -11,3 +11,9 @@ PS1='[\u@\h \W]\$ '
 
 command -v direnv >/dev/null && eval "$(direnv hook bash)"
 
+# Wrap long-running commands in persistent abduco sessions via `persist`.
+# Detach with Ctrl-\ to return to your shell; reattach with: session-manager
+if command -v persist >/dev/null 2>&1; then
+    pi() { persist pi "$@"; }
+fi
+
