@@ -104,7 +104,46 @@ async function notifyMacOS(title: string, body: string, cwd: string): Promise<vo
 	execFile("terminal-notifier", args, () => {});
 }
 
-// ── macOS foreground check ───────────────────────────────────────────────────
+// ── Foreground detection ─────────────────────────────────────────────────────
+
+async function isForegroundLinux(): Promise<boolean> {
+	const appId = getLinuxAppId();
+	if (!appId) return false;
+
+	try {
+		if (process.env.NIRI_SOCKET) {
+			const { stdout } = await execFileAsync("niri", ["msg", "--json", "focused-window"], { timeout: 2000 });
+			const win = JSON.parse(stdout);
+			return win.app_id === appId;
+		}
+		if (process.env.SWAYSOCK) {
+			const { stdout } = await execFileAsync("swaymsg", ["-t", "get_tree"], { timeout: 2000 });
+			const tree = JSON.parse(stdout);
+			const focused = findFocused(tree);
+			return focused?.app_id === appId;
+		}
+		if (process.env.HYPRLAND_INSTANCE_SIGNATURE) {
+			const { stdout } = await execFileAsync("hyprctl", ["activewindow", "-j"], { timeout: 2000 });
+			const win = JSON.parse(stdout);
+			return (win.class ?? win.initialClass) === appId;
+		}
+	} catch {}
+
+	return false; // unknown compositor — don't suppress
+}
+
+function findFocused(node: any): any {
+	if (node.focused) return node;
+	for (const child of node.nodes ?? []) {
+		const found = findFocused(child);
+		if (found) return found;
+	}
+	for (const child of node.floating_nodes ?? []) {
+		const found = findFocused(child);
+		if (found) return found;
+	}
+	return null;
+}
 
 async function isForegroundMacOS(): Promise<boolean> {
 	const bundleId = getBundleId();
@@ -138,6 +177,7 @@ export async function sendNotification(opts: NotifyOptions): Promise<void> {
 		if (skipIfForeground && (await isForegroundMacOS())) return;
 		await notifyMacOS(title, body, cwd);
 	} else if (process.platform === "linux") {
+		if (skipIfForeground && (await isForegroundLinux())) return;
 		notifyLinux(title, body);
 	}
 }
