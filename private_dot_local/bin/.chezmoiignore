@@ -1,4 +1,26 @@
-{{- if ne .chezmoi.os "linux" }}
-zed
+{{- if .headless }}
+# Headless: only deploy tools that make sense on a server
+*
+
+# Session management
+!persist
+!session-manager
+
+# Shell utilities
+!cols
+!cz
+!yeet
+{{- end }}
+
+{{- if eq .chezmoi.os "darwin" }}
+# macOS: exclude Linux-specific tools
+bing-wallpaper.sh
 clean-disk.sh
+gpu-reset
+gpu-resume-check
+reheat
+set-wallpaper.sh
+sunshine-audio-fix
+system-audio-setup
+workspace
 {{- end }}

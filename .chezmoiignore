@@ -39,7 +39,7 @@ CLAUDE.md
 !.config/gh
 !.config/gh/**
 
-# Local bin (directory symlinked to persistent storage via boot script)
+# Local bin (has its own .chezmoiignore for per-system filtering)
 !.local
 !.local/bin
 !.local/bin/**
