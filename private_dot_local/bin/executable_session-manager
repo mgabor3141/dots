@@ -164,26 +164,20 @@ attach() {
         _process="${_pi#* }"
     fi
 
-    # Background fixups after abduco takes over the terminal:
-    _post_attach "$_leaf_pid" "$_process" &
+    # Background fixup: nudge pty size so TUI apps redraw correctly
+    _post_attach "$_leaf_pid" &
 
     abduco -a "$name" 2>/dev/null || true
 }
 
-# Run in background after abduco attaches.  Fixes up the terminal state:
-# 1. Exit alternate screen (abduco uses it, which kills scrollback)
-# 2. Print running command info if session is busy
-# 3. Nudge pty size to trigger a real SIGWINCH → apps redraw
+# Run in background after abduco attaches.  Nudges the pty size to
+# trigger a SIGWINCH so TUI apps redraw at the correct dimensions.
 _post_attach() {
-    local leaf_pid="${1:-}" process="${2:-}"
-
-    sleep 0.05
-    printf '\033[?1049l' > /dev/tty 2>/dev/null
-
-    [[ -n "$process" ]] && \
-        printf '\033[2m · running: %s\033[0m\r\n' "$process" > /dev/tty 2>/dev/null
+    local leaf_pid="${1:-}"
 
     [[ -n "$leaf_pid" ]] || return 0
+    sleep 0.05
+
     local pty
     pty="$(readlink "/proc/$leaf_pid/fd/0" 2>/dev/null || true)"
     [[ -n "$pty" && -c "$pty" ]] || return 0
