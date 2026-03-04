@@ -1,0 +1,24 @@
+{{- if .headless -}}
+#!/bin/bash
+# Symlink all tools from chezmoi destDir to $HOME/.local/bin
+# On Unraid, destDir is persistent storage while $HOME is tmpfs.
+# hash: {{ include (joinPath .chezmoi.sourceDir ".chezmoiignore") | sha256sum }}
+set -Eeuo pipefail
+
+SRC="{{ .chezmoi.destDir }}/.local/bin"
+DST="{{ .chezmoi.homeDir }}/.local/bin"
+
+[[ "$SRC" == "$DST" ]] && exit 0
+[[ -d "$SRC" ]] || exit 0
+
+mkdir -p "$DST"
+
+for f in "$SRC"/*; do
+    [[ -f "$f" ]] || continue
+    name="$(basename "$f")"
+    target="$DST/$name"
+    if [[ ! -e "$target" ]] || [[ "$(readlink "$target" 2>/dev/null)" != "$f" ]]; then
+        ln -sf "$f" "$target"
+    fi
+done
+{{- end }}
