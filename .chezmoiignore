@@ -39,10 +39,17 @@ CLAUDE.md
 !.config/gh
 !.config/gh/**
 
-# Local bin (per-binary allowlist in bin/.chezmoiignore)
+# Local bin
+# NOTE: headless uses allowlist here because subdirectory .chezmoiignore
+# can't override the global */** + ! pattern. Darwin blocklist lives in
+# bin/.chezmoiignore (works since non-headless has no global catch-all).
 !.local
 !.local/bin
-!.local/bin/**
+!.local/bin/cols
+!.local/bin/cz
+!.local/bin/persist
+!.local/bin/session-manager
+!.local/bin/yeet
 
 # Fish shell config
 !.config/fish
