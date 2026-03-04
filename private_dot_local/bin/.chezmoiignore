@@ -1,3 +1,19 @@
+{{- if .headless }}
+# Headless: only deploy server-relevant tools
+bing-wallpaper.sh
+clean-disk.sh
+gpu-reset
+gpu-resume-check
+lms
+reheat
+session-overview
+set-wallpaper.sh
+sunshine-audio-fix
+system-audio-setup
+workspace
+zed
+{{- end }}
+
 {{- if eq .chezmoi.os "darwin" }}
 # macOS: exclude Linux-specific tools
 bing-wallpaper.sh
