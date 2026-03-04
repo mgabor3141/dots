@@ -69,6 +69,7 @@ function buildJjNote(state: JjState, cwd: string): string {
 const PREAMBLE = `You are running inside pi, a coding agent harness.
 
 Non-obvious tool notes:
+- Prefer relative paths over cd or absolute paths.
 - Use read to examine files, not cat or sed.
 - edit oldText must match exactly — read first to verify.
 - interactive_shell instead of bash for: sudo, interactive prompts, GUI apps, long-running processes.
@@ -113,12 +114,17 @@ export default function (pi: ExtensionAPI) {
 	pi.on("before_agent_start", async (event, ctx) => {
 		const dynamicTail = extractDynamicTail(event.systemPrompt);
 
-		const os = process.platform === "darwin" ? "macOS" : process.platform;
-		const arch = process.arch;
+		let system: string;
+		if (process.platform === "darwin") {
+			system = "macOS (Work)";
+		} else if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) {
+			system = "Linux (Personal Desktop)";
+		} else {
+			system = "Linux headless (Unraid Server)";
+		}
 
 		const notes: string[] = [
-			`OS: ${os} (${arch}).`,
-			`Prefer relative paths over cd + absolute paths.`,
+			`System: ${system}.`,
 		];
 
 		const jjNote = buildJjNote(await detectJj(ctx.cwd), ctx.cwd);
