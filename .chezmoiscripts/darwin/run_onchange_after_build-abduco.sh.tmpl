@@ -1,10 +1,13 @@
 {{- if eq .chezmoi.os "darwin" -}}
 #!/usr/bin/env bash
 # abduco-version: 0.6-git-latest
+# patches: {{ include (joinPath (.chezmoi.sourceFile | dir) "../../dot_config/customizepkg/abduco-git.files/kitty-keyboard-protocol.patch") | sha256sum }}
+# patches: {{ include (joinPath (.chezmoi.sourceFile | dir) "../../dot_config/customizepkg/abduco-git.files/no-alternate-screen.patch") | sha256sum }}
 trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
 DEST="{{ .chezmoi.homeDir }}/.local/bin"
+PATCHES="{{ .chezmoi.sourceDir }}/dot_config/customizepkg/abduco-git.files"
 mkdir -p "$DEST"
 
 BUILDDIR="$(mktemp -d)"
@@ -13,6 +16,12 @@ trap 'rm -rf "$BUILDDIR"' EXIT
 echo "Building abduco from git..."
 git clone --depth 1 https://github.com/martanne/abduco.git "$BUILDDIR/abduco"
 cd "$BUILDDIR/abduco"
+
+for patch in "$PATCHES"/*.patch; do
+    echo "Applying $(basename "$patch")..."
+    git apply "$patch"
+done
+
 ./configure
 make -j"$(sysctl -n hw.ncpu)"
 

@@ -3,7 +3,7 @@
 {
   /*#- includeTemplate "pick" (dict
     "stdin" .chezmoi.stdin
-    "jq" `{ lastChangelogVersion, enabledModels, defaultProvider, defaultModel, hideThinkingBlock, defaultThinkingLevel }`
+    "jq" `{ lastChangelogVersion, enabledModels, defaultProvider, defaultModel, hideThinkingBlock, defaultThinkingLevel, compaction }`
   ) */
   "packages": [
     "npm:pi-interactive-shell",
@@ -14,5 +14,6 @@
   "terminal": {
     "clearOnShrink": true
   },
-  "quietStartup": true
+  "quietStartup": true,
+  "showHardwareCursor": true
 }
