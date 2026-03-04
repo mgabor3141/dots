@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
-# session-overview — kitty split grid for all active abduco sessions
+# session-overview — kitty grid of all active abduco sessions
 #
-# Opens each session as a split pane in the current tab, then watches
-# for new sessions and adds them automatically.
+# Opens each session as a pane in a kitty grid layout, then watches
+# for new sessions and adds them automatically. The original window
+# is closed — only session panes remain.
 #
 # Usage:
 #   session-overview              Local sessions only
 #   session-overview --hosts      Include remote sessions via SSH
 #
-# The current window becomes a small watcher pane showing status.
-# Press Ctrl-C to stop watching (sessions keep running in their panes).
 # Close the tab to end everything.
 #
 # Requires: kitty with allow_remote_control=socket-only, listen_on,
-#           and enabled_layouts including splits.
+#           and enabled_layouts including grid.
+#
+# Note: uses abduco -a -l (low priority) so overview panes don't
+# resize the original terminal sessions.
 
 set -Eeuo pipefail
 trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
@@ -25,14 +27,6 @@ POLL_INTERVAL=3
 include_hosts=false
 [[ "${1:-}" == "--hosts" || "${1:-}" == "-H" ]] && include_hosts=true
 
-# ── Tracking ────────────────────────────────────────────────────────────────
-
-tracker=$(mktemp)
-trap 'rm -f "$tracker"' EXIT
-
-is_tracked() { grep -qxF "$1" "$tracker" 2>/dev/null; }
-track()      { echo "$1" >> "$tracker"; }
-
 # ── Kitty checks ───────────────────────────────────────────────────────────
 
 if ! kitty @ ls &>/dev/null; then
@@ -42,17 +36,27 @@ if ! kitty @ ls &>/dev/null; then
     exit 1
 fi
 
+# Our window ID (for targeting this tab and closing self later)
+self_id=$(kitty @ ls | jq -r \
+    '[.[].tabs[] | select(.is_focused) | .windows[] | select(.is_focused)] | .[0].id')
+
+# ── Tracking ────────────────────────────────────────────────────────────────
+
+tracker=$(mktemp /tmp/session-overview.XXXXXX)
+
+is_tracked() { grep -qxF "$1" "$tracker" 2>/dev/null; }
+track()      { echo "$1" >> "$tracker"; }
+
 # ── Session discovery ───────────────────────────────────────────────────────
 
 # Outputs: key \t attach_cmd \t label
-# key is unique: "name" for local, "name@host" for remote
 discover_sessions() {
     while IFS=$'\t' read -r name status process cwd; do
         [[ -z "$name" ]] && continue
         local label="$name"
         [[ -n "$cwd" ]] && label="$label  ›  ${cwd/#$HOME/\~}"
         [[ -n "$process" && "$process" != "-" ]] && label="$label  ›  $process"
-        printf '%s\t%s\t%s\n' "$name" "abduco -a '$name'" "$label"
+        printf '%s\t%s\t%s\n' "$name" "abduco -a -l '$name'" "$label"
     done < <(session-manager --list-all-raw 2>/dev/null)
 
     if $include_hosts; then
@@ -61,15 +65,16 @@ discover_sessions() {
             local label="$host:$name"
             [[ -n "$cwd" ]] && label="$label  ›  ${cwd/#$HOME/\~}"
             [[ -n "$process" && "$process" != "-" ]] && label="$label  ›  $process"
-            printf '%s\t%s\t%s\n' "$name@$host" "ssh -t '$host' abduco -a '$name'" "$label"
+            printf '%s\t%s\t%s\n' "$name@$host" "ssh -t '$host' abduco -a -l '$name'" "$label"
         done < <(session-manager --list-hosts-raw 2>/dev/null || true)
     fi
 }
 
-# ── Launch / refresh ────────────────────────────────────────────────────────
+# ── Launch panes ────────────────────────────────────────────────────────────
 
-# Add splits for any sessions not already tracked.
-# Returns 0 if any new sessions were added.
+# First window we create — used by the watcher to target our tab
+first_wid=""
+
 add_new_sessions() {
     local added=0
     while IFS=$'\t' read -r key cmd label; do
@@ -77,42 +82,53 @@ add_new_sessions() {
         is_tracked "$key" && continue
         track "$key"
 
-        kitty @ launch --type=window --location=split \
+        local wid
+        wid=$(kitty @ launch --type=window \
+            --match="id:${first_wid:-$self_id}" \
             --title="$label" --cwd=current \
-            bash -c "$cmd; printf '\\n\\033[2m[session ended — press enter]\\033[0m'; read" \
-            >/dev/null
+            bash -c "$cmd; printf '\\n\\033[2m[session ended — press enter]\\033[0m'; read")
 
+        [[ -z "$first_wid" ]] && first_wid="$wid"
         (( added++ )) || true
     done < <(discover_sessions)
-    return $(( added == 0 ))
+    (( added > 0 ))
 }
 
 # ── Main ────────────────────────────────────────────────────────────────────
 
-# Switch to splits layout in current tab
-kitty @ goto-layout splits >/dev/null 2>&1 || true
+# Switch to grid layout so panes auto-tile
+kitty @ goto-layout grid >/dev/null 2>&1 || true
 
-# Initial population
+# Launch initial sessions
 add_new_sessions || true
-count=$(wc -l < "$tracker")
 
-if (( count == 0 )); then
-    echo "session-overview: no active sessions, watching for new ones..."
+if [[ -z "$first_wid" ]]; then
+    echo "session-overview: no active sessions"
+    rm -f "$tracker"
+    exit 0
 fi
 
-# Minimize the watcher pane
-kitty @ resize-window --axis=vertical --increment=-100 >/dev/null 2>&1 || true
+# ── Background watcher ──────────────────────────────────────────────────────
 
-# Watch loop — adds new sessions as they appear
-trap 'printf "\r\033[K\033[2mstopped\033[0m\n"; exit 0' INT
-printf '\033[?25l'  # hide cursor
+(
+    while true; do
+        sleep "$POLL_INTERVAL"
 
-while true; do
-    count=$(wc -l < "$tracker")
-    printf '\r\033[K\033[2msession-overview: %d session(s) · watching…\033[0m' "$count"
-    sleep "$POLL_INTERVAL"
-    if add_new_sessions; then
-        count=$(wc -l < "$tracker")
-        printf '\r\033[K\033[2msession-overview: %d session(s) · watching…\033[0m' "$count"
-    fi
-done
+        # Exit if our tab is gone (all windows closed)
+        if ! kitty @ ls 2>/dev/null | \
+             jq -e ".[].tabs[].windows[] | select(.id == $first_wid)" \
+             >/dev/null 2>&1; then
+            break
+        fi
+
+        # Add any new sessions
+        if add_new_sessions 2>/dev/null; then
+            kitty @ goto-layout --match="id:$first_wid" grid >/dev/null 2>&1 || true
+        fi
+    done
+    rm -f "$tracker"
+) &
+disown
+
+# Close the original window — session panes fill the tab
+kitty @ close-window --match="id:$self_id" >/dev/null 2>&1 || exit 0
