@@ -1061,7 +1061,7 @@ click_interval 0.3
 #: works on Wayland. See also kitty --position to specify the position
 #: when launching kitty.
 
-# enabled_layouts *
+enabled_layouts splits,stack
 
 #: The enabled window layouts. A comma separated list of layout names.
 #: The special value all means all layouts. The first listed layout
@@ -1750,7 +1750,7 @@ white = "0xECEFF4"
 #: See rc_custom_auth <https://sw.kovidgoyal.net/kitty/remote-
 #: control/#rc-custom-auth> for details.
 
-# allow_remote_control no
+allow_remote_control socket-only
 
 #: Allow other programs to control kitty. If you turn this on, other
 #: programs can control all aspects of kitty, including sending text
@@ -1779,7 +1779,7 @@ white = "0xECEFF4"
 #: yes
 #:     Remote control requests are always accepted.
 
-# listen_on none
+listen_on unix:@kitty-{kitty_pid}
 
 #: Listen to the specified socket for remote control connections. Note
 #: that this will apply to all kitty instances. It can be overridden

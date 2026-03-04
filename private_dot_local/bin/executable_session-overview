@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# session-overview — open all active abduco sessions in a kitty split grid
+#
+# Usage:
+#   session-overview              Local sessions only
+#   session-overview --hosts      Include remote sessions (via SSH)
+#
+# Each session gets its own kitty split pane. The layout is a grid:
+# columns fill left-to-right, then wrap to next row.
+#
+# Requires: kitty with allow_remote_control=socket-only and listen_on set.
+
+set -Eeuo pipefail
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+# ── Collect sessions ────────────────────────────────────────────────────────
+
+include_hosts=false
+[[ "${1:-}" == "--hosts" || "${1:-}" == "-H" ]] && include_hosts=true
+
+# Collect local sessions: name \t attach_cmd \t label
+sessions=()
+
+while IFS=$'\t' read -r name status process cwd; do
+    [[ -z "$name" ]] && continue
+    label="$name"
+    [[ -n "$cwd" ]] && label="$label  ›  ${cwd/#$HOME/\~}"
+    [[ -n "$process" && "$process" != "-" ]] && label="$label  ›  $process"
+    sessions+=("$name"$'\t'"abduco -a $name"$'\t'"$label")
+done < <(session-manager --list-all-raw 2>/dev/null)
+
+# Collect remote sessions if requested
+if $include_hosts; then
+    while IFS=$'\t' read -r host name status process cwd; do
+        [[ -z "$host" || -z "$name" ]] && continue
+        label="$host:$name"
+        [[ -n "$cwd" ]] && label="$label  ›  ${cwd/#$HOME/\~}"
+        [[ -n "$process" && "$process" != "-" ]] && label="$label  ›  $process"
+        sessions+=("$name@$host"$'\t'"ssh -t $host abduco -a $name"$'\t'"$label")
+    done < <(session-manager --list-hosts-raw 2>/dev/null || true)
+fi
+
+count=${#sessions[@]}
+if (( count == 0 )); then
+    echo "session-overview: no active sessions" >&2
+    exit 0
+fi
+
+# ── Check kitty remote control ─────────────────────────────────────────────
+
+if ! kitty @ --help &>/dev/null; then
+    echo "session-overview: kitty remote control not available" >&2
+    echo "  Set allow_remote_control and listen_on in kitty.conf" >&2
+    exit 1
+fi
+
+# ── Calculate grid layout ──────────────────────────────────────────────────
+
+# Aim for roughly square grid, slightly wider than tall
+cols=$(( count <= 1 ? 1 : count <= 4 ? 2 : count <= 9 ? 3 : 4 ))
+rows=$(( (count + cols - 1) / cols ))
+
+# ── Create kitty tab + splits ──────────────────────────────────────────────
+
+# Open a new tab for the overview
+first_cmd="$(echo "${sessions[0]}" | cut -f2)"
+first_label="$(echo "${sessions[0]}" | cut -f3)"
+
+# Launch first session in a new tab
+first_window=$(kitty @ launch --type=tab --tab-title="session-overview" \
+    --title="$first_label" \
+    --cwd=current \
+    bash -c "$first_cmd; echo '[session ended — press enter]'; read")
+
+# Track window IDs per grid position for focus management
+windows=("$first_window")
+
+for (( i = 1; i < count; i++ )); do
+    cmd="$(echo "${sessions[$i]}" | cut -f2)"
+    label="$(echo "${sessions[$i]}" | cut -f3)"
+
+    row=$(( i / cols ))
+    col=$(( i % cols ))
+
+    if (( col == 0 )); then
+        # First column of a new row: split the first window horizontally
+        location="hsplit"
+        target="$first_window"
+    else
+        # Subsequent column: split the previous window vertically
+        location="vsplit"
+        target="${windows[$i-1]}"
+    fi
+
+    wid=$(kitty @ launch --type=window --location="$location" \
+        --target-window="$target" \
+        --title="$label" \
+        --cwd=current \
+        bash -c "$cmd; echo '[session ended — press enter]'; read")
+    windows+=("$wid")
+done
+
+echo "session-overview: opened $count session(s) in ${cols}x${rows} grid"
