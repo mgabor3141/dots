@@ -2,22 +2,28 @@
 **Keep this file very brief.** Only essential context for AI agents working on this repository.
 ## Repository Overview
 This is a **public** dotfiles repository managed by chezmoi. It supports multiple platforms (macOS/darwin and Linux) with conditional file management.
-**Privacy:** Do not include personal information, machine names, serial numbers, or other identifying details in files. Keep documentation general and useful for others.
+**Privacy:** Do not include personal information, machine names, serial numbers, or other identifying details in files.
 ## Agent Instructions
-1. **Read README files first.** Before working in any subdirectory, check for a README.md and read it. These contain domain-specific context, design principles, and gotchas.
-2. **Sub-project documentation belongs in README files**, not here. When adding documentation about a specific tool or config area, write it in a README.md within that subdirectory and link to it from here. Keep this file as a high-level index.
-3. **Open temporary files for the user.** When creating temporary files intended for the user to read, run `zed <filepath>` after writing them so they open automatically.
-4. **Keep documentation up to date.** When you discover information that isn't documented but would be useful for future sessions (gotchas, design decisions, how things work), update the relevant README or this file.
-5. **README files should explain concepts, not catalog details.** Focus on the "why" and the overarching design — things that aren't obvious from reading the code. Don't list every file, every function, or every flag; those details go stale quickly and are easy to discover by opening the file. If something is self-evident from the code, it doesn't need to be in the README.
-6. **Preserve findings and reasoning.** When you discover something non-obvious through investigation — benchmarks, surprising performance characteristics, why one approach was chosen over another, tradeoffs evaluated — write it down in the relevant README. These discoveries are hard-won and would otherwise be lost between sessions. The code shows *what* was done; the README should capture *why* and *what was learned along the way*.
-## Key Gotchas
-1. **External files/repositories**: Some files are managed using `.chezmoiexternal.toml` files (e.g., fish plugins at `dot_config/fish/.chezmoiexternal.toml`). Don't manually add these files to the repo - update the external config instead.
-2. **Platform-specific files**: Files/folders specific to Linux or macOS are conditionally ignored via `.chezmoiignore` based on `chezmoi.os`. Check the ignore file before assuming something should exist.
-3. **Template files**: Files ending in `.tmpl` are chezmoi templates that get processed. Don't edit the target files directly - edit the source templates. **IMPORTANT**: When searching for config files, always search for both the regular extension AND the `.tmpl` extension (e.g., search for both `keymap.json` and `keymap.json.tmpl`).
-4. **Ignore files**: Prefer subfolder-specific `.chezmoiignore` files over the global `.chezmoiignore` file. This keeps ignore rules localized and easier to maintain.
-5. **Always check diffs first**: Before applying changes, run `chezmoi diff` to see what would be changed. Then use `chezmoi apply` to apply changes. You do not need to verify that `chezmoi apply` successfully updated the target files - trust that it worked.
-6. **macOS `/bin/bash` is Bash 3.2**: It lacks features like associative arrays (`declare -A`), which silently break. Scripts needing Bash 4+ features must use `#!/usr/bin/env bash` (not `#!/bin/bash`) so they pick up the Homebrew-installed Bash 5. On Linux this is not an issue since the system bash is already 5+.
-7. **Use chezmoi template variables for paths**: In `.tmpl` files, always use template variables (`.chezmoi.homeDir`, `.chezmoi.sourceDir`, `.chezmoi.targetFile`, `.chezmoi.sourceFile`) and `joinPath` for path construction instead of hardcoding `$HOME` or absolute paths. Use `(.chezmoi.targetFile | dir)` for paths relative to the script's target directory and `(.chezmoi.sourceFile | dir)` for paths relative to the source. This ensures everything still works if files are moved within the repo.
-## Shell Scripting
-Use `#!/usr/bin/env bash` with `trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR` and `set -Eeuo pipefail` at the top of every script. This catches errors early and gives actionable diagnostics. With `set -e` in effect, don't add redundant `|| exit 1` guards — let the trap handle failures.
+1. **Read README files first** before working in any subdirectory. They contain domain-specific context, design decisions, and gotchas.
+2. **Documentation goes in subdirectory READMEs**, not here. This file is a high-level index only. Cross-cutting discoveries that affect multiple areas go in each relevant README.
+3. **Open draft/temporary files** for the user — run `zed <filepath>` after writing them so they open automatically. This does not apply to config files or code you're editing in place.
+4. **Keep docs up to date.** When you discover non-obvious information (gotchas, design decisions, benchmarks, why one approach beat another), write it in the relevant README. The code shows *what*; READMEs capture *why* and *what was learned*. Focus on concepts and reasoning, not cataloging files or flags.
 
+## Chezmoi Workflow
+Edit source files in this repo → `chezmoi diff` → `chezmoi apply` → done. Trust that apply worked; don't verify target files.
+
+## Key Gotchas
+
+These apply to almost every task:
+1. **Template files (.tmpl)**: Don't edit target files — edit the source templates. **Always search for both the regular extension AND `.tmpl`** (e.g., both `keymap.json` and `keymap.json.tmpl`).
+2. **Check diffs before applying**: `chezmoi diff` before `chezmoi apply`, always.
+3. **External files**: Some files come from `.chezmoiexternal.toml` (e.g., fish plugins). Update the external config, not the files.
+
+These are situational:
+4. **Platform-specific files**: Conditionally ignored via `.chezmoiignore` based on `chezmoi.os`. Check ignore files before assuming something should exist.
+5. **Prefer subfolder `.chezmoiignore`** over the global one. Keeps rules localized.
+6. **macOS `/bin/bash` is Bash 3.2**: Use `#!/usr/bin/env bash` for Bash 4+ features. Not an issue on Linux.
+7. **Use chezmoi template variables for paths**: In `.tmpl` files, use `.chezmoi.homeDir`, `.chezmoi.sourceDir`, `.chezmoi.targetFile`, `.chezmoi.sourceFile` and `joinPath` instead of hardcoding paths.
+
+## Shell Scripting
+Use `#!/usr/bin/env bash` with `trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR` and `set -Eeuo pipefail` at the top of every script. Don't add redundant `|| exit 1` — let the trap handle failures.
