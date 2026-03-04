@@ -39,16 +39,10 @@ CLAUDE.md
 !.config/gh
 !.config/gh/**
 
-# Local bin
+# Local bin (directory symlinked to persistent storage via boot script)
 !.local
 !.local/bin
-!.local/bin/abduco
-!.local/bin/dust
-!.local/bin/persist
-!.local/bin/session-manager
-!.local/bin/session-overview
-!.local/bin/fish
-!.local/bin/difft
+!.local/bin/**
 
 # Fish shell config
 !.config/fish
