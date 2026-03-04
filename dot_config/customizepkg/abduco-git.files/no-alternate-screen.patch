@@ -1,5 +1,5 @@
 diff --git a/client.c b/client.c
-index 3d6d82b..0b0b1d8 100644
+index be1f5c9..69f3bce 100644
 --- a/client.c
 +++ b/client.c
 @@ -25,11 +25,6 @@ static void client_restore_terminal(void) {
@@ -26,4 +26,4 @@ index 3d6d82b..0b0b1d8 100644
 -	}
  }
  
- static int client_mainloop(void) {
+ /* Kitty keyboard protocol support.
