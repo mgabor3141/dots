@@ -53,6 +53,11 @@ CLAUDE.md
 # Fish shell config
 !.config/fish
 !.config/fish/**
+
+# Build scripts
+!.chezmoiscripts
+!.chezmoiscripts/headless
+!.chezmoiscripts/headless/**
 {{- end }}
 
 {{- if not .headless }}
