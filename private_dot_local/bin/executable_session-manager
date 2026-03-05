@@ -321,9 +321,14 @@ pick_local() {
 
     [[ -z "$chosen" ]] && return
 
-    local key line
-    key="$(head -1 <<<"$chosen")"
-    line="$(sed -n '2p' <<<"$chosen")"
+    local key="" line=""
+    if $IS_REMOTE; then
+        # No --expect: fzf outputs just the selected line
+        line="$(head -1 <<<"$chosen")"
+    else
+        key="$(head -1 <<<"$chosen")"
+        line="$(sed -n '2p' <<<"$chosen")"
+    fi
 
     case "$key" in
         ctrl-a) pick_hosts; return ;;
