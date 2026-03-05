@@ -5,8 +5,6 @@
 # workspaces dynamically. Workspace names follow "N-label" format
 # (e.g. "1-dots", "2-go60") so keybinds can target by prefix.
 #
-# Also nudges new Zed windows (1px resize) to work around a rendering bug.
-#
 # State file maps project names to slot numbers: {"chezmoi": 1, "go60": 2}
 # Started manually or via spawn-sh-at-startup in niri config.kdl.
 
@@ -32,13 +30,12 @@ done
 
 # ── In-memory tracking ──
 declare -A SEEN        # wid → 1: windows we've fully processed (assigned)
-declare -A NUDGED      # wid → 1: windows we've nudged (rendering fix)
 declare -A PENDING     # wid → 1: "empty project" windows awaiting real title
 declare -A WIN_WS      # wid → workspace_id: last known workspace for manual-move detection
 declare -A WIN_PROJECT # wid → project name: for cleanup on close
 # Workaround: bash set -u treats empty associative arrays as unbound.
 # Assign+delete a dummy key so bash considers them initialized.
-for _arr in SEEN NUDGED PENDING WIN_WS WIN_PROJECT; do
+for _arr in SEEN PENDING WIN_WS WIN_PROJECT; do
     declare -n _ref="$_arr"; _ref[_]=1; unset "_ref[_]"
 done; unset _arr _ref
 
@@ -228,16 +225,6 @@ ensure_workspace_and_move() {
     echo "$ws_name"
 }
 
-# Nudge Zed window to fix frozen rendering (background)
-nudge_zed_window() {
-    local wid="$1"
-    sleep 0.3
-    niri msg action set-window-height --id "$wid" -- -1 2>/dev/null || true
-    sleep 0.1
-    niri msg action set-window-height --id "$wid" -- +1 2>/dev/null || true
-    log "nudged window $wid"
-}
-
 # Refresh workspace labels using shortest-unique-prefix
 refresh_labels() {
     local -a all_projects=()
@@ -419,7 +406,6 @@ while IFS='|' read -r wid title ws_id; do
     [ -z "$wid" ] && continue
     local_project=$(extract_project "$title" 2>/dev/null) || continue
     SEEN[$wid]=1
-    NUDGED[$wid]=1
     WIN_WS[$wid]="$ws_id"
     WIN_PROJECT[$wid]="$local_project"
     log "startup: registered existing wid=$wid project=$local_project ws=$ws_id"
@@ -440,14 +426,6 @@ while IFS= read -r line; do
             wid=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.id')
             title=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.title')
             workspace_id=$(echo "$line" | jq -r '.WindowOpenedOrChanged.window.workspace_id')
-
-            # Nudge workaround for niri freeze — no longer needed as of Zed 0.225.13
-            # (fixed by zed-industries/zed#50640). See niri#2335, zed#50734.
-            # Keeping the function around in case of future regressions.
-            # if [ -z "${NUDGED[$wid]:-}" ]; then
-            #     NUDGED[$wid]=1
-            #     nudge_zed_window "$wid" &
-            # fi
 
             if [ -z "${SEEN[$wid]:-}" ]; then
                 handle_new_window "$wid" "$title" "$workspace_id"
