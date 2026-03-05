@@ -2,12 +2,12 @@
 [
   {
     "label": "diff",
-    "command": "chezmoi diff",
+    "command": "chezmoi diff --tool difft",
     "show_command": false,
   },
   {
     "label": "diff $ZED_FILENAME",
-    "command": "chezmoi diff --source-path $ZED_FILE",
+    "command": "chezmoi diff --source-path $ZED_FILE --tool difft",
     "show_command": false,
   },
   {
