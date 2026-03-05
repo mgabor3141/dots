@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# Patches hash: {{ joinPath (.chezmoi.sourceFile | dir) "patches/pi-brave-search-rate-limit-retry.patch" | include | sha256sum }}
+
+PATCHES_DIR="{{ joinPath .chezmoi.homeDir ".pi/agent/patches" }}"
+
+# Resolve the global npm lib directory (works with fnm, nvm, or system node)
+NPM_ROOT="$(npm root -g 2>/dev/null)"
+
+if [[ -z "$NPM_ROOT" ]]; then
+    echo "⚠️  npm not found, skipping pi package patches"
+    exit 0
+fi
+
+apply_patch() {
+    local pkg="$1" patch_file="$2" marker="$3"
+    local pkg_dir="$NPM_ROOT/$pkg"
+
+    if [[ ! -d "$pkg_dir" ]]; then
+        echo "⚠️  Package $pkg not installed at $pkg_dir, skipping"
+        return 0
+    fi
+
+    echo ">>> Patching $pkg"
+
+    # Use a marker string to check if already applied (more reliable than patch --reverse)
+    if grep -rq "$marker" "$pkg_dir/" 2>/dev/null; then
+        echo "    ✅ Already applied"
+    elif patch --batch --forward --dry-run -d "$pkg_dir" -p1 < "$patch_file" &>/dev/null; then
+        patch --batch --forward -d "$pkg_dir" -p1 < "$patch_file"
+        echo "    ✅ Applied"
+    else
+        echo "    ⚠️  Patch does not apply cleanly (upstream may have changed)"
+    fi
+}
+
+# Apply each patch — filename format: <npm-package-name>-<description>.patch
+# The package name is derived from the first path component after stripping a/ or b/ in the diff header.
+apply_patch "pi-brave-search" "$PATCHES_DIR/pi-brave-search-rate-limit-retry.patch" "RATE_LIMIT_MAX_RETRIES"
+
+echo "✅ Done applying patches"
