@@ -9,7 +9,7 @@ This is a **public** dotfiles repository managed by chezmoi. It supports multipl
 4. **Keep docs up to date.** Document if you had to search, experiment, or were surprised. Don't document what's self-explanatory from the code. The code shows *what*; READMEs capture *why* and *what was learned*.
 
 ## Chezmoi Workflow
-Edit source files in this repo → `chezmoi diff` → `chezmoi apply` → done. Trust that apply worked; no need to verify target files. Services should either automatically detect their changed config and apply the changes, or `onchange_` scripts are set up to restart them when they need to be.
+Edit source files in this repo then run `chezmoi apply`. Trust that apply worked; no need to verify target files. Services should either automatically detect their changed config, or `run_onchange_` scripts should be set up to restart them automatically.
 
 ## Key Gotchas
 
