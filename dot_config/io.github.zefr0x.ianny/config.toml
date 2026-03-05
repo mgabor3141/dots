@@ -1,38 +1,35 @@
 [timer]
 ignore_idle_inhibitors = true
 idle_detection_threshold = 10  # seconds without input to detect break started
+base_interval = 1200           # 20 minutes between break slots
 
 [[timer.breaks]]
-interval = 1200       # 20 minutes
-nudge_duration = 60   # 1 minute nudge
-idle_threshold = 120  # 2 min idle = break taken
+every = 1              # every slot (every 20 min)
+nudge_duration = 60    # 1 minute nudge
+idle_threshold = 120   # 2 min idle = break taken
+max_skips = 2          # after 2 skips, upgrade to next tier
 
-[[timer.breaks.escalation]]
+[[timer.breaks.messages]]
 summary = "Quick stretch 🙆"
 body = "Rest your eyes and stretch"
 
-[[timer.breaks.escalation]]
+[[timer.breaks.messages]]
 summary = "Break reminder 👀"
 body = "You skipped the last one — take a break"
 
-[[timer.breaks.escalation]]
-summary = "You really need a break ⚠️"
-body = "Step away — your future self will thank you"
-
 [[timer.breaks]]
-interval = 3600        # 60 minutes
+every = 3              # every 3rd slot (every 60 min)
 nudge_duration = 60    # 1 minute nudge
 idle_threshold = 300   # 5 min idle = break taken
+max_skips = 1          # after 1 skip, escalate
 
-[[timer.breaks.escalation]]
+[[timer.breaks.messages]]
 summary = "Time to move ☕"
 body = "Get up and walk around"
 
-[[timer.breaks.escalation]]
+[[timer.breaks.messages]]
 summary = "Movement break overdue 🚶"
 body = "Your body needs you to get up and move"
 
 [notification]
 urgency = "low"
-show_progress_bar = true
-minimum_update_delay = 1
