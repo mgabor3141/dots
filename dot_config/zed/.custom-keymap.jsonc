@@ -45,6 +45,7 @@
       "secondary-s": ["terminal::SendText", "\u0013"], // ctrl-s
       "secondary-g": ["terminal::SendText", "\u0007"], // ctrl-g: toggle fish history mode
       "secondary-shift-m": ["terminal::SendText", "\u001b\u001bm"], // alt-shift-m: toggle mouse tracking in fish
+      "cmd-\\": ["terminal::SendKeystroke", "ctrl-\\"], // ctrl-\: abduco detach
     },
   },
   {
