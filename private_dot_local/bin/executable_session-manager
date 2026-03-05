@@ -170,24 +170,13 @@ attach() {
     abduco -a "$name" 2>/dev/null || true
 }
 
-# Run in background after abduco attaches.  Nudges the pty size to
-# trigger a SIGWINCH so TUI apps redraw at the correct dimensions.
+# Run in background after abduco attaches.  Sends SIGWINCH so TUI apps
+# redraw at the correct dimensions.
 _post_attach() {
     local leaf_pid="${1:-}"
-
     [[ -n "$leaf_pid" ]] || return 0
-    sleep 0.05
-
-    local pty
-    pty="$(readlink "/proc/$leaf_pid/fd/0" 2>/dev/null || true)"
-    [[ -n "$pty" && -c "$pty" ]] || return 0
-    local size
-    size="$(stty size < "$pty" 2>/dev/null || true)"
-    [[ -n "$size" ]] || return 0
-
-    local rows="${size%% *}" cols="${size##* }"
-    stty rows $((rows - 1)) cols $((cols - 1)) < "$pty" 2>/dev/null || true
-    stty rows "$rows" cols "$cols" < "$pty" 2>/dev/null || true
+    sleep 0.1
+    kill -WINCH "$leaf_pid" 2>/dev/null || true
 }
 
 # Returns true if the last attached session is still alive (was detached).
