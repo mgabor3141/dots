@@ -1,0 +1,2 @@
+@mariozechner/pi-coding-agent
+@devcontainers/cli

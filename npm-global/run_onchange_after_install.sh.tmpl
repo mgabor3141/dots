@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# packages.txt hash: {{ joinPath (.chezmoi.sourceFile | dir) "packages.txt" | include | sha256sum }}
+
+FNM_DEFAULT="{{ .chezmoi.homeDir }}/.local/share/fnm/aliases/default"
+NPM="$FNM_DEFAULT/bin/npm"
+NODE="$FNM_DEFAULT/bin/node"
+SHIM_DIR="{{ .chezmoi.homeDir }}/.local/bin"
+PACKAGES_FILE="{{ .chezmoi.sourceDir }}/{{ (.chezmoi.sourceFile | dir) }}/packages.txt"
+
+if [[ ! -x "$NODE" ]]; then
+    echo "❌ fnm default Node not found at $FNM_DEFAULT/bin/node"
+    echo "   Run: fnm install 22 && fnm default 22"
+    exit 1
+fi
+
+echo ">>> Using Node: $("$NODE" --version) from $FNM_DEFAULT"
+
+# Read packages into array
+packages=()
+while IFS= read -r pkg || [[ -n "$pkg" ]]; do
+    pkg="${pkg%%#*}"       # strip comments
+    pkg="${pkg// /}"       # strip whitespace
+    [[ -z "$pkg" ]] && continue
+    packages+=("$pkg")
+done < "$PACKAGES_FILE"
+
+# Install/update each package globally under fnm default
+for pkg in "${packages[@]}"; do
+    echo ">>> Installing $pkg"
+    "$NPM" install -g "$pkg"
+done
+
+# Discover binaries and create shims
+echo ">>> Creating shims in $SHIM_DIR"
+mkdir -p "$SHIM_DIR"
+GLOBAL_BIN="$FNM_DEFAULT/bin"
+
+for pkg in "${packages[@]}"; do
+    PKG_DIR="$FNM_DEFAULT/lib/node_modules/$pkg"
+    [[ -d "$PKG_DIR" ]] || continue
+
+    # Find symlinks in global bin that point into this package
+    while IFS= read -r link; do
+        bin_name="$(basename "$link")"
+        # Skip Node builtins
+        case "$bin_name" in
+            node|npm|npx|corepack|pnpm|pnpx|yarn|yarnpkg) continue ;;
+        esac
+
+        target="$(readlink "$link" 2>/dev/null || true)"
+        [[ "$target" == *"$pkg"* ]] || continue
+
+        echo "    Shimming: $bin_name -> $pkg"
+        cat > "$SHIM_DIR/$bin_name" <<SHIM
+#!/usr/bin/env bash
+# Auto-generated shim for $bin_name (from $pkg)
+# Do not edit — managed by chezmoi (npm-global/run_onchange_after_install.sh)
+FNM_DEFAULT="\$HOME/.local/share/fnm/aliases/default"
+export PATH="\$FNM_DEFAULT/bin:\$PATH"
+exec "\$FNM_DEFAULT/bin/$bin_name" "\$@"
+SHIM
+        chmod +x "$SHIM_DIR/$bin_name"
+    done < <(find "$GLOBAL_BIN" -maxdepth 1 -type l 2>/dev/null)
+done
+
+echo "✅ Done"
