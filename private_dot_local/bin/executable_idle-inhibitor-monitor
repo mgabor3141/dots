@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# Idle inhibitor monitor for noctalia control center.
+# Detects:
+#   1. systemd idle block inhibitors (systemd-inhibit --list)
+#   2. Active PipeWire audio streams that trigger wayland-pipewire-idle-inhibit
+#
+# Uses the same blacklist patterns as wayland-pipewire-idle-inhibit config.
+#
+# Usage:
+#   idle-inhibitor-monitor --check  Exit 0 if inhibitors active, 1 otherwise
+#   idle-inhibitor-monitor --toast  Show current inhibitors as a noctalia toast
+
+# Patterns matching wayland-pipewire-idle-inhibit blacklist
+STREAM_BLACKLIST_PATTERNS=(
+    '.*loopback.*'
+    'speech-dispatcher.*'
+)
+
+is_blacklisted() {
+    local name="$1"
+    for pattern in "${STREAM_BLACKLIST_PATTERNS[@]}"; do
+        if [[ "$name" =~ ^${pattern}$ ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+get_active_audio_streams() {
+    # Find running (not corked/paused) PipeWire output streams that aren't blacklisted.
+    # Blacklist is checked against both node.name and media.name.
+    local streams=()
+    local current_media_name="" current_node_name="" current_corked="" current_class=""
+
+    process_entry() {
+        if [[ -n "$current_node_name" && "$current_corked" == "no" && "$current_class" == *"Output/Audio"* ]]; then
+            if ! is_blacklisted "$current_node_name" && ! is_blacklisted "$current_media_name"; then
+                local display_name="${current_media_name:-$current_node_name}"
+                streams+=("$display_name")
+            fi
+        fi
+        current_media_name="" current_node_name="" current_corked="" current_class=""
+    }
+
+    while IFS= read -r line; do
+        if [[ "$line" =~ media\.name\ =\ \"(.+)\" ]]; then
+            current_media_name="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ node\.name\ =\ \"(.+)\" ]]; then
+            current_node_name="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ Corked:\ (.+) ]]; then
+            current_corked="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ media\.class\ =\ \"(.+)\" ]]; then
+            current_class="${BASH_REMATCH[1]}"
+        elif [[ "$line" == "Sink Input #"* ]]; then
+            process_entry
+        fi
+    done < <(pactl list sink-inputs 2>/dev/null; echo "Sink Input #end")
+
+    process_entry
+
+    printf '%s\n' "${streams[@]}"
+}
+
+get_systemd_idle_inhibitors() {
+    systemd-inhibit --list --no-legend 2>/dev/null | while IFS= read -r line; do
+        if [[ "$line" =~ idle ]] && [[ "$line" =~ block ]]; then
+            local who comm why
+            who=$(echo "$line" | awk '{print $1}')
+            comm=$(echo "$line" | awk '{print $5}')
+            why=$(echo "$line" | awk '{
+                for(i=6;i<=NF;i++) {
+                    if($i=="idle") continue
+                    if($i=="block") break
+                    printf "%s ", $i
+                }
+            }' | sed 's/ *$//')
+            [[ -z "$why" ]] && why="$who"
+            echo "${who} (${comm}): ${why}"
+        fi
+    done
+}
+
+# Collect all inhibitor lines into an array
+collect_inhibitors() {
+    inhibitor_lines=()
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && inhibitor_lines+=("⏻ $line")
+    done < <(get_systemd_idle_inhibitors)
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && inhibitor_lines+=("♫ $line")
+    done < <(get_active_audio_streams)
+}
+
+# --- --check ---
+# Exit 0 if any idle inhibitors are active, 1 otherwise.
+cmd_check() {
+    collect_inhibitors
+    [[ ${#inhibitor_lines[@]} -gt 0 ]]
+}
+
+# --- --toast ---
+# Show current inhibitors as a noctalia toast notification.
+cmd_toast() {
+    collect_inhibitors
+
+    if [[ ${#inhibitor_lines[@]} -eq 0 ]]; then
+        qs -c noctalia-shell ipc call toast send \
+            '{"title":"Idle Inhibitors","body":"No active idle inhibitors","icon":"eye","duration":3000}'
+        return
+    fi
+
+    local body=""
+    for line in "${inhibitor_lines[@]}"; do
+        [[ -n "$body" ]] && body+=$'\n'
+        body+="$line"
+    done
+
+    local json_body
+    json_body=$(printf '%s' "$body" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+
+    local count=${#inhibitor_lines[@]}
+    qs -c noctalia-shell ipc call toast send \
+        "{\"title\":\"Idle Inhibitors (${count})\",\"body\":${json_body},\"icon\":\"eye\",\"type\":\"warning\",\"duration\":6000}"
+}
+
+case "${1:-}" in
+    --toast)  cmd_toast ;;
+    --check)  cmd_check ;;
+    *)        echo "Usage: idle-inhibitor-monitor [--check|--toast]" >&2; exit 1 ;;
+esac

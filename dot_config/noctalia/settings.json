@@ -241,6 +241,15 @@
                     "id": "KeepAwake"
                 },
                 {
+                    "id": "CustomButton",
+                    "icon": "eye",
+                    "onClicked": "idle-inhibitor-monitor --toast",
+                    "enableOnStateLogic": true,
+                    "stateChecksJson": "[{\"command\":\"idle-inhibitor-monitor --check\",\"icon\":\"eye\"}]",
+                    "showExecTooltip": false,
+                    "generalTooltipText": "Idle inhibitors"
+                },
+                {
                     "id": "Notifications"
                 },
                 {
