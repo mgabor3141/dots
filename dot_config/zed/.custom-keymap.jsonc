@@ -35,6 +35,8 @@
       "secondary-shift-r": ["task::Spawn", { "reveal_target": "dock" }],
       "secondary-v": "terminal::Paste",
 
+      "alt-enter": ["terminal::SendKeystroke", "alt-enter"],
+
       "secondary-shift-backspace": ["terminal::SendText", "\u0015"], // ctrl-u: clear from cursor to beginning of line
       "secondary-shift-delete": ["terminal::SendText", "\u000b"], // ctrl-k: clear from cursor to end of line
 
@@ -42,7 +44,23 @@
       "secondary-t": ["terminal::SendText", "\u0014"], // ctrl-t
       "secondary-x": ["terminal::SendText", "\u0018"], // ctrl-x
       "secondary-q": ["terminal::SendText", "\u0011"], // ctrl-q
+      "secondary-a": ["terminal::SendText", "\u0001"], // ctrl-a
+      "secondary-b": ["terminal::SendText", "\u0002"], // ctrl-b
+      "secondary-d": ["terminal::SendText", "\u0004"], // ctrl-d
+      "secondary-h": ["terminal::SendText", "\u0008"], // ctrl-h
+      "secondary-i": ["terminal::SendText", "\u0009"], // ctrl-i
+      "secondary-j": ["terminal::SendText", "\u000a"], // ctrl-j
+      "secondary-k": ["terminal::SendText", "\u000b"], // ctrl-k
+      "secondary-l": ["terminal::SendText", "\u000c"], // ctrl-l
+      "secondary-m": ["terminal::SendText", "\u000d"], // ctrl-m
+      "secondary-n": ["terminal::SendText", "\u000e"], // ctrl-n
+      "secondary-o": ["terminal::SendText", "\u000f"], // ctrl-o
       "secondary-s": ["terminal::SendText", "\u0013"], // ctrl-s
+      "secondary-u": ["terminal::SendText", "\u0015"], // ctrl-u
+      "secondary-w": ["terminal::SendText", "\u0017"], // ctrl-w
+      "secondary-y": ["terminal::SendText", "\u0019"], // ctrl-y
+      "secondary-z": ["terminal::SendText", "\u001a"], // ctrl-z
+      "secondary-shift-w": "pane::CloseActiveItem",
       "secondary-g": ["terminal::SendText", "\u0007"], // ctrl-g: toggle fish history mode
       "secondary-shift-m": ["terminal::SendText", "\u001b\u001bm"], // alt-shift-m: toggle mouse tracking in fish
       "cmd-\\": ["terminal::SendKeystroke", "ctrl-\\"], // ctrl-\: abduco detach
