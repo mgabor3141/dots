@@ -1,13 +1,13 @@
 ---
-description: Push and create a draft PR (jj)
+description: Push and create a draft PR (git)
 ---
-Push the current branch and create a draft GitHub PR using jj.
+Push the current branch and create a draft GitHub PR using git.
 
-1. If `jj diff` shows uncommitted changes, grab recent commit messages as style examples, write a message matching their conventions, and `jj commit -m "<message>"`.
-2. Push: `jj git push --allow-new`
+1. If `git status --porcelain` shows uncommitted changes, stage with `git add -A`, write a commit message matching recent conventions (`git log --oneline -10`), and `git commit -m "<message>"`.
+2. Push: `git push -u origin HEAD`
 3. Gather context:
-   - Commit descriptions: `jj log -r 'trunk()..@-' --no-graph -T 'description ++ "\n---\n"'`
-   - Diff stat: `jj diff -r 'trunk()..@-' --stat`
+   - Commit descriptions: `git log --format='%B---' origin/main..HEAD`
+   - Diff stat: `git diff --stat origin/main..HEAD`
    - PR template: check for `.github/pull_request_template.md` and common variants
    - Recent PR titles: `gh pr list --state merged --limit 10 --json title --jq '.[].title'`
 4. Write a PR title and description:
