@@ -7,7 +7,6 @@
   ) */
   "packages": [
     "npm:pi-interactive-shell",
-    "npm:@aliou/pi-guardrails",
     "npm:pi-librarian",
     "npm:pi-brave-search",
     "npm:@tmustier/pi-ralph-wiggum"

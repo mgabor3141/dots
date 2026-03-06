@@ -1,14 +1,33 @@
 /**
- * - Intercept sudo in bash → block with reason to use interactive_shell
- * - Notify on any interactive_shell open (user may need to interact)
- * - Notify on guardrails approve/deny dialog
+ * Hints for sudo and interactive shell usage.
+ *
+ * - Redirects sudo in bash → interactive_shell (bash has no TTY for password)
+ * - Notifies on interactive_shell open (user may need to interact)
+ *
+ * This is a best-effort hint, not a security boundary. Missing cases is fine
+ * (the command would just fail on password prompt); false positives are not.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { sendNotification } from "./lib/notify.js";
 
-const SUDO_RE = /\bsudo\b/;
+/**
+ * Check if a command invokes sudo in a command position (not inside quotes).
+ * Strips single-quoted, double-quoted, and $'...' strings, plus comments,
+ * then checks for sudo as a command word (start of line, after ;, &&, ||, |, or ().
+ */
+function hasSudoCommand(command: string): boolean {
+	// Strip quoted strings and comments to avoid matching sudo inside arguments
+	const stripped = command
+		.replace(/\\./g, "")                   // remove escaped chars first
+		.replace(/\$'[^']*'/g, "''")           // $'...' strings
+		.replace(/'[^']*'/g, "''")             // single-quoted strings
+		.replace(/"[^"]*"/g, '""')             // double-quoted strings
+		.replace(/#.*/g, "");                  // comments
+	// Check for sudo in command position
+	return /(?:^|[;&|`(])\s*sudo\b/.test(stripped);
+}
 
 export default function (pi: ExtensionAPI) {
 	let cwd = process.cwd();
@@ -20,7 +39,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("tool_call", async (event, ctx) => {
 		cwd = ctx.cwd;
 		if (!isToolCallEventType("bash", event)) return;
-		if (!SUDO_RE.test(event.input.command)) return;
+		if (!hasSudoCommand(event.input.command)) return;
 
 		return {
 			block: true,
@@ -41,18 +60,6 @@ export default function (pi: ExtensionAPI) {
 		await sendNotification({
 			title: "🖥️ Interactive shell opened",
 			body: short,
-			cwd,
-			skipIfForeground: false,
-		});
-	});
-
-	pi.events.on("guardrails:dangerous", (event: { command?: string; description?: string }) => {
-		const desc = event.description || "dangerous command";
-		const cmd = event.command || "";
-		const short = cmd.length > 80 ? cmd.slice(0, 80) + "…" : cmd;
-		sendNotification({
-			title: "⚠️ Approve command?",
-			body: `${desc}: ${short}`,
 			cwd,
 			skipIfForeground: false,
 		});
