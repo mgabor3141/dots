@@ -3,6 +3,7 @@ trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
 # Patches hash: {{ joinPath (.chezmoi.sourceFile | dir) "patches/pi-brave-search-rate-limit-retry.patch" | include | sha256sum }}
+# Patches hash: {{ joinPath (.chezmoi.sourceFile | dir) "patches/pi-ralph-wiggum-skill-name.patch" | include | sha256sum }}
 
 PATCHES_DIR="{{ joinPath .chezmoi.homeDir ".pi/agent/patches" }}"
 
@@ -39,5 +40,6 @@ apply_patch() {
 # Apply each patch — filename format: <npm-package-name>-<description>.patch
 # The package name is derived from the first path component after stripping a/ or b/ in the diff header.
 apply_patch "pi-brave-search" "$PATCHES_DIR/pi-brave-search-rate-limit-retry.patch" "RATE_LIMIT_MAX_RETRIES"
+apply_patch "@tmustier/pi-ralph-wiggum" "$PATCHES_DIR/pi-ralph-wiggum-skill-name.patch" "name: pi-ralph-wiggum"
 
 echo "✅ Done applying patches"
