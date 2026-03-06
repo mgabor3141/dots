@@ -21,5 +21,8 @@ These apply to almost every task:
 5. **Prefer subfolder `.chezmoiignore`** over the global one. Keeps rules localized.
 7. **Use chezmoi template variables for paths**: In `.tmpl` files, use `.chezmoi.homeDir`, `.chezmoi.sourceDir`, `.chezmoi.targetFile`, `.chezmoi.sourceFile` and `joinPath` instead of hardcoding paths.
 
+## Branching
+This repo commits directly to `main` — no feature branches or PRs.
+
 ## Shell Scripting
 Use `#!/usr/bin/env bash` with `trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR` and `set -Eeuo pipefail` at the top of every script. Don't add redundant `|| exit 1` — let the trap handle failures.
