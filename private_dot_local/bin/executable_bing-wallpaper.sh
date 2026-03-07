@@ -65,6 +65,15 @@ update_once() {
   gradient_to="$(jq -r '.colors.gradient_to' <<<"$json")"
   copyright="$(jq -r '.copyright' <<<"$json")"
 
+  # 3) Validate color values — reject null/malformed data that would break niri config
+  local hex6='^#[0-9a-fA-F]{6}$'
+  local int='^[0-9]+$'
+  if ! [[ "$gradient_from" =~ $hex6 && "$gradient_to" =~ $hex6 && "$gradient_angle" =~ $int ]]; then
+    echo "Invalid color data from API — from=$gradient_from to=$gradient_to angle=$gradient_angle" >&2
+    echo "Raw JSON: $json" >&2
+    return 1
+  fi
+
   # 4) Filename (unique per day; title sanitized)
   safe_title="${title//[^[:alnum:] _-]/}"
   name="${startdate}-${safe_title:-bing}.jpg"
