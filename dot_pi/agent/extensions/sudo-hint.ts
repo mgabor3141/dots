@@ -61,7 +61,12 @@ export default function (pi: ExtensionAPI) {
 			spawnHook: ({ command, cwd: spawnCwd, env }) => ({
 				command,
 				cwd: spawnCwd,
-				env: { ...env, SUDO_ASKPASS: ASKPASS_PATH },
+				env: {
+					...env,
+					SUDO_ASKPASS: ASKPASS_PATH,
+					// Pass the full command to askpass so it can show what's being approved
+					SUDO_ASKPASS_COMMAND: command,
+				},
 			}),
 		});
 

@@ -23,4 +23,18 @@ if [ -z "$WAYLAND_DISPLAY" ] && [ -z "$DISPLAY" ]; then
         exit 1
     fi
 fi
-exec zenity --password --title="sudo" --timeout=60 2>/dev/null
+# Build the dialog — use --entry --hide-text instead of --password
+# because --password doesn't support --text
+title="sudo"
+if [ -n "$SUDO_ASKPASS_COMMAND" ]; then
+    # Truncate long commands
+    cmd="$SUDO_ASKPASS_COMMAND"
+    if [ ${#cmd} -gt 200 ]; then
+        cmd="${cmd:0:200}…"
+    fi
+    exec zenity --entry --hide-text --title="$title" \
+        --text="Command:\n$cmd\n\nPassword:" \
+        --timeout=60 2>/dev/null
+else
+    exec zenity --password --title="$title" --timeout=60 2>/dev/null
+fi
