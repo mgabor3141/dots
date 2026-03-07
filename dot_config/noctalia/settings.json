@@ -339,6 +339,7 @@
         "clockStyle": "analog",
         "compactLockScreen": true,
         "dimmerOpacity": 0,
+        "enableBlurBehind": true,
         "enableLockScreenCountdown": false,
         "enableLockScreenMediaControls": false,
         "enableShadows": false,
@@ -558,7 +559,7 @@
         "showHeader": false,
         "showKeybinds": true
     },
-    "settingsVersion": 55,
+    "settingsVersion": 56,
     "systemMonitor": {
         "batteryCriticalThreshold": 5,
         "batteryWarningThreshold": 20,
