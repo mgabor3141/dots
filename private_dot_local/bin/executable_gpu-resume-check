@@ -18,14 +18,30 @@ log() { logger -t "$LOG_TAG" "$*"; echo "$*"; }
 
 # Check if the NVIDIA GPU is healthy by querying nvidia-smi
 gpu_healthy() {
-    nvidia-smi --query-gpu=name --format=csv,noheader &>/dev/null
+    # Timeout after 5s — nvidia-smi can hang on a broken GPU
+    timeout 5 nvidia-smi --query-gpu=name --format=csv,noheader &>/dev/null
 }
 
-# Check recent kernel log for GSP boot failure (within last 60 seconds)
+# Check recent kernel log for GSP boot failure (within last 120 seconds)
 gsp_boot_failed() {
-    journalctl -k --since "-60s" --no-pager -q 2>/dev/null | \
-        grep -q "GSP boot failed at resume" 2>/dev/null
+    journalctl -k --since "-120s" --no-pager -q 2>/dev/null | \
+        grep -qE "GSP boot failed|NV_ERR_INVALID_STATE|Failed to allocate display engine" 2>/dev/null
 }
+
+# Wait for nvidia-resume.service to finish (up to 15s). We don't use
+# After=nvidia-resume.service in the unit file because if nvidia-resume hangs
+# (which is exactly the failure case we're trying to recover from), systemd
+# would block us from ever running.
+log "Waiting for nvidia-resume.service to settle..."
+for i in $(seq 1 15); do
+    if ! systemctl is-active --quiet nvidia-resume.service 2>/dev/null; then
+        break
+    fi
+    sleep 1
+done
+if systemctl is-active --quiet nvidia-resume.service 2>/dev/null; then
+    log "⚠ nvidia-resume.service still running after 15s — likely hung"
+fi
 
 if gpu_healthy && ! gsp_boot_failed; then
     log "GPU healthy after resume"
