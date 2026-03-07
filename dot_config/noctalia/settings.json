@@ -62,6 +62,9 @@
         "hideOnOverview": false,
         "marginHorizontal": 14,
         "marginVertical": 0,
+        "middleClickAction": "none",
+        "middleClickCommand": "",
+        "middleClickFollowMouse": false,
         "monitors": [
         ],
         "mouseWheelAction": "none",
@@ -69,6 +72,9 @@
         "outerCorners": true,
         "position": "top",
         "reverseScroll": false,
+        "rightClickAction": "controlCenter",
+        "rightClickCommand": "",
+        "rightClickFollowMouse": true,
         "screenOverrides": [
         ],
         "showCapsule": true,
@@ -227,30 +233,28 @@
             }
         ],
         "diskPath": "/",
-        "openAtMouseOnBarRightClick": true,
         "position": "close_to_bar_button",
         "shortcuts": {
             "left": [
                 {
-                    "id": "Bluetooth"
-                },
-                {
-                    "id": "NightLight"
+                    "enableOnStateLogic": true,
+                    "generalTooltipText": "Idle inhibitors",
+                    "icon": "eye",
+                    "id": "CustomButton",
+                    "onClicked": "idle-inhibitor-monitor --toast",
+                    "onMiddleClicked": "",
+                    "onRightClicked": "",
+                    "showExecTooltip": false,
+                    "stateChecksJson": "[{\"command\":\"idle-inhibitor-monitor --check\",\"icon\":\"eye\"}]"
                 },
                 {
                     "id": "KeepAwake"
                 },
                 {
-                    "id": "CustomButton",
-                    "icon": "eye",
-                    "onClicked": "idle-inhibitor-monitor --toast",
-                    "enableOnStateLogic": true,
-                    "stateChecksJson": "[{\"command\":\"idle-inhibitor-monitor --check\",\"icon\":\"eye\"}]",
-                    "showExecTooltip": false,
-                    "generalTooltipText": "Idle inhibitors"
+                    "id": "Bluetooth"
                 },
                 {
-                    "id": "Notifications"
+                    "id": "NightLight"
                 },
                 {
                     "id": "PowerProfile"
@@ -427,6 +431,7 @@
     },
     "network": {
         "airplaneModeEnabled": false,
+        "bluetoothAutoConnect": true,
         "bluetoothDetailsViewMode": "grid",
         "bluetoothHideUnnamedDevices": true,
         "bluetoothRssiPollIntervalMs": 10000,
@@ -553,7 +558,7 @@
         "showHeader": false,
         "showKeybinds": true
     },
-    "settingsVersion": 54,
+    "settingsVersion": 55,
     "systemMonitor": {
         "batteryCriticalThreshold": 5,
         "batteryWarningThreshold": 20,
