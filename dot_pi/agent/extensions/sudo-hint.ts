@@ -1,16 +1,34 @@
 /**
- * Hints for sudo and interactive shell usage.
+ * Sudo extension for pi
  *
- * - Redirects sudo in bash → interactive_shell (bash has no TTY for password)
- * - Notifies on interactive_shell open (user may need to interact)
+ * Instead of blocking sudo in bash, injects SUDO_ASKPASS into the environment
+ * so sudo pops up a GUI dialog (zenity) when there's no TTY. Over SSH or
+ * headless, falls back to blocking with guidance to use interactive_shell.
  *
- * This is a best-effort hint, not a security boundary. Missing cases is fine
- * (the command would just fail on password prompt); false positives are not.
+ * Also notifies on interactive_shell opens.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
+import { createBashTool, isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { sendNotification } from "./lib/notify.js";
+import { existsSync, readdirSync } from "node:fs";
+import { join, basename } from "node:path";
+
+const ASKPASS_PATH = join(process.env.HOME ?? "", ".local/bin/sudo-askpass");
+
+function hasDisplay(): boolean {
+	if (process.env.WAYLAND_DISPLAY || process.env.DISPLAY) return true;
+
+	// Check for a Wayland socket (e.g. SSH into a machine with a running compositor)
+	const uid = process.getuid?.();
+	if (uid == null) return false;
+	const runtimeDir = process.env.XDG_RUNTIME_DIR ?? `/run/user/${uid}`;
+	try {
+		return readdirSync(runtimeDir).some((f) => f.startsWith("wayland-") && !f.includes(".lock"));
+	} catch {
+		return false;
+	}
+}
 
 /**
  * Check if a command invokes sudo in a command position (not inside quotes).
@@ -18,14 +36,12 @@ import { sendNotification } from "./lib/notify.js";
  * then checks for sudo as a command word (start of line, after ;, &&, ||, |, or ().
  */
 function hasSudoCommand(command: string): boolean {
-	// Strip quoted strings and comments to avoid matching sudo inside arguments
 	const stripped = command
-		.replace(/\\./g, "")                   // remove escaped chars first
-		.replace(/\$'[^']*'/g, "''")           // $'...' strings
-		.replace(/'[^']*'/g, "''")             // single-quoted strings
-		.replace(/"[^"]*"/g, '""')             // double-quoted strings
-		.replace(/#.*/g, "");                  // comments
-	// Check for sudo in command position
+		.replace(/\\./g, "")
+		.replace(/\$'[^']*'/g, "''")
+		.replace(/'[^']*'/g, "''")
+		.replace(/"[^"]*"/g, '""')
+		.replace(/#.*/g, "");
 	return /(?:^|[;&|`(])\s*sudo\b/.test(stripped);
 }
 
@@ -36,21 +52,62 @@ export default function (pi: ExtensionAPI) {
 		cwd = ctx.cwd;
 	});
 
-	pi.on("tool_call", async (event, ctx) => {
-		cwd = ctx.cwd;
-		if (!isToolCallEventType("bash", event)) return;
-		if (!hasSudoCommand(event.input.command)) return;
+	const askpassAvailable = existsSync(ASKPASS_PATH);
 
-		return {
-			block: true,
-			reason: [
-				"sudo commands cannot run in the bash tool because it has no TTY for password entry.",
-				"Use the interactive_shell tool instead:",
-				'  interactive_shell({ command: "sudo ...", mode: "hands-free", handsFree: { autoExitOnQuiet: true, quietThreshold: 15000 } })',
-				"The user can then enter their password in the interactive overlay.",
-			].join("\n"),
-		};
-	});
+	if (askpassAvailable) {
+		// Override bash tool to inject SUDO_ASKPASS into the environment.
+		// sudo automatically uses askpass when there's no TTY.
+		const bashTool = createBashTool(cwd, {
+			spawnHook: ({ command, cwd: spawnCwd, env }) => ({
+				command,
+				cwd: spawnCwd,
+				env: { ...env, SUDO_ASKPASS: ASKPASS_PATH },
+			}),
+		});
+
+		pi.registerTool({
+			...bashTool,
+			execute: async (id, params, signal, onUpdate, ctx) => {
+				cwd = ctx.cwd;
+
+				// If there's no display and the command uses sudo, block — askpass
+				// needs a display to show the password dialog
+				if (!hasDisplay() && hasSudoCommand(params.command)) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: [
+									"No display available for sudo password prompt.",
+									"Use the interactive_shell tool instead:",
+									'  interactive_shell({ command: "sudo ...", mode: "hands-free", handsFree: { autoExitOnQuiet: true, quietThreshold: 15000 } })',
+								].join("\n"),
+							},
+						],
+						isError: true,
+					};
+				}
+
+				return bashTool.execute(id, params, signal, onUpdate);
+			},
+		});
+	} else {
+		// No askpass script — block sudo with guidance
+		pi.on("tool_call", async (event, ctx) => {
+			cwd = ctx.cwd;
+			if (!isToolCallEventType("bash", event)) return;
+			if (!hasSudoCommand(event.input.command)) return;
+
+			return {
+				block: true,
+				reason: [
+					"sudo-askpass is not installed at " + ASKPASS_PATH,
+					"Use the interactive_shell tool instead:",
+					'  interactive_shell({ command: "sudo ...", mode: "hands-free", handsFree: { autoExitOnQuiet: true, quietThreshold: 15000 } })',
+				].join("\n"),
+			};
+		});
+	}
 
 	pi.on("tool_execution_start", async (event, _ctx) => {
 		if (event.toolName !== "interactive_shell") return;
