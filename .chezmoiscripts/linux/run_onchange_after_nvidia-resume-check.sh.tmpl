@@ -15,7 +15,9 @@ fi
 cat << 'EOF' > /etc/systemd/system/nvidia-resume-check.service
 [Unit]
 Description=Check NVIDIA GPU health after resume and auto-recover
-After=nvidia-resume.service
+# Do NOT use After=nvidia-resume.service — if nvidia-resume hangs (GSP boot
+# failure), it blocks this service from ever running, defeating the whole
+# purpose of the health check. Instead we wait inside the script.
 After=systemd-suspend.service
 After=systemd-hibernate.service
 
