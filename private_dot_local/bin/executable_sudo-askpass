@@ -3,9 +3,24 @@
 # sudo uses this automatically when there's no TTY (e.g. from a non-interactive
 # shell or agent). Over SSH (where a TTY exists), sudo prompts normally.
 #
-# If no display is available (e.g. headless SSH), exit with error so sudo
-# falls back to its normal "no askpass, no TTY" error message.
+# sudo sanitizes the environment before calling askpass, stripping most
+# variables. We reconstruct what's needed to connect to a Wayland display.
+
+# XDG_RUNTIME_DIR is required for Wayland socket access
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+# If WAYLAND_DISPLAY isn't set, try to find a running compositor's socket.
+# This handles SSH sessions where the env var isn't forwarded.
 if [ -z "$WAYLAND_DISPLAY" ] && [ -z "$DISPLAY" ]; then
-    exit 1
+    for sock in "$XDG_RUNTIME_DIR"/wayland-*; do
+        if [ -S "$sock" ]; then
+            export WAYLAND_DISPLAY="$(basename "$sock")"
+            break
+        fi
+    done
+    # Still nothing — no display available (truly headless)
+    if [ -z "$WAYLAND_DISPLAY" ] && [ -z "$DISPLAY" ]; then
+        exit 1
+    fi
 fi
 exec zenity --password --title="sudo" --timeout=60 2>/dev/null
