@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# {{ include (joinPath .chezmoi.sourceDir ".chezmoiscripts/linux/.99-gaming-network.sysctl.conf") | sha256sum }}
+
+# Copy gaming sysctl config to /etc and apply
+
+if [ "$(id -u)" -ne 0 ]; then
+    sudo "$0" "$@"
+    exit $?
+fi
+
+cp "{{ joinPath .chezmoi.sourceDir ".chezmoiscripts/linux/.99-gaming-network.sysctl.conf" }}" /etc/sysctl.d/99-gaming-network.conf
+sysctl --system > /dev/null 2>&1
+echo "✅ Applied gaming sysctl config"
