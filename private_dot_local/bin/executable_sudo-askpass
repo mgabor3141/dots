@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# SUDO_ASKPASS helper — shows a GUI password dialog.
+# sudo uses this automatically when there's no TTY (e.g. from a non-interactive
+# shell or agent). Over SSH (where a TTY exists), sudo prompts normally.
+exec zenity --password --title="sudo" --timeout=60 2>/dev/null
