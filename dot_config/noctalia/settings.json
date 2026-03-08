@@ -399,7 +399,7 @@
         "screenLock": "",
         "screenUnlock": "",
         "session": "",
-        "startup": "qs -c noctalia-shell ipc call lockScreen lock",
+        "startup": "",
         "wallpaperChange": ""
     },
     "idle": {
