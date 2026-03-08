@@ -9,7 +9,11 @@
     "npm:pi-interactive-shell",
     "npm:pi-librarian",
     "npm:pi-brave-search",
-    "npm:@tmustier/pi-ralph-wiggum"
+    "npm:@tmustier/pi-ralph-wiggum",
+    "npm:pi-desktop-notify",
+    "npm:pi-safeguard",
+    "npm:pi-budget-model",
+    "npm:pi-bash-trim"
   ],
   "terminal": {
     "clearOnShrink": true

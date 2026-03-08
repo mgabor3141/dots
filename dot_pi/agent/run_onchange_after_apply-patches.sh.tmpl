@@ -4,6 +4,7 @@ set -Eeuo pipefail
 
 # Patches hash: {{ joinPath (.chezmoi.sourceFile | dir) "patches/pi-brave-search-rate-limit-retry.patch" | include | sha256sum }}
 # Patches hash: {{ joinPath (.chezmoi.sourceFile | dir) "patches/pi-ralph-wiggum-skill-name.patch" | include | sha256sum }}
+# Installed versions: {{ output "npm" "list" "-g" "--json" "--depth=0" "pi-brave-search" "@tmustier/pi-ralph-wiggum" | sha256sum }}
 
 PATCHES_DIR="{{ joinPath .chezmoi.homeDir ".pi/agent/patches" }}"
 
