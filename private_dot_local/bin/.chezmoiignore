@@ -1,3 +1,5 @@
+__pycache__
+
 {{- if eq .chezmoi.os "darwin" }}
 # macOS: exclude Linux-specific tools
 bing-wallpaper.sh
