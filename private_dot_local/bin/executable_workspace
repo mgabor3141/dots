@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.13
+#!/usr/bin/env python3
 """Create workspaces from jj repos with moon task runner integration."""
 
 import argparse
@@ -611,8 +611,8 @@ def get_original_repo(workspace_repo_dir: Path) -> Path | None:
     return Path(original_jj_repo).parent.parent
 
 
-def load_review_data(workspace_dir: Path) -> list[dict]:
-    """Gather jj commit data for each repo in the workspace.
+def load_review_data(workspace_dir: Path, standalone: bool = False) -> list[dict]:
+    """Gather jj commit data for each repo in the workspace (or a single standalone repo).
 
     Returns list of dicts with keys:
         name, original_dir, commits (list, oldest first),
@@ -621,39 +621,43 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
     Each commit dict has: change_id (full), short_id, description, empty,
         files, bookmarks
     """
-    ws_name = workspace_dir.name
+    if standalone:
+        # Single repo: the directory itself is the jj repo
+        dirs = [(workspace_dir.name, workspace_dir, workspace_dir, "@")]
+    else:
+        # Multi-repo workspace: iterate subdirs, resolve originals
+        dirs = []
+        ws_name = workspace_dir.name
+        for subdir in sorted(workspace_dir.iterdir()):
+            if not subdir.is_dir() or subdir.name.startswith("."):
+                continue
+            if not (subdir / ".jj").is_dir():
+                continue
+            original = get_original_repo(subdir)
+            if not original:
+                continue
+            jj_ws_name = f"{ws_name}-{subdir.name}"
+            # Detect jj workspace name: try new format first, fall back to old
+            detect_result = subprocess.run(
+                ["jj", "log", "--no-pager", "--ignore-working-copy",
+                 "-r", f"{jj_ws_name}@", "--no-graph", "-T", "change_id"],
+                cwd=original, capture_output=True, text=True,
+            )
+            if detect_result.returncode != 0 or not detect_result.stdout.strip():
+                jj_ws_name = subdir.name
+            dirs.append((subdir.name, subdir, original, f"{jj_ws_name}@"))
+
     repos = []
-    for subdir in sorted(workspace_dir.iterdir()):
-        if not subdir.is_dir() or subdir.name.startswith("."):
-            continue
-        if not (subdir / ".jj").is_dir():
-            continue
-
-        name = subdir.name
-        jj_ws_name = f"{ws_name}-{name}"
-        original = get_original_repo(subdir)
-        if not original:
-            continue
-
+    for name, _subdir, original, head_revset in dirs:
         # All jj operations run against the original repo. We manipulate default@
         # there so the user can view diffs in the editor, leaving workspace copies
         # untouched for the agent. Read-only ops use --ignore-working-copy to
         # avoid stale errors; mutations use jj_update_stale() first instead.
 
-        # Detect jj workspace name: try new format (ws-repo) first, fall back to old (repo)
-        detect_result = subprocess.run(
-            ["jj", "log", "--no-pager", "--ignore-working-copy",
-             "-r", f"{jj_ws_name}@", "--no-graph", "-T", "change_id"],
-            cwd=original, capture_output=True, text=True,
-        )
-        if detect_result.returncode != 0 or not detect_result.stdout.strip():
-            # Fall back to old naming (repo name only)
-            jj_ws_name = name
-
-        # Get commits between trunk and workspace head (newest first from jj)
+        # Get commits between trunk and head (newest first from jj)
         log_result = subprocess.run(
             ["jj", "log", "--no-pager", "--ignore-working-copy",
-             "-r", f"trunk()..{jj_ws_name}@", "--no-graph",
+             "-r", f"trunk()..{head_revset}", "--no-graph",
              "-T", 'change_id ++ "\t"'
                    '++ change_id.shortest() ++ "\t"'
                    '++ description.first_line() ++ "\t"'
@@ -732,6 +736,18 @@ def load_review_data(workspace_dir: Path) -> list[dict]:
         repos.append(repo_data)
 
     return repos
+
+
+def find_jj_root(start: Path | None = None) -> Path | None:
+    """Walk up from start (default cwd) looking for a .jj directory."""
+    d = (start or Path.cwd()).resolve()
+    while True:
+        if (d / ".jj").is_dir():
+            return d
+        parent = d.parent
+        if parent == d:
+            return None
+        d = parent
 
 
 def auto_select_full_ranges(repos: list[dict]) -> None:
@@ -999,7 +1015,8 @@ def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
     return f"✓ bookmark {bookmark} → {', '.join(results)}"
 
 
-def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
+def tui_review(stdscr, repos: list[dict], workspace_name: str,
+               reload_fn=None) -> None:
     """TUI controller for reviewing workspace commits across repos."""
     curses.curs_set(0)
     curses.use_default_colors()
@@ -1036,7 +1053,6 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
 
     def full_refresh():
         nonlocal repos_with_commits, all_repos, col, row, visual_anchor
-        ws_dir = Path(f"~/workspaces/{workspace_name}").expanduser()
 
         # Save active ranges before teardown
         saved_ranges: dict[str, str | tuple[str, str] | None] = {}
@@ -1045,7 +1061,7 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
 
         # Abandon all temps and reload
         jj_abandon_all_temps(all_repos)
-        new_repos = load_review_data(ws_dir)
+        new_repos = reload_fn()
         all_repos[:] = new_repos
         repos_with_commits[:] = [r for r in new_repos if r["commits"]]
         if col >= len(repos_with_commits):
@@ -1382,18 +1398,25 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str) -> None:
             status_msg = "✓ refreshed"
 
 
-def review_tui(config: dict, name: str | None) -> None:
-    """Launch the review TUI controller for a workspace."""
-    workspace_dir = resolve_workspace_dir(config, name)
-    repos = load_review_data(workspace_dir)
+def review_tui(config: dict, name: str | None, standalone_dir: Path | None = None) -> None:
+    """Launch the review TUI controller for a workspace or standalone repo."""
+    if standalone_dir:
+        repos = load_review_data(standalone_dir, standalone=True)
+        display_name = standalone_dir.name
+        reload_fn = lambda: load_review_data(standalone_dir, standalone=True)
+    else:
+        workspace_dir = resolve_workspace_dir(config, name)
+        repos = load_review_data(workspace_dir)
+        display_name = workspace_dir.name
+        reload_fn = lambda: load_review_data(workspace_dir)
 
     if not repos:
-        die(f"no jj repos found in {workspace_dir}")
+        die(f"no jj repos found")
 
     auto_select_full_ranges(repos)
 
     try:
-        curses.wrapper(tui_review, repos, workspace_dir.name)
+        curses.wrapper(tui_review, repos, display_name, reload_fn)
     except KeyboardInterrupt:
         pass
     finally:
@@ -1559,7 +1582,14 @@ def main() -> None:
     elif args.command == "review-open":
         review_open(config, args.name)
     elif args.command == "review":
-        review_tui(config, args.name)
+        if args.name:
+            review_tui(config, args.name)
+        else:
+            jj_root = find_jj_root()
+            if jj_root:
+                review_tui(config, None, standalone_dir=jj_root)
+            else:
+                review_tui(config, None)
     elif args.command == "list":
         list_workspaces(config)
 
