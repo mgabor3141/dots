@@ -201,9 +201,9 @@ binds {
     Mod+Escape                         repeat=false { toggle-overview; }
 
     // ─── Screenshots ───
-    CTRL+SHIFT+1                       { screenshot; }
+    CTRL+SHIFT+1                       { screenshot show-pointer=false; }
     CTRL+SHIFT+2                       { screenshot-window; }
-    CTRL+SHIFT+3                       { screenshot-screen; }
+    CTRL+SHIFT+3                       { screenshot-screen show-pointer=false; }
 
     // ─── Emergency Escape Key ───
     // Use this when a fullscreen app blocks your keybinds.
