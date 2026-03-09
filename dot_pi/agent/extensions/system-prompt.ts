@@ -69,10 +69,9 @@ function buildJjNote(state: JjState, cwd: string): string {
 const PREAMBLE = `You are running inside pi, a coding agent harness.
 
 Non-obvious tool notes:
-- Prefer relative paths over cd or absolute paths.
+- Prefer relative paths over absolute paths. You can assume that all relative paths will be resolved from the current working directory.
 - Use read to examine files, not cat or sed.
 - edit oldText must match exactly — read first to verify.
-- interactive_shell instead of bash for: sudo, interactive prompts, GUI apps, long-running processes.
 - brave_search / librarian: prefer over assumptions for external tools, libraries, or error messages.`;
 
 /**
