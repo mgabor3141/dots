@@ -70,6 +70,7 @@ const PREAMBLE = `You are running inside pi, a coding agent harness.
 
 Non-obvious tool notes:
 - Prefer relative paths over absolute paths. You can assume that all relative paths will be resolved from the current working directory.
+- \`command &\` syntax doesn't work for backgrounding because the bash tool waits for all children to complete regardless.
 - Use read to examine files, not cat or sed.
 - edit oldText must match exactly — read first to verify.
 - brave_search / librarian: prefer over assumptions for external tools, libraries, or error messages.`;

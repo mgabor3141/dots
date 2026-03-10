@@ -1,3 +1,4 @@
 .DS_Store
 .idea
+.ralph
 private_dot_local/bin/__pycache__/
