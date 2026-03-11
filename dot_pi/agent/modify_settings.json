@@ -13,11 +13,13 @@
     "npm:@tmustier/pi-ralph-wiggum",
     "npm:pi-rtk",
     "npm:@cegersdo/pi-ptc",
-    "npm:pi-bash-trim"
+    "npm:pi-bash-trim",
+    "npm:pi-desktop-notify"
   ],
   "terminal": {
     "clearOnShrink": true
   },
   "quietStartup": true,
-  "showHardwareCursor": true
+  "showHardwareCursor": true,
+  "steeringMode": "all"
 }
