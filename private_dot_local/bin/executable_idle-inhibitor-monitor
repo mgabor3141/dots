@@ -61,7 +61,9 @@ get_active_audio_streams() {
 
     process_entry
 
-    printf '%s\n' "${streams[@]}"
+    if [[ ${#streams[@]} -gt 0 ]]; then
+        printf '%s\n' "${streams[@]}"
+    fi
 }
 
 get_systemd_idle_inhibitors() {
@@ -88,11 +90,11 @@ collect_inhibitors() {
     inhibitor_lines=()
 
     while IFS= read -r line; do
-        [[ -n "$line" ]] && inhibitor_lines+=("⏻ $line")
+        if [[ -n "$line" ]]; then inhibitor_lines+=("⏻ $line"); fi
     done < <(get_systemd_idle_inhibitors)
 
     while IFS= read -r line; do
-        [[ -n "$line" ]] && inhibitor_lines+=("♫ $line")
+        if [[ -n "$line" ]]; then inhibitor_lines+=("♫ $line"); fi
     done < <(get_active_audio_streams)
 }
 
