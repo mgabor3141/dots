@@ -46,19 +46,18 @@ async function detectJj(cwd: string): Promise<JjState> {
 	return { kind: "none" };
 }
 
-const JJ_USAGE = [
+const JJ_NOTE = [
 	"Use jj instead of git.",
-	"The working copy is a commit (@) that auto-snapshots — no staging, no jj add.",
-	"`jj describe` sets the message; `jj commit` does describe + creates a new empty change on top.",
-	"`jj undo` reverses any operation.",
+	"Every file change is automatically recorded in the working copy commit `@` — there is no staging or `jj add`.",
+	"`@` is your workspace, not your history: accumulate freely, `jj commit -m '...'` when a logical unit is done, `jj diff --stat` before starting new work.",
 ].join(" ");
 
 function buildJjNote(state: JjState, cwd: string): string {
 	switch (state.kind) {
 		case "jj-repo":
-			return `This is a jj (Jujutsu) repository${state.root !== cwd ? ` (root: ${state.root})` : ""}. ${JJ_USAGE}`;
+			return `This is a jj (Jujutsu) repository${state.root !== cwd ? ` (root: ${state.root})` : ""}. ${JJ_NOTE}`;
 		case "jj-workspace":
-			return `This directory is a workspace whose subdirectories are jj (Jujutsu) repositories. ${JJ_USAGE}`;
+			return `This directory is a workspace whose subdirectories are jj (Jujutsu) repositories. ${JJ_NOTE}`;
 		default:
 			return "";
 	}
