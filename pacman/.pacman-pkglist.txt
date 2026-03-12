@@ -125,6 +125,7 @@ ttf-fira-code
 ttf-fira-sans
 ttf-hack
 ttf-opensans
+ttyd
 turbostat
 udiskie
 ufw
@@ -132,6 +133,7 @@ unrar
 vlc-plugins-all
 wayland-pipewire-idle-inhibit
 wayland-protocols
+websocat
 wtype
 xl2tpd
 xorg-xinit
