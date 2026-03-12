@@ -14,3 +14,4 @@ sunshine-git
 systemd-manager-tui-bin
 systemd-numlockontty
 vesktop-git
+wl-screenrec-git

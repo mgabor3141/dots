@@ -205,6 +205,10 @@ binds {
     CTRL+SHIFT+2                       { screenshot-window; }
     CTRL+SHIFT+3                       { screenshot-screen show-pointer=false; }
 
+    // ─── Screen Recording ───
+    // Toggle region recording (select area on first press, stop on second press)
+    CTRL+SHIFT+4                       hotkey-overlay-title="Toggle Screen Recording" { spawn-sh "~/.config/wm-scripts/screenrec.sh"; }
+
     // ─── Emergency Escape Key ───
     // Use this when a fullscreen app blocks your keybinds.
     // It disables any active keyboard shortcut inhibitor, restoring control.

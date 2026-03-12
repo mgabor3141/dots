@@ -3,7 +3,6 @@ atomicparsley
 cliphist
 ddcutil
 docker-buildx
-evince
 ffmpegthumbs
 filelight
 flite
