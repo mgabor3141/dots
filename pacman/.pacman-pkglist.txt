@@ -112,10 +112,12 @@ reflector
 satty
 sddm
 sg3_utils
+slurp
 sof-firmware
 speedtest-cli
 spoofdpi
 spotify-launcher
+sushi
 swayidle
 systemd-boot-manager
 tailscale
