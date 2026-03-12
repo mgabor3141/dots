@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "quietHoursStart": "23:00",
+  "quietHoursEnd": "07:00",
+  "messageLimit": 3
+}

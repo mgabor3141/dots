@@ -19,6 +19,5 @@
     "clearOnShrink": true
   },
   "quietStartup": true,
-  "showHardwareCursor": true,
   "steeringMode": "all"
 }

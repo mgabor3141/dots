@@ -36,20 +36,25 @@ urgency = "low"
 
 [sleep]
 start_time = "23:00"
+end_time = "06:00"
 
 [[sleep.escalations]]
 after = 0
 summary = "Time for bed 🌙"
 body = "Start winding down"
+persistence = "gentle"
 
 [[sleep.escalations]]
 after = 1800
 summary = "Still up? 😴"
 body = "You should really go to sleep"
+persistence = "firm"
 command = "playerctl pause"
 
 [[sleep.escalations]]
 after = 3600
 summary = "Go to sleep! 🛏️"
-body = "Activating night mode"
+body = "You're sacrificing tomorrow"
+persistence = "persistent"
+repeat_every = 300
 command = "busctl --user set-property rs.wl-gammarelay / rs.wl.gammarelay Saturation d 0.0"

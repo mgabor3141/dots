@@ -11,6 +11,11 @@
     "show_command": false,
   },
   {
+    "label": "open target for $ZED_FILENAME",
+    "command": "zed $(chezmoi target-path $ZED_FILE)",
+    "hide": "on_success",
+  },
+  {
     "label": "apply",
     "command": "chezmoi apply",
     "hide": "on_success",
