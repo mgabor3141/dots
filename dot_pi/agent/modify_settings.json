@@ -12,6 +12,7 @@
     "npm:@tmustier/pi-ralph-wiggum",
     "npm:pi-rtk",
     "npm:@cegersdo/pi-ptc",
+    "npm:pi-powerline-footer",
     "npm:pi-bash-trim",
     "npm:pi-desktop-notify"
   ],
