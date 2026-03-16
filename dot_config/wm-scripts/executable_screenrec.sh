@@ -23,10 +23,10 @@ else
     WH=$(echo "$REST" | cut -d' ' -f2)
     REGION="${WH}+${X}+${Y}"
     FILENAME="$OUTDIR/$(date +%Y-%m-%d_%H-%M-%S).mp4"
-    # -k hevc: smaller files at same quality
+    # -k h264: maximum compatibility (Discord, iOS, browsers all support it)
     # -q ultra: highest quality preset
     # -fm vfr: variable framerate (skip unchanged frames)
     # Add -a default_output for desktop audio, -a default_input for mic
-    setsid gpu-screen-recorder -w region -region "$REGION" -f 60 -k hevc -q ultra -fm vfr -o "$FILENAME" </dev/null &>/dev/null &
+    setsid gpu-screen-recorder -w region -region "$REGION" -f 60 -k h264 -q ultra -fm vfr -o "$FILENAME" </dev/null &>/dev/null &
     notify-send -t 3000 "Screen Recording" "Recording started..."
 fi
