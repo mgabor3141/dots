@@ -1,7 +1,0 @@
-# chezmoi:modify-template
-{{- $existing := .chezmoi.stdin | fromToml -}}
-[tailscale]
-enabled = true
-{{- if dig "tailscale" "hostname" "" $existing }}
-hostname = {{ $existing.tailscale.hostname | quote }}
-{{- end }}
