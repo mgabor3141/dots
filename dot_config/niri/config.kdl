@@ -208,6 +208,7 @@ binds {
     // ─── Screen Recording ───
     // Toggle region recording (select area on first press, stop on second press)
     CTRL+SHIFT+4                       hotkey-overlay-title="Toggle Screen Recording" { spawn-sh "~/.config/wm-scripts/screenrec.sh"; }
+    CTRL+SHIFT+5                       hotkey-overlay-title="Toggle Screen Recording (with audio)" { spawn-sh "~/.config/wm-scripts/screenrec.sh --audio"; }
 
     // ─── Emergency Escape Key ───
     // Use this when a fullscreen app blocks your keybinds.
