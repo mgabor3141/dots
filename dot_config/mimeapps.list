@@ -25,6 +25,7 @@ x-scheme-handler/chrome=zen.desktop;
 x-scheme-handler/file=org.gnome.Nautilus.desktop;
 x-scheme-handler/http=zen.desktop;
 x-scheme-handler/https=zen.desktop;
+font/woff2=com.github.FontManager.FontViewer.desktop;
 
 [Default Applications]
 application/json=dev.zed.Zed.desktop
@@ -55,3 +56,4 @@ x-scheme-handler/file=org.gnome.Nautilus.desktop;
 x-scheme-handler/http=zen.desktop
 x-scheme-handler/https=zen.desktop
 x-scheme-handler/fluxer=fluxer-desktop.desktop
+font/woff2=com.github.FontManager.FontViewer.desktop
