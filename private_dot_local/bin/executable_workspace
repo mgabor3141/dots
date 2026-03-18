@@ -93,9 +93,14 @@ def sync_symlinks(grove_root: Path, workspace_dir: Path) -> None:
     - .grove, .workspaces, .git, .jj (infrastructure)
     - Repo directories (these get jj workspaces instead)
     - .moon/ is handled specially: contents are symlinked but cache/ stays local
+
+    Also removes stale symlinks that point into the grove but whose source
+    no longer exists.
     """
     repo_names = {r.name for r in find_repos(grove_root)}
+    grove_resolved = grove_root.resolve()
 
+    # Create/update symlinks
     for item in sorted(grove_root.iterdir()):
         if item.name in SKIP_ITEMS or item.name in repo_names:
             continue
@@ -106,6 +111,35 @@ def sync_symlinks(grove_root: Path, workspace_dir: Path) -> None:
             _sync_moon_dir(item, target)
         else:
             _ensure_symlink(target, item)
+
+    # Clean up stale symlinks pointing into the grove
+    for item in sorted(workspace_dir.iterdir()):
+        if not item.is_symlink():
+            continue
+        link_target = item.resolve()
+        # Only remove symlinks that point into the grove root
+        try:
+            link_target.relative_to(grove_resolved)
+        except ValueError:
+            continue
+        if not link_target.exists():
+            print(f"  Removing stale symlink: {item.name}")
+            item.unlink()
+
+    # Clean up stale symlinks inside .moon/
+    moon_dst = workspace_dir / ".moon"
+    if moon_dst.is_dir() and not moon_dst.is_symlink():
+        for item in sorted(moon_dst.iterdir()):
+            if not item.is_symlink():
+                continue
+            link_target = item.resolve()
+            try:
+                link_target.relative_to(grove_resolved)
+            except ValueError:
+                continue
+            if not link_target.exists():
+                print(f"  Removing stale symlink: .moon/{item.name}")
+                item.unlink()
 
     print(f"  Synced symlinks")
 

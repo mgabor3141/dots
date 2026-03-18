@@ -132,16 +132,18 @@ def find_jj_root(start: Path | None = None) -> Path | None:
 def detect_multi_repo_dir(start: Path | None = None) -> Path | None:
     """Find a directory containing multiple jj repo subdirs.
 
-    Walks up from start looking for a dir with at least one non-dot subdir
-    containing .jj/. This detects grove workspaces and similar layouts.
+    Walks up from start looking for a dir with at least two non-dot subdirs
+    containing .jj/. Requires multiple repos to avoid false positives when
+    inside a single repo that happens to have sibling repos.
     """
     d = (start or Path.cwd()).resolve()
     while True:
-        has_repo_subdirs = any(
-            sub.is_dir() and not sub.name.startswith(".") and (sub / ".jj").is_dir()
-            for sub in d.iterdir() if sub.is_dir()
+        repo_subdir_count = sum(
+            1 for sub in d.iterdir()
+            if sub.is_dir() and not sub.name.startswith(".")
+            and (sub / ".jj").is_dir()
         )
-        if has_repo_subdirs:
+        if repo_subdir_count >= 2:
             return d
         parent = d.parent
         if parent == d:
@@ -258,25 +260,42 @@ def load_review_data(workspace_dir: Path, standalone: bool = False) -> list[dict
 # ── Commit range helpers ─────────────────────────────────────────────
 
 
+def select_commit_range(repo: dict, lo: int, hi: int) -> str | None:
+    """Select a single commit or squashed range for a repo.
+
+    lo and hi are indices into repo["commits"] (lo <= hi).
+    Abandons any existing temp commit first.
+    Returns a status message, or None on failure.
+    """
+    jj_abandon_temp(repo)
+    original = repo["original_dir"]
+    commits = repo["commits"]
+    bottom = commits[lo]
+    top = commits[hi]
+
+    if lo == hi:
+        ok = jj_edit(original, bottom["change_id"])
+        if ok:
+            repo["current_edit"] = bottom["change_id"]
+            repo["active_range"] = bottom["change_id"]
+            return f"✓ jj edit {bottom['short_id']} in {repo['name']}"
+        return None
+
+    temp_cid = jj_create_temp_squash(original, bottom["change_id"], top["change_id"])
+    if temp_cid:
+        repo["temp_commit"] = temp_cid
+        repo["current_edit"] = temp_cid
+        repo["active_range"] = (bottom["change_id"], top["change_id"])
+        return f"✓ squash {bottom['short_id']}..{top['short_id']} in {repo['name']}"
+    return None
+
+
 def auto_select_full_ranges(repos: list[dict]) -> None:
     """Auto-select the full commit range for repos with commits but no active range."""
     for repo in repos:
         if repo["active_range"] is not None or not repo["commits"]:
             continue
-        commits = repo["commits"]
-        if len(commits) == 1:
-            cid = commits[0]["change_id"]
-            if jj_edit(repo["original_dir"], cid):
-                repo["current_edit"] = cid
-                repo["active_range"] = cid
-        else:
-            bottom_cid = commits[0]["change_id"]
-            top_cid = commits[-1]["change_id"]
-            temp_cid = jj_create_temp_squash(repo["original_dir"], bottom_cid, top_cid)
-            if temp_cid:
-                repo["temp_commit"] = temp_cid
-                repo["current_edit"] = temp_cid
-                repo["active_range"] = (bottom_cid, top_cid)
+        select_commit_range(repo, 0, len(repo["commits"]) - 1)
 
 
 def collect_bookmarks(repos: list[dict]) -> dict[str, list[tuple[str, int]]]:
@@ -291,39 +310,16 @@ def collect_bookmarks(repos: list[dict]) -> dict[str, list[tuple[str, int]]]:
 
 def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
     """Apply jj edit for a single commit or a squashed range."""
-    jj_abandon_temp(repo)
-    original = repo["original_dir"]
-    commits = repo["commits"]
-
     if visual_anchor is None:
-        commit = commits[row]
-        ok = jj_edit(original, commit["change_id"])
-        if ok:
-            repo["current_edit"] = commit["change_id"]
-            repo["active_range"] = commit["change_id"]
-            return f"✓ jj edit {commit['short_id']} in {repo['name']}"
-        return f"✗ jj edit failed for {repo['name']}"
+        lo = hi = row
+    else:
+        lo = min(row, visual_anchor)
+        hi = max(row, visual_anchor)
 
-    lo = min(row, visual_anchor)
-    hi = max(row, visual_anchor)
-    bottom = commits[lo]
-    top = commits[hi]
-
-    if lo == hi:
-        ok = jj_edit(original, bottom["change_id"])
-        if ok:
-            repo["current_edit"] = bottom["change_id"]
-            repo["active_range"] = bottom["change_id"]
-            return f"✓ jj edit {bottom['short_id']} in {repo['name']}"
-        return f"✗ jj edit failed for {repo['name']}"
-
-    temp_cid = jj_create_temp_squash(original, bottom["change_id"], top["change_id"])
-    if temp_cid:
-        repo["temp_commit"] = temp_cid
-        repo["current_edit"] = temp_cid
-        repo["active_range"] = (bottom["change_id"], top["change_id"])
-        return f"✓ squash {bottom['short_id']}..{top['short_id']} in {repo['name']}"
-    return f"✗ squash failed for {repo['name']}"
+    result = select_commit_range(repo, lo, hi)
+    if result:
+        return result
+    return f"✗ failed for {repo['name']}"
 
 
 def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
@@ -340,29 +336,9 @@ def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
         repo = repo_by_name.get(repo_name)
         if not repo:
             continue
-
-        jj_abandon_temp(repo)
-
-        if commit_idx == 0:
-            cid = repo["commits"][commit_idx]["change_id"]
-            ok = jj_edit(repo["original_dir"], cid)
-            if ok:
-                repo["current_edit"] = cid
-                repo["active_range"] = cid
-                results.append(f"{repo_name}:{cid}")
-            else:
-                results.append(f"{repo_name}:✗")
-        else:
-            bottom_cid = repo["commits"][0]["change_id"]
-            top_cid = repo["commits"][commit_idx]["change_id"]
-            temp_cid = jj_create_temp_squash(repo["original_dir"], bottom_cid, top_cid)
-            if temp_cid:
-                repo["temp_commit"] = temp_cid
-                repo["current_edit"] = temp_cid
-                repo["active_range"] = (bottom_cid, top_cid)
-                results.append(f"{repo_name}:{temp_cid}")
-            else:
-                results.append(f"{repo_name}:✗")
+        # Select from oldest commit (0) through the bookmarked commit
+        result = select_commit_range(repo, 0, commit_idx)
+        results.append(f"{repo_name}:{'✓' if result else '✗'}")
 
     return f"✓ bookmark {bookmark} → {', '.join(results)}"
 
@@ -710,24 +686,9 @@ def tui_review(stdscr, repos: list[dict], display_name: str,
         elif key == ord("a"):
             if repos_with_commits:
                 repo = repos_with_commits[col]
-                commits = repo["commits"]
-                if commits:
-                    jj_abandon_temp(repo)
-                    if len(commits) == 1:
-                        cid = commits[0]["change_id"]
-                        if jj_edit(repo["original_dir"], cid):
-                            repo["current_edit"] = cid
-                            repo["active_range"] = cid
-                            status_msg = f"✓ selected all in {repo['name']}"
-                    else:
-                        bottom_cid = commits[0]["change_id"]
-                        top_cid = commits[-1]["change_id"]
-                        temp_cid = jj_create_temp_squash(repo["original_dir"], bottom_cid, top_cid)
-                        if temp_cid:
-                            repo["temp_commit"] = temp_cid
-                            repo["current_edit"] = temp_cid
-                            repo["active_range"] = (bottom_cid, top_cid)
-                            status_msg = f"✓ selected all in {repo['name']}"
+                if repo["commits"]:
+                    result = select_commit_range(repo, 0, len(repo["commits"]) - 1)
+                    status_msg = result or f"✗ failed for {repo['name']}"
         elif key == ord("b"):
             bookmark_mode = True
             bookmark_filter = ""
