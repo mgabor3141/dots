@@ -21,6 +21,11 @@
     "hide": "on_success",
   },
   {
+    "label": "apply - refresh externals",
+    "command": "chezmoi apply --refresh-externals=always",
+    "hide": "on_success",
+  },
+  {
     "label": "apply $ZED_FILENAME",
     "command": "chezmoi apply --source-path $ZED_FILE",
     "hide": "on_success",
