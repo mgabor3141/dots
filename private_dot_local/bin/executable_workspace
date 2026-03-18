@@ -1,332 +1,31 @@
 #!/usr/bin/env python3
-"""Create workspaces from jj repos with moon task runner integration."""
+"""Create workspaces from jj repos in a grove (a collection of related repositories).
+
+A grove is a directory containing one or more jj repos alongside shared config
+files (AGENTS.md, .moon/, .scripts/, .zed/, etc.). Workspaces are created in
+.workspaces/<name>/ with jj workspace copies of each repo and symlinks to the
+shared files.
+
+Usage:
+    workspace init                  Mark current directory as a grove
+    workspace create <name>         Create a new workspace
+    workspace sync [name]           Re-sync symlinks from grove root
+    workspace delete [name]         Delete a workspace
+    workspace list                  List workspaces in current grove
+    workspace review [name]         TUI for browsing workspace commits
+"""
 
 import argparse
 import curses
-import json
 import shutil
 import subprocess
 import sys
-import textwrap
-import tomllib
 from pathlib import Path
-
-CONFIG_PATH = Path("~/.config/workspaces/config.toml").expanduser()
 
 
 def die(msg: str) -> None:
     print(f"error: {msg}", file=sys.stderr)
     sys.exit(1)
-
-
-def load_config() -> dict:
-    if not CONFIG_PATH.exists():
-        die(f"config not found: {CONFIG_PATH}")
-    with open(CONFIG_PATH, "rb") as f:
-        return tomllib.load(f)
-
-
-def get_groups(repos: list[dict]) -> dict[str, list[int]]:
-    """Return {group_name: [repo_indices]} from repos' groups fields."""
-    groups: dict[str, list[int]] = {}
-    for i, repo in enumerate(repos):
-        for g in repo.get("groups", []):
-            groups.setdefault(g, []).append(i)
-    return dict(sorted(groups.items()))
-
-
-def validate_name(name: str) -> str | None:
-    """Return error message if name is invalid, None if ok."""
-    if not name.strip():
-        return "Cannot be empty."
-    if not all(c.isalnum() or c in "-_" for c in name):
-        return "Use only alphanumeric, hyphens, underscores."
-    return None
-
-
-# ── TUI ─────────────────────────────────────────────────────────────────
-
-
-def tui_input(stdscr, prompt: str, validator=None) -> str:
-    """Single-line text input with validation."""
-    curses.curs_set(1)
-    curses.use_default_colors()
-    stdscr.clear()
-    buf = ""
-    error = ""
-
-    while True:
-        stdscr.clear()
-        stdscr.addstr(0, 0, prompt, curses.A_BOLD)
-        stdscr.addstr(1, 0, "> " + buf)
-        if error:
-            stdscr.addstr(3, 0, error, curses.A_DIM)
-        stdscr.refresh()
-
-        ch = stdscr.get_wch()
-        if ch == "\n":
-            if validator:
-                err = validator(buf)
-                if err:
-                    error = err
-                    continue
-            if buf.strip():
-                return buf.strip()
-            error = "Cannot be empty."
-        elif ch in ("\x7f", "\b", curses.KEY_BACKSPACE):
-            buf = buf[:-1]
-            error = ""
-        elif ch == "\x1b":  # ESC
-            return ""
-        elif isinstance(ch, str) and ch.isprintable():
-            buf += ch
-            error = ""
-
-
-# Row types for the unified list
-ROW_GROUP_HEADER = "group"
-ROW_REPO = "repo"
-
-
-def build_rows(repos: list[dict]) -> list[tuple[str, str, list[int] | int]]:
-    """Build a flat list of rows: group headers + repo items, grouped by group.
-
-    Returns [(type, label, payload), ...] where:
-      - group header: (ROW_GROUP_HEADER, group_name, [repo_indices])
-      - repo item:    (ROW_REPO, repo_name, repo_index)
-
-    Repos not in any group go under "ungrouped".
-    """
-    groups = get_groups(repos)
-    grouped_indices: set[int] = set()
-    rows: list[tuple] = []
-
-    for group_name, indices in groups.items():
-        rows.append((ROW_GROUP_HEADER, group_name, indices))
-        for i in indices:
-            rows.append((ROW_REPO, repos[i]["name"], i))
-            grouped_indices.add(i)
-
-    # Ungrouped repos
-    ungrouped = [i for i in range(len(repos)) if i not in grouped_indices]
-    if ungrouped:
-        rows.append((ROW_GROUP_HEADER, "ungrouped", ungrouped))
-        for i in ungrouped:
-            rows.append((ROW_REPO, repos[i]["name"], i))
-
-    return rows
-
-
-def tui_select_repos(stdscr, repos: list[dict], preselected: list[dict] | None = None) -> list[dict] | None:
-    """Unified TUI: grouped list with group headers as select-all toggles."""
-    curses.curs_set(0)
-    curses.use_default_colors()
-
-    if curses.has_colors():
-        curses.init_pair(1, curses.COLOR_GREEN, -1)   # selected
-        curses.init_pair(2, curses.COLOR_WHITE, -1)    # unselected
-        curses.init_pair(3, curses.COLOR_CYAN, -1)     # group header
-        curses.init_pair(4, curses.COLOR_YELLOW, -1)   # cursor
-
-    rows = build_rows(repos)
-    selected: set[int] = set()
-    if preselected:
-        pre_names = {r["name"] for r in preselected}
-        selected = {i for i, r in enumerate(repos) if r["name"] in pre_names}
-    cursor = 0
-
-    while True:
-        stdscr.clear()
-        stdscr.addstr(0, 0, "Select repos", curses.A_BOLD)
-        stdscr.addstr(1, 0, "↑↓ navigate  space toggle  enter confirm  a all  n none  q quit", curses.A_DIM)
-
-        for row_idx, (rtype, label, payload) in enumerate(rows):
-            y = row_idx + 3
-            is_cur = row_idx == cursor
-
-            if rtype == ROW_GROUP_HEADER:
-                group_indices = payload
-                all_sel = all(i in selected for i in group_indices)
-                any_sel = any(i in selected for i in group_indices)
-
-                if all_sel:
-                    marker = "●"
-                elif any_sel:
-                    marker = "◐"
-                else:
-                    marker = "○"
-
-                pointer = "▸" if is_cur else " "
-                count = f"{sum(1 for i in group_indices if i in selected)}/{len(group_indices)}"
-                attr = curses.color_pair(3) | curses.A_BOLD
-                stdscr.addstr(y, 0, f" {pointer} {marker} {label} ({count})", attr)
-
-            else:  # ROW_REPO
-                repo_idx = payload
-                is_sel = repo_idx in selected
-
-                if is_sel:
-                    marker = "●"
-                    name_attr = curses.color_pair(1)
-                else:
-                    marker = "○"
-                    name_attr = curses.color_pair(2)
-
-                if is_cur:
-                    pointer = "▸"
-                    name_attr |= curses.A_BOLD
-                else:
-                    pointer = " "
-
-                stdscr.addstr(y, 0, f" {pointer}   {marker} {label}", name_attr)
-
-        count_y = len(rows) + 4
-        stdscr.addstr(count_y, 0, f"  {len(selected)}/{len(repos)} selected", curses.A_DIM)
-
-        stdscr.refresh()
-        key = stdscr.getch()
-
-        if key in (curses.KEY_UP, ord("k")):
-            cursor = max(0, cursor - 1)
-        elif key in (curses.KEY_DOWN, ord("j")):
-            cursor = min(len(rows) - 1, cursor + 1)
-        elif key == ord(" "):
-            rtype, _, payload = rows[cursor]
-            if rtype == ROW_GROUP_HEADER:
-                group_indices = payload
-                if all(i in selected for i in group_indices):
-                    selected -= set(group_indices)
-                else:
-                    selected |= set(group_indices)
-            else:
-                selected.symmetric_difference_update({payload})
-        elif key == ord("\n"):
-            if not selected:
-                stdscr.addstr(count_y + 1, 0, "  Select at least one repo.", curses.A_BOLD)
-                stdscr.refresh()
-                stdscr.getch()
-                continue
-            return [repos[i] for i in sorted(selected)]
-        elif key == ord("a"):
-            selected = set(range(len(repos)))
-        elif key == ord("n"):
-            selected = set()
-        elif key == ord("q"):
-            return None
-
-
-# ── Moon integration ─────────────────────────────────────────────────
-
-
-def generate_moon_config(workspace_dir: Path, selected_repos: list[dict]) -> None:
-    """Generate .moon/workspace.yml at root and moon.yml per project with tasks.
-
-    Per-project moon.yml is ignored by jj via workspace-scoped snapshot.auto-track.
-    """
-    moon_dir = workspace_dir / ".moon"
-    moon_dir.mkdir(parents=True, exist_ok=True)
-
-    # .moon/workspace.yml — project mapping
-    lines = ["projects:"]
-    for repo in selected_repos:
-        lines.append(f'  {repo["name"]}: "{repo["name"]}"')
-    (moon_dir / "workspace.yml").write_text("\n".join(lines) + "\n")
-
-    # Per-project moon.yml with tasks + jj ignore
-    for repo in selected_repos:
-        tasks = repo.get("tasks", {})
-        if not tasks:
-            continue
-
-        repo_dir = workspace_dir / repo["name"]
-
-        # Generate moon.yml
-        moon_yml_lines = ["tasks:"]
-        for task_name, task_config in tasks.items():
-            moon_yml_lines.append(f"  {task_name}:")
-            moon_yml_lines.append(f'    command: "{task_config["command"]}"')
-            if "deps" in task_config:
-                moon_yml_lines.append("    deps:")
-                for dep in task_config["deps"]:
-                    moon_yml_lines.append(f"      - {dep}")
-        (repo_dir / "moon.yml").write_text("\n".join(moon_yml_lines) + "\n")
-
-        # Tell jj to ignore moon.yml in this workspace
-        subprocess.run(
-            [
-                "jj", "config", "set", "--workspace",
-                "snapshot.auto-track",
-                '"all() & ~glob:\\"moon.yml\\""',
-            ],
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-        )
-
-
-def generate_zed_tasks(workspace_dir: Path, selected_repos: list[dict]) -> None:
-    """Generate .zed/tasks.json with moon run commands for all tasks."""
-    all_task_names: set[str] = set()
-    for repo in selected_repos:
-        for task_name in repo.get("tasks", {}):
-            all_task_names.add(task_name)
-
-    zed_tasks = []
-
-    # Workspace management
-    ws_name = workspace_dir.name
-    zed_tasks.append({
-        "label": "workspace: update configs",
-        "command": "workspace update",
-        "use_new_terminal": False,
-        "allow_concurrent_runs": False,
-        "reveal": "always",
-        "hide": "on_success",
-    })
-    zed_tasks.append({
-        "label": "workspace: delete",
-        "command": "workspace delete",
-        "use_new_terminal": False,
-        "allow_concurrent_runs": False,
-        "reveal": "always",
-        "hide": "never",
-    })
-
-    if not all_task_names:
-        zed_dir = workspace_dir / ".zed"
-        zed_dir.mkdir(parents=True, exist_ok=True)
-        (zed_dir / "tasks.json").write_text(json.dumps(zed_tasks, indent=2) + "\n")
-        return
-
-    # Global tasks (run across all projects)
-    for task_name in sorted(all_task_names):
-        zed_tasks.append({
-            "label": f"all: {task_name}",
-            "command": f"moon run :{task_name}",
-            "use_new_terminal": False,
-            "allow_concurrent_runs": False,
-            "reveal": "always",
-            "hide": "on_success" if task_name != "dev" else "never",
-        })
-
-    # Per-project tasks
-    for repo in selected_repos:
-        for task_name in repo.get("tasks", {}):
-            zed_tasks.append({
-                "label": f"{repo['name']}: {task_name}",
-                "command": f"moon run {repo['name']}:{task_name}",
-                "use_new_terminal": False,
-                "allow_concurrent_runs": False,
-                "reveal": "always",
-                "hide": "on_success" if task_name != "dev" else "never",
-            })
-
-    zed_dir = workspace_dir / ".zed"
-    zed_dir.mkdir(parents=True, exist_ok=True)
-    (zed_dir / "tasks.json").write_text(json.dumps(zed_tasks, indent=2) + "\n")
-
-
-# ── Core logic ───────────────────────────────────────────────────────
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
@@ -337,273 +36,246 @@ def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
     return result
 
 
-def create_workspace(config: dict, name: str, selected_repos: list[dict],
+# ── Grove detection ──────────────────────────────────────────────────
+
+
+def find_grove_root(start: Path | None = None) -> Path:
+    """Walk up from start (default cwd) looking for .grove marker."""
+    d = (start or Path.cwd()).resolve()
+    while True:
+        if (d / ".grove").exists():
+            return d
+        parent = d.parent
+        if parent == d:
+            die("not inside a grove (no .grove marker found)\n"
+                "  Run 'workspace init' in the grove root first.")
+        d = parent
+
+
+def find_repos(grove_root: Path) -> list[Path]:
+    """Find all repo directories (containing .jj/) in the grove root."""
+    repos = []
+    for d in sorted(grove_root.iterdir()):
+        if d.is_dir() and not d.name.startswith(".") and (d / ".jj").is_dir():
+            repos.append(d)
+    return repos
+
+
+def resolve_workspace_dir(grove_root: Path, name: str | None) -> Path:
+    """Resolve workspace directory from name or cwd."""
+    ws_root = grove_root / ".workspaces"
+
+    if name:
+        return ws_root / name
+
+    cwd = Path.cwd().resolve()
+    ws_root_resolved = ws_root.resolve()
+
+    if cwd.parent == ws_root_resolved:
+        return cwd
+
+    for parent in cwd.parents:
+        if parent.parent == ws_root_resolved:
+            return parent
+
+    die("not inside a workspace — pass a name or cd into one")
+
+
+# ── Symlinking ───────────────────────────────────────────────────────
+
+
+# Items at grove root that are never symlinked into workspaces.
+SKIP_ITEMS = {".grove", ".workspaces", ".git", ".jj"}
+
+
+def sync_symlinks(grove_root: Path, workspace_dir: Path) -> None:
+    """Create/update symlinks from grove root into workspace.
+
+    Everything in the grove root is symlinked except:
+    - .grove, .workspaces, .git, .jj (infrastructure)
+    - Repo directories (these get jj workspaces instead)
+    - .moon/ is handled specially: contents are symlinked but cache/ stays local
+    """
+    repo_names = {r.name for r in find_repos(grove_root)}
+
+    for item in sorted(grove_root.iterdir()):
+        if item.name in SKIP_ITEMS or item.name in repo_names:
+            continue
+
+        target = workspace_dir / item.name
+
+        if item.name == ".moon":
+            _sync_moon_dir(item, target)
+        else:
+            _ensure_symlink(target, item)
+
+    print(f"  Synced symlinks")
+
+
+def _ensure_symlink(link_path: Path, target: Path) -> None:
+    """Create a symlink, replacing any existing one."""
+    resolved = target.resolve()
+    if link_path.is_symlink():
+        if link_path.resolve() == resolved:
+            return
+        link_path.unlink()
+    elif link_path.exists():
+        # Real file/dir exists — don't clobber it
+        print(f"  warning: {link_path.name} exists and is not a symlink, skipping")
+        return
+    link_path.symlink_to(resolved)
+
+
+def _sync_moon_dir(moon_src: Path, moon_dst: Path) -> None:
+    """Symlink .moon/ contents except cache/ (which stays workspace-local)."""
+    moon_dst.mkdir(exist_ok=True)
+
+    for item in sorted(moon_src.iterdir()):
+        if item.name == "cache":
+            continue
+        _ensure_symlink(moon_dst / item.name, item)
+
+
+# ── Workspace operations ────────────────────────────────────────────
+
+
+def init_grove() -> None:
+    """Mark current directory as a grove root."""
+    cwd = Path.cwd()
+    marker = cwd / ".grove"
+
+    if marker.exists():
+        print(f"Already a grove: {cwd}")
+        return
+
+    repos = find_repos(cwd)
+    marker.touch()
+    (cwd / ".workspaces").mkdir(exist_ok=True)
+
+    print(f"Initialized grove: {cwd}")
+    if repos:
+        print(f"  Found repos: {', '.join(r.name for r in repos)}")
+    else:
+        print(f"  No repos found yet — clone some jj repos here.")
+
+
+def create_workspace(grove_root: Path, name: str,
                      skip_install: bool = False, skip_zed: bool = False) -> None:
-    workspace_root = Path(config["workspace_root"]).expanduser()
-    workspace_dir = workspace_root / name
+    repos = find_repos(grove_root)
+    if not repos:
+        die(f"no repos found in {grove_root}")
 
-    if workspace_dir.exists():
-        die(f"workspace already exists: {workspace_dir}")
+    ws_root = grove_root / ".workspaces"
+    ws_root.mkdir(exist_ok=True)
+    ws_dir = ws_root / name
 
-    workspace_dir.mkdir(parents=True)
-    print(f"\nCreating workspace: {workspace_dir}\n")
+    if ws_dir.exists():
+        die(f"workspace already exists: {ws_dir}")
 
-    for repo in selected_repos:
-        repo_name = repo["name"]
-        local_path = Path(repo["local_path"]).expanduser()
-        revision = repo.get("revision", "trunk()")
-        dest = workspace_dir / repo_name
+    ws_dir.mkdir(parents=True)
+    print(f"\nCreating workspace: {ws_dir}\n")
 
-        if not local_path.exists():
-            die(f"repo not found: {local_path}")
-
+    # Create jj workspaces for each repo
+    for repo_dir in repos:
+        repo_name = repo_dir.name
         jj_ws_name = f"{name}-{repo_name}"
+        dest = ws_dir / repo_name
+
         print(f"  {repo_name}: fetching and creating jj workspace...")
-        subprocess.run(["jj", "git", "fetch"], cwd=local_path, capture_output=True, text=True)
-        run(["jj", "workspace", "add", "--name", jj_ws_name, "--revision", revision, str(dest)], cwd=local_path)
+        subprocess.run(["jj", "git", "fetch"], cwd=repo_dir,
+                       capture_output=True, text=True)
+        run(["jj", "workspace", "add", "--name", jj_ws_name,
+             "--revision", "trunk()", str(dest)], cwd=repo_dir)
 
-    regenerate_configs(config, workspace_dir, selected_repos)
+    # Symlink shared files from grove root
+    sync_symlinks(grove_root, ws_dir)
 
-    # Open workspace folder in Zed (before install so it's ready while deps install)
+    # Open in Zed
     if not skip_zed:
         print(f"  Opening in Zed...")
-        subprocess.run(["zed", "-n", str(workspace_dir)])
+        subprocess.run(["zed", "-n", str(ws_dir)])
 
-    # Run install tasks via moon if any project has one
-    has_install = any(repo.get("tasks", {}).get("install") for repo in selected_repos)
-    if has_install and not skip_install:
-        print(f"\n  Running install via moon...\n")
+    # Run workspace-install via moon
+    if not skip_install and (grove_root / ".moon").is_dir():
+        print(f"\n  Running moon run :workspace-install...\n")
         result = subprocess.run(
-            ["moon", "run", ":install"],
-            cwd=workspace_dir,
+            ["moon", "run", ":workspace-install"],
+            cwd=ws_dir,
         )
         if result.returncode != 0:
-            print(f"  warning: moon run :install had failures", file=sys.stderr)
+            print(f"  warning: workspace-install had failures", file=sys.stderr)
 
-    print(f"\nWorkspace ready: {workspace_dir}")
-    print(f"  Run tasks:  cd {workspace_dir} && moon run :<task>")
-
-
-def regenerate_configs(config: dict, workspace_dir: Path, selected_repos: list[dict]) -> None:
-    """Regenerate moon, zed, and AGENTS.md configs for a workspace."""
-    generate_moon_config(workspace_dir, selected_repos)
-    print(f"  Generated moon config")
-
-    # Assemble AGENTS.md
-    home = Path.home()
-    agents_parts = [config.get("agents_md", {}).get("template", "").strip()]
-
-    # Build per-repo GIT_DIR table and sections
-    git_dir_lines = []
-    repo_sections = []
-    for repo in selected_repos:
-        local_path = Path(repo["local_path"]).expanduser()
-        git_dir = local_path / ".git"
-        # Use ~/... path when possible
-        try:
-            tilde_git_dir = "~/" + str(git_dir.relative_to(home))
-        except ValueError:
-            tilde_git_dir = str(git_dir)
-        git_dir_lines.append(f"- **{repo['name']}**: `GIT_DIR={tilde_git_dir}`")
-
-        # Auto-generate heading from folder name
-        section_lines = [f"## {repo['name']}"]
-        # Append any custom agents_md content
-        custom = repo.get("agents_md", "").strip()
-        # Strip leading heading if it matches the auto-generated one
-        if custom:
-            lines = custom.split("\n")
-            if lines and lines[0].strip().lower() == f"## {repo['name']}".lower():
-                lines = lines[1:]
-            custom = "\n".join(lines).strip()
-        if custom:
-            section_lines.append(custom)
-        repo_sections.append("\n".join(section_lines))
-
-    if git_dir_lines:
-        agents_parts.append(
-            "### Using the `gh` CLI\n\n"
-            "Each subdirectory is a jj workspace, not a full git clone. "
-            "Set the `GIT_DIR` environment variable so `gh` can find the git repo:\n\n"
-            + "\n".join(git_dir_lines)
-        )
-
-    agents_parts.extend(repo_sections)
-    agents_content = "\n\n".join(part for part in agents_parts if part) + "\n"
-    agents_path = workspace_dir / "AGENTS.md"
-    agents_path.write_text(agents_content)
-    print(f"  Wrote {agents_path}")
-
-    generate_zed_tasks(workspace_dir, selected_repos)
-    print(f"  Generated .zed/tasks.json")
+    print(f"\nWorkspace ready: {ws_dir}")
 
 
-def resolve_workspace_dir(config: dict, name: str | None) -> Path:
-    """Resolve workspace directory from name or cwd."""
-    workspace_root = Path(config["workspace_root"]).expanduser()
+def sync_workspace(grove_root: Path, name: str | None) -> None:
+    """Re-sync symlinks for an existing workspace."""
+    ws_dir = resolve_workspace_dir(grove_root, name)
+    if not ws_dir.exists():
+        die(f"workspace not found: {ws_dir}")
 
+    print(f"Syncing workspace: {ws_dir}\n")
+    sync_symlinks(grove_root, ws_dir)
+    print(f"\nWorkspace synced.")
+
+
+def delete_workspace(grove_root: Path, name: str | None) -> None:
     if name:
-        workspace_dir = workspace_root / name
+        ws_dir = grove_root / ".workspaces" / name
     else:
-        # Try to detect from cwd
-        cwd = Path.cwd()
-        if cwd.parent == workspace_root:
-            workspace_dir = cwd
-        elif cwd == workspace_root:
-            die("run from inside a workspace directory, or pass a name")
-        else:
-            # Check if cwd is inside a workspace (e.g. in a repo subdir)
-            for parent in cwd.parents:
-                if parent.parent == workspace_root:
-                    workspace_dir = parent
-                    break
-            else:
-                die("not inside a workspace — pass a name or cd into one")
-
-    if not workspace_dir.exists():
-        die(f"workspace not found: {workspace_dir}")
-
-    return workspace_dir
-
-
-def detect_workspace_repos(config: dict, workspace_dir: Path) -> list[dict]:
-    """Detect which configured repos are present in a workspace directory."""
-    all_repos = config.get("repos", [])
-    repo_by_name = {r["name"]: r for r in all_repos}
-    selected = []
-    for subdir in sorted(workspace_dir.iterdir()):
-        if subdir.is_dir() and not subdir.name.startswith(".") and subdir.name in repo_by_name:
-            selected.append(repo_by_name[subdir.name])
-    return selected
-
-
-def update_workspace(config: dict, name: str | None, edit: bool = False,
-                     add_repos: list[str] | None = None,
-                     add_groups: list[str] | None = None) -> None:
-    workspace_dir = resolve_workspace_dir(config, name)
-    all_repos = config.get("repos", [])
-    current_repos = detect_workspace_repos(config, workspace_dir)
-
-    if not current_repos and not edit and not add_repos and not add_groups:
-        die(f"no configured repos found in {workspace_dir}")
-
-    if add_repos or add_groups:
-        # CLI-based add: merge current + new
-        extra = resolve_repos_from_args(all_repos, add_groups or [], add_repos or [])
-        current_names = {r["name"] for r in current_repos}
-        merged = list(current_repos)
-        for r in extra:
-            if r["name"] not in current_names:
-                merged.append(r)
-        selected_repos = merged
-    elif edit:
-        selected_repos = curses.wrapper(tui_select_repos, all_repos, current_repos)
-        if selected_repos is None:
-            print("Cancelled.")
-            return
-    else:
-        selected_repos = current_repos
-
-    current_names = {r["name"] for r in current_repos}
-    new_names = {r["name"] for r in selected_repos}
-
-    ws_name = workspace_dir.name
-
-    # Add new repos
-    for repo in selected_repos:
-        if repo["name"] not in current_names:
-            local_path = Path(repo["local_path"]).expanduser()
-            revision = repo.get("revision", "trunk()")
-            dest = workspace_dir / repo["name"]
-            jj_ws_name = f"{ws_name}-{repo['name']}"
-            if not local_path.exists():
-                die(f"repo not found: {local_path}")
-            print(f"  {repo['name']}: fetching and creating jj workspace...")
-            subprocess.run(["jj", "git", "fetch"], cwd=local_path, capture_output=True, text=True)
-            run(["jj", "workspace", "add", "--name", jj_ws_name, "--revision", revision, str(dest)], cwd=local_path)
-
-    # Remove repos no longer selected
-    for repo in current_repos:
-        if repo["name"] not in new_names:
-            local_path = Path(repo["local_path"]).expanduser()
-            jj_ws_name = f"{ws_name}-{repo['name']}"
-            print(f"  {repo['name']}: forgetting jj workspace")
-            result = subprocess.run(
-                ["jj", "workspace", "forget", jj_ws_name],
-                cwd=local_path,
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                # Try old naming for backward compat
-                result = subprocess.run(
-                    ["jj", "workspace", "forget", repo["name"]],
-                    cwd=local_path,
-                    capture_output=True,
-                    text=True,
-                )
-            if result.returncode != 0:
-                print(f"  warning: jj workspace forget failed: {result.stderr.strip()}")
-            dest = workspace_dir / repo["name"]
-            if dest.exists():
-                shutil.rmtree(dest)
-
-    print(f"Updating workspace: {workspace_dir}\n")
-    regenerate_configs(config, workspace_dir, selected_repos)
-    print(f"\nWorkspace updated.")
-
-
-def delete_workspace(config: dict, name: str | None) -> None:
-    if name:
-        workspace_root = Path(config["workspace_root"]).expanduser()
-        workspace_dir = workspace_root / name
-    else:
-        workspace_dir = resolve_workspace_dir(config, None)
-        confirm = input(f"Delete workspace {workspace_dir.name}? [y/N] ").strip()
+        ws_dir = resolve_workspace_dir(grove_root, None)
+        confirm = input(f"Delete workspace {ws_dir.name}? [y/N] ").strip()
         if confirm.lower() != "y":
             print("Cancelled.")
             return
 
-    if not workspace_dir.exists():
-        die(f"workspace not found: {workspace_dir}")
+    if not ws_dir.exists():
+        die(f"workspace not found: {ws_dir}")
 
-    repos = config.get("repos", [])
-    repo_dirs = {r["name"]: Path(r["local_path"]).expanduser() for r in repos}
+    repo_dirs = {r.name: r for r in find_repos(grove_root)}
+    ws_name = ws_dir.name
 
-    ws_name = workspace_dir.name
-    for subdir in sorted(workspace_dir.iterdir()):
+    for subdir in sorted(ws_dir.iterdir()):
         if not subdir.is_dir() or subdir.name.startswith("."):
             continue
-        if subdir.name in repo_dirs:
-            local_path = repo_dirs[subdir.name]
+        if subdir.name in repo_dirs and (subdir / ".jj").is_dir():
             jj_ws_name = f"{ws_name}-{subdir.name}"
             print(f"  {subdir.name}: forgetting jj workspace")
             result = subprocess.run(
                 ["jj", "workspace", "forget", jj_ws_name],
-                cwd=local_path,
-                capture_output=True,
-                text=True,
+                cwd=repo_dirs[subdir.name],
+                capture_output=True, text=True,
             )
             if result.returncode != 0:
-                # Try old naming (repo name only) for backward compat
-                result = subprocess.run(
-                    ["jj", "workspace", "forget", subdir.name],
-                    cwd=local_path,
-                    capture_output=True,
-                    text=True,
-                )
-            if result.returncode != 0:
-                print(f"  warning: jj workspace forget failed for {subdir.name}: {result.stderr.strip()}")
+                print(f"  warning: forget failed for {subdir.name}: "
+                      f"{result.stderr.strip()}")
 
-    shutil.rmtree(workspace_dir)
-    print(f"Deleted workspace: {workspace_dir}")
+    shutil.rmtree(ws_dir)
+    print(f"Deleted workspace: {ws_dir}")
+
+
+def list_workspaces(grove_root: Path) -> None:
+    ws_root = grove_root / ".workspaces"
+    if not ws_root.exists():
+        print("No workspaces.")
+        return
+
+    workspaces = sorted(d for d in ws_root.iterdir() if d.is_dir())
+    if not workspaces:
+        print("No workspaces.")
+        return
+
+    for ws in workspaces:
+        repos = [d.name for d in sorted(ws.iterdir())
+                 if d.is_dir() and not d.name.startswith(".")]
+        print(f"  {ws.name}: {', '.join(repos) if repos else '(empty)'}")
+
+
+# ── Review TUI ───────────────────────────────────────────────────────
 
 
 def get_original_repo(workspace_repo_dir: Path) -> Path | None:
-    """Get the original repo root from a jj workspace directory.
-
-    Workspace .jj/repo contains the path to the original repo's .jj/repo.
-    """
+    """Get the original repo root from a jj workspace directory."""
     repo_file = workspace_repo_dir / ".jj" / "repo"
     if not repo_file.exists():
         return None
@@ -611,21 +283,23 @@ def get_original_repo(workspace_repo_dir: Path) -> Path | None:
     return Path(original_jj_repo).parent.parent
 
 
+def find_jj_root(start: Path | None = None) -> Path | None:
+    """Walk up from start (default cwd) looking for a .jj directory."""
+    d = (start or Path.cwd()).resolve()
+    while True:
+        if (d / ".jj").is_dir():
+            return d
+        parent = d.parent
+        if parent == d:
+            return None
+        d = parent
+
+
 def load_review_data(workspace_dir: Path, standalone: bool = False) -> list[dict]:
-    """Gather jj commit data for each repo in the workspace (or a single standalone repo).
-
-    Returns list of dicts with keys:
-        name, original_dir, commits (list, oldest first),
-        current_edit (full change_id of default@), temp_commit, active_range
-
-    Each commit dict has: change_id (full), short_id, description, empty,
-        files, bookmarks
-    """
+    """Gather jj commit data for each repo in the workspace."""
     if standalone:
-        # Single repo: the directory itself is the jj repo
         dirs = [(workspace_dir.name, workspace_dir, workspace_dir, "@")]
     else:
-        # Multi-repo workspace: iterate subdirs, resolve originals
         dirs = []
         ws_name = workspace_dir.name
         for subdir in sorted(workspace_dir.iterdir()):
@@ -637,7 +311,6 @@ def load_review_data(workspace_dir: Path, standalone: bool = False) -> list[dict
             if not original:
                 continue
             jj_ws_name = f"{ws_name}-{subdir.name}"
-            # Detect jj workspace name: try new format first, fall back to old
             detect_result = subprocess.run(
                 ["jj", "log", "--no-pager", "--ignore-working-copy",
                  "-r", f"{jj_ws_name}@", "--no-graph", "-T", "change_id"],
@@ -649,12 +322,6 @@ def load_review_data(workspace_dir: Path, standalone: bool = False) -> list[dict
 
     repos = []
     for name, _subdir, original, head_revset in dirs:
-        # All jj operations run against the original repo. We manipulate default@
-        # there so the user can view diffs in the editor, leaving workspace copies
-        # untouched for the agent. Read-only ops use --ignore-working-copy to
-        # avoid stale errors; mutations use jj_update_stale() first instead.
-
-        # Get commits between trunk and head (newest first from jj)
         log_result = subprocess.run(
             ["jj", "log", "--no-pager", "--ignore-working-copy",
              "-r", f"trunk()..{head_revset}", "--no-graph",
@@ -681,7 +348,6 @@ def load_review_data(workspace_dir: Path, standalone: bool = False) -> list[dict
                 bookmarks_str = parts[4].strip() if len(parts) > 4 else ""
                 bookmarks = [b for b in bookmarks_str.split(",") if b] if bookmarks_str else []
 
-                # Get changed files for this commit
                 files_result = subprocess.run(
                     ["jj", "diff", "--no-pager", "--ignore-working-copy",
                      "-r", full_cid, "--name-only"],
@@ -699,10 +365,8 @@ def load_review_data(workspace_dir: Path, standalone: bool = False) -> list[dict
                     "bookmarks": bookmarks,
                 })
 
-        # Reverse so oldest is first, drop empty commits
         commits = [c for c in reversed(commits) if not c["empty"]]
 
-        # What is default@ currently pointing at? (full change_id + description)
         cur_result = subprocess.run(
             ["jj", "log", "--no-pager", "--ignore-working-copy",
              "-r", "default@", "--no-graph",
@@ -714,7 +378,6 @@ def load_review_data(workspace_dir: Path, standalone: bool = False) -> list[dict
             parts = cur_result.stdout.strip().split("\t", 1)
             current_edit = parts[0]
             cur_desc = parts[1] if len(parts) > 1 else ""
-            # Clean up orphaned temp commits from previous sessions
             if cur_desc.startswith("temp: reviewing"):
                 jj_update_stale(original)
                 subprocess.run(
@@ -723,78 +386,40 @@ def load_review_data(workspace_dir: Path, standalone: bool = False) -> list[dict
                 )
                 current_edit = ""
 
-        repo_data = {
+        repos.append({
             "name": name,
             "original_dir": original,
             "commits": commits,
             "current_edit": current_edit,
             "temp_commit": None,
-            # Active range as (bottom_cid, top_cid) or single cid string, or None
             "active_range": None,
-        }
-
-        repos.append(repo_data)
+        })
 
     return repos
 
 
-def find_jj_root(start: Path | None = None) -> Path | None:
-    """Walk up from start (default cwd) looking for a .jj directory."""
-    d = (start or Path.cwd()).resolve()
-    while True:
-        if (d / ".jj").is_dir():
-            return d
-        parent = d.parent
-        if parent == d:
-            return None
-        d = parent
+def jj_update_stale(original_dir: Path) -> None:
+    """Fix stale working copy if needed."""
+    subprocess.run(
+        ["jj", "workspace", "update-stale"],
+        cwd=original_dir, capture_output=True, text=True,
+    )
 
 
-def auto_select_full_ranges(repos: list[dict]) -> None:
-    """Auto-select the full commit range for repos that have commits but no active range."""
-    for repo in repos:
-        if repo["active_range"] is not None or not repo["commits"]:
-            continue
-        commits = repo["commits"]
-        if len(commits) == 1:
-            cid = commits[0]["change_id"]
-            if jj_edit(repo["original_dir"], cid):
-                repo["current_edit"] = cid
-                repo["active_range"] = cid
-        else:
-            bottom_cid = commits[0]["change_id"]
-            top_cid = commits[-1]["change_id"]
-            temp_cid = jj_create_temp_squash(repo["original_dir"], bottom_cid, top_cid)
-            if temp_cid:
-                repo["temp_commit"] = temp_cid
-                repo["current_edit"] = temp_cid
-                repo["active_range"] = (bottom_cid, top_cid)
-
-
-def collect_bookmarks(repos: list[dict]) -> dict[str, list[tuple[str, int]]]:
-    """Collect bookmarks across all repos.
-
-    Returns {bookmark_name: [(repo_name, commit_index), ...]} sorted by name.
-    Only includes repos that have commits.
-    """
-    bookmarks: dict[str, list[tuple[str, int]]] = {}
-    for repo in repos:
-        for ci, commit in enumerate(repo["commits"]):
-            for bm in commit["bookmarks"]:
-                bookmarks.setdefault(bm, []).append((repo["name"], ci))
-    return dict(sorted(bookmarks.items()))
+def jj_edit(original_dir: Path, change_id: str) -> bool:
+    """Run jj edit in the original repo. Returns True on success."""
+    jj_update_stale(original_dir)
+    result = subprocess.run(
+        ["jj", "edit", change_id],
+        cwd=original_dir, capture_output=True, text=True,
+    )
+    return result.returncode == 0
 
 
 def jj_create_temp_squash(original_dir: Path, bottom_cid: str, top_cid: str) -> str | None:
-    """Create a temporary squashed commit covering a range of commits.
-
-    The temp commit's parent is parents(bottom_cid), its tree is top_cid's tree.
-    Returns the temp commit's change_id, or None on failure.
-    """
-    # Fix staleness before mutating
+    """Create a temporary squashed commit covering a range of commits."""
     jj_update_stale(original_dir)
 
-    # Create new commit as child of bottom's parent
     result = subprocess.run(
         ["jj", "new", f"parents({bottom_cid})",
          "-m", f"temp: reviewing {bottom_cid}..{top_cid}"],
@@ -803,7 +428,6 @@ def jj_create_temp_squash(original_dir: Path, bottom_cid: str, top_cid: str) -> 
     if result.returncode != 0:
         return None
 
-    # Get the new commit's full change_id (it's now default@)
     cid_result = subprocess.run(
         ["jj", "log", "--no-pager", "-r", "default@", "--no-graph",
          "-T", "change_id"],
@@ -813,13 +437,11 @@ def jj_create_temp_squash(original_dir: Path, bottom_cid: str, top_cid: str) -> 
         return None
     temp_cid = cid_result.stdout.strip()
 
-    # Restore tree from the top of the range
     result = subprocess.run(
         ["jj", "restore", "--from", top_cid],
         cwd=original_dir, capture_output=True, text=True,
     )
     if result.returncode != 0:
-        # Clean up the empty temp commit
         subprocess.run(["jj", "abandon", temp_cid],
                        cwd=original_dir, capture_output=True, text=True)
         return None
@@ -828,30 +450,14 @@ def jj_create_temp_squash(original_dir: Path, bottom_cid: str, top_cid: str) -> 
 
 
 def jj_resolve_successor(original_dir: Path, full_cid: str) -> str | None:
-    """Try to find the successor of a change via evolog.
-
-    If the change was rewritten (rebased, amended, squashed), the latest
-    version in the evolog has a different commit_id but the same change_id.
-    If the change was abandoned and its content moved to a new change,
-    we check if the evolog's latest predecessor points to a successor.
-
-    Returns the full change_id of the successor, or None if not found.
-    """
-    # First: does the change_id still resolve at all?
+    """Try to find the successor of a change via evolog."""
     result = subprocess.run(
         ["jj", "log", "--no-pager", "--ignore-working-copy",
-         "-r", full_cid, "--no-graph",
-         "-T", "change_id"],
+         "-r", full_cid, "--no-graph", "-T", "change_id"],
         cwd=original_dir, capture_output=True, text=True,
     )
     if result.returncode == 0 and result.stdout.strip():
-        # Change still exists — return it (might have been rebased but same id)
         return result.stdout.strip()
-
-    # Change doesn't resolve. Check evolog for what happened.
-    # The evolog shows the history of a change. If abandoned, there might be
-    # a successor hint. But jj doesn't have a native successor concept,
-    # so if the change_id is truly gone, we can't recover.
     return None
 
 
@@ -872,68 +478,44 @@ def jj_abandon_all_temps(repos: list[dict]) -> None:
         jj_abandon_temp(repo)
 
 
-
-
-
-# ── Review: open Zed ────────────────────────────────────────────────
-
-
-def review_open(config: dict, name: str | None) -> None:
-    """Open all original repos from a workspace in a single Zed window."""
-    workspace_dir = resolve_workspace_dir(config, name)
-
-    original_dirs = []
-    for subdir in sorted(workspace_dir.iterdir()):
-        if not subdir.is_dir() or subdir.name.startswith("."):
+def auto_select_full_ranges(repos: list[dict]) -> None:
+    """Auto-select the full commit range for repos with commits but no active range."""
+    for repo in repos:
+        if repo["active_range"] is not None or not repo["commits"]:
             continue
-        if not (subdir / ".jj").is_dir():
-            continue
-        original = get_original_repo(subdir)
-        if original:
-            original_dirs.append(str(original))
-
-    if not original_dirs:
-        die(f"no jj repos found in {workspace_dir}")
-
-    print(f"Opening {len(original_dirs)} repo(s) in Zed...")
-    subprocess.run(["zed", "-n"] + original_dirs)
-    print(f"\nNow run `workspace review` in the Zed terminal to browse and switch commits.")
-
-
-# ── Review: TUI controller ──────────────────────────────────────────
-
-
-def jj_update_stale(original_dir: Path) -> None:
-    """Fix stale working copy if needed (no-op if already current)."""
-    subprocess.run(
-        ["jj", "workspace", "update-stale"],
-        cwd=original_dir, capture_output=True, text=True,
-    )
+        commits = repo["commits"]
+        if len(commits) == 1:
+            cid = commits[0]["change_id"]
+            if jj_edit(repo["original_dir"], cid):
+                repo["current_edit"] = cid
+                repo["active_range"] = cid
+        else:
+            bottom_cid = commits[0]["change_id"]
+            top_cid = commits[-1]["change_id"]
+            temp_cid = jj_create_temp_squash(repo["original_dir"], bottom_cid, top_cid)
+            if temp_cid:
+                repo["temp_commit"] = temp_cid
+                repo["current_edit"] = temp_cid
+                repo["active_range"] = (bottom_cid, top_cid)
 
 
-def jj_edit(original_dir: Path, change_id: str) -> bool:
-    """Run jj edit in the original repo, updating working copy files. Returns True on success."""
-    jj_update_stale(original_dir)
-    result = subprocess.run(
-        ["jj", "edit", change_id],
-        cwd=original_dir, capture_output=True, text=True,
-    )
-    return result.returncode == 0
+def collect_bookmarks(repos: list[dict]) -> dict[str, list[tuple[str, int]]]:
+    """Collect bookmarks across all repos."""
+    bookmarks: dict[str, list[tuple[str, int]]] = {}
+    for repo in repos:
+        for ci, commit in enumerate(repo["commits"]):
+            for bm in commit["bookmarks"]:
+                bookmarks.setdefault(bm, []).append((repo["name"], ci))
+    return dict(sorted(bookmarks.items()))
 
 
 def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
-    """Apply jj edit for a single commit or a squashed range.
-
-    Abandons any existing temp commit first. Records the active range.
-    Returns a status message.
-    """
+    """Apply jj edit for a single commit or a squashed range."""
     jj_abandon_temp(repo)
-
     original = repo["original_dir"]
     commits = repo["commits"]
 
     if visual_anchor is None:
-        # Single commit
         commit = commits[row]
         ok = jj_edit(original, commit["change_id"])
         if ok:
@@ -942,7 +524,6 @@ def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
             return f"✓ jj edit {commit['short_id']} in {repo['name']}"
         return f"✗ jj edit failed for {repo['name']}"
 
-    # Range: oldest is lower index, newest is higher index
     lo = min(row, visual_anchor)
     hi = max(row, visual_anchor)
     bottom = commits[lo]
@@ -967,12 +548,7 @@ def apply_edit_or_range(repo: dict, row: int, visual_anchor: int | None) -> str:
 
 def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
                    bookmark_map: dict[str, list[tuple[str, int]]]) -> str:
-    """Navigate to a bookmark across all repos that have it.
-
-    Abandons existing temp commits first. For single-commit bookmarks, does a
-    plain jj edit. For multi-commit stacks, squashes trunk..bookmark.
-    Returns a status message.
-    """
+    """Navigate to a bookmark across all repos that have it."""
     entries = bookmark_map.get(bookmark, [])
     if not entries:
         return f"✗ bookmark {bookmark} not found"
@@ -987,10 +563,7 @@ def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
 
         jj_abandon_temp(repo)
 
-        # The bookmark is on commits[commit_idx].
-        # Range is from index 0 (oldest, closest to trunk) to commit_idx.
         if commit_idx == 0:
-            # Single commit or first commit — plain edit
             cid = repo["commits"][commit_idx]["change_id"]
             ok = jj_edit(repo["original_dir"], cid)
             if ok:
@@ -1000,7 +573,6 @@ def apply_bookmark(repos_with_commits: list[dict], bookmark: str,
             else:
                 results.append(f"{repo_name}:✗")
         else:
-            # Squash from oldest (0) to bookmark commit
             bottom_cid = repo["commits"][0]["change_id"]
             top_cid = repo["commits"][commit_idx]["change_id"]
             temp_cid = jj_create_temp_squash(repo["original_dir"], bottom_cid, top_cid)
@@ -1022,19 +594,19 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
     curses.use_default_colors()
 
     if curses.has_colors():
-        curses.init_pair(1, curses.COLOR_GREEN, -1)    # active/changed
-        curses.init_pair(2, curses.COLOR_WHITE, -1)     # normal
-        curses.init_pair(3, curses.COLOR_CYAN, -1)      # header/label
-        curses.init_pair(4, curses.COLOR_YELLOW, -1)    # selected tab
-        curses.init_pair(5, curses.COLOR_MAGENTA, -1)   # file paths
-        curses.init_pair(6, curses.COLOR_RED, -1)       # visual range
+        curses.init_pair(1, curses.COLOR_GREEN, -1)
+        curses.init_pair(2, curses.COLOR_WHITE, -1)
+        curses.init_pair(3, curses.COLOR_CYAN, -1)
+        curses.init_pair(4, curses.COLOR_YELLOW, -1)
+        curses.init_pair(5, curses.COLOR_MAGENTA, -1)
+        curses.init_pair(6, curses.COLOR_RED, -1)
 
     repos_with_commits = [r for r in repos if r["commits"]]
     all_repos = repos
 
-    col = 0      # selected repo column
-    row = 0      # selected commit row
-    visual_anchor: int | None = None  # None = not in visual mode
+    col = 0
+    row = 0
+    visual_anchor: int | None = None
     status_msg = ""
     bookmark_mode = False
     bookmark_filter = ""
@@ -1054,12 +626,10 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
     def full_refresh():
         nonlocal repos_with_commits, all_repos, col, row, visual_anchor
 
-        # Save active ranges before teardown
         saved_ranges: dict[str, str | tuple[str, str] | None] = {}
         for r in all_repos:
             saved_ranges[r["name"]] = r.get("active_range")
 
-        # Abandon all temps and reload
         jj_abandon_all_temps(all_repos)
         new_repos = reload_fn()
         all_repos[:] = new_repos
@@ -1070,7 +640,6 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
             row = max(0, len(repos_with_commits[col]["commits"]) - 1)
         visual_anchor = None
 
-        # Re-apply saved ranges, resolving successors if needed
         for repo in all_repos:
             ar = saved_ranges.get(repo["name"])
             if ar is None:
@@ -1078,7 +647,6 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
             cids = {c["change_id"] for c in repo["commits"]}
 
             def resolve(cid: str) -> str | None:
-                """Resolve a change_id, trying successor if not in range."""
                 if cid in cids:
                     return cid
                 succ = jj_resolve_successor(repo["original_dir"], cid)
@@ -1106,7 +674,6 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
                     repo["current_edit"] = resolved
                     repo["active_range"] = resolved
 
-        # Auto-select full range for repos with commits but no active range
         auto_select_full_ranges(all_repos)
         repos_with_commits[:] = [r for r in all_repos if r["commits"]]
 
@@ -1122,11 +689,9 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
         stdscr.clear()
         max_y, max_x = stdscr.getmaxyx()
 
-        # ── Title bar ──
         title = f" review: {workspace_name} "
         safe_addstr(0, 0, title, curses.A_BOLD | curses.A_REVERSE)
 
-        # ── Active diffs header ──
         safe_addstr(2, 0, " ACTIVE DIFFS", curses.A_BOLD | curses.color_pair(3))
 
         header_y = 3
@@ -1139,7 +704,6 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
                 continue
 
             if isinstance(ar, tuple):
-                # Find descriptions for range bounds
                 bottom_desc = top_desc = "?"
                 for c in repo["commits"]:
                     if c["change_id"] == ar[0]:
@@ -1163,7 +727,7 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
             safe_addstr(header_y, 0, "  (no active diffs)", curses.A_DIM)
             active_count = 1
 
-        # ── Bookmark picker overlay ──
+        # Bookmark picker overlay
         if bookmark_mode:
             filtered = get_filtered_bookmarks()
             if bookmark_cursor >= len(filtered):
@@ -1197,7 +761,7 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
             stdscr.refresh()
 
             key = stdscr.getch()
-            if key == 27:  # ESC
+            if key == 27:
                 bookmark_mode = False
                 bookmark_filter = ""
                 bookmark_cursor = 0
@@ -1223,7 +787,7 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
                 bookmark_cursor = 0
             continue
 
-        # ── Repo tab bar (hidden if 0-1 repos) ──
+        # Repo tab bar
         list_y = header_y + active_count + 1
         safe_addstr(list_y, 0, "─" * max_x, curses.A_DIM)
         list_y += 1
@@ -1247,7 +811,6 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
             if row >= len(commits):
                 row = max(0, len(commits) - 1)
 
-            # Compute active set (which commits are in the active range)
             ar = repo.get("active_range")
             if ar is None:
                 active_set = set()
@@ -1261,7 +824,6 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
             else:
                 active_set = {ar}
 
-            # Compute visual range
             vis_lo = vis_hi = None
             if visual_anchor is not None:
                 vis_lo = min(row, visual_anchor)
@@ -1274,7 +836,6 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
 
                 is_cursor = ci == row
                 cid = commit["change_id"]
-                # Check if this commit is in the active range
                 is_active = cid in active_set
                 in_range = vis_lo is not None and vis_lo <= ci <= vis_hi
 
@@ -1311,7 +872,6 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
                 safe_addstr(y, 0, line[:max_x - 1], attr)
                 y += 1
 
-                # Expand files under cursor
                 if is_cursor and commit["files"]:
                     for fpath in commit["files"]:
                         if y >= max_y - 2:
@@ -1325,7 +885,7 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
         else:
             safe_addstr(list_y + 1, 1, "(no repos with commits)", curses.A_DIM)
 
-        # ── Help bar ──
+        # Help bar
         if visual_anchor is not None:
             help_line = " VISUAL: j/k:extend  space/enter:apply range  v/esc:cancel"
         else:
@@ -1338,7 +898,7 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
         stdscr.refresh()
         key = stdscr.getch()
 
-        if key in (ord("q"), 27):  # q or ESC
+        if key in (ord("q"), 27):
             return
         elif key in (ord("h"), curses.KEY_LEFT):
             if visual_anchor is None and repos_with_commits and col > 0:
@@ -1398,20 +958,23 @@ def tui_review(stdscr, repos: list[dict], workspace_name: str,
             status_msg = "✓ refreshed"
 
 
-def review_tui(config: dict, name: str | None, standalone_dir: Path | None = None) -> None:
-    """Launch the review TUI controller for a workspace or standalone repo."""
+def review_tui(grove_root: Path | None, name: str | None,
+               standalone_dir: Path | None = None) -> None:
+    """Launch the review TUI controller."""
     if standalone_dir:
         repos = load_review_data(standalone_dir, standalone=True)
         display_name = standalone_dir.name
         reload_fn = lambda: load_review_data(standalone_dir, standalone=True)
     else:
-        workspace_dir = resolve_workspace_dir(config, name)
+        workspace_dir = resolve_workspace_dir(grove_root, name)
+        if not workspace_dir.exists():
+            die(f"workspace not found: {workspace_dir}")
         repos = load_review_data(workspace_dir)
         display_name = workspace_dir.name
         reload_fn = lambda: load_review_data(workspace_dir)
 
     if not repos:
-        die(f"no jj repos found")
+        die("no jj repos found")
 
     auto_select_full_ranges(repos)
 
@@ -1423,175 +986,109 @@ def review_tui(config: dict, name: str | None, standalone_dir: Path | None = Non
         jj_abandon_all_temps(repos)
 
 
-def list_workspaces(config: dict) -> None:
-    workspace_root = Path(config["workspace_root"]).expanduser()
-    if not workspace_root.exists():
-        print("No workspaces directory.")
-        return
-
-    workspaces = sorted(d for d in workspace_root.iterdir() if d.is_dir())
-    if not workspaces:
-        print("No workspaces.")
-        return
-
-    for ws in workspaces:
-        repos = [d.name for d in sorted(ws.iterdir()) if d.is_dir() and not d.name.startswith(".")]
-        print(f"  {ws.name}: {', '.join(repos) if repos else '(empty)'}")
-
-
 # ── CLI ──────────────────────────────────────────────────────────────
+
+
+def validate_name(name: str) -> str | None:
+    """Return error message if name is invalid, None if ok."""
+    if not name.strip():
+        return "Cannot be empty."
+    if not all(c.isalnum() or c in "-_" for c in name):
+        return "Use only alphanumeric, hyphens, underscores."
+    return None
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="workspace",
-        description="Create and manage multi-repo workspaces with jj and moon.",
+        description="Create and manage workspaces in a grove of jj repos.",
     )
     sub = parser.add_subparsers(dest="command", metavar="command")
 
+    # init
+    sub.add_parser("init", help="Initialize current directory as a grove")
+
     # create
     create_p = sub.add_parser("create", help="Create a new workspace")
-    create_p.add_argument("name", nargs="?", help="Workspace name")
-    create_p.add_argument(
-        "-g", "--group", action="append", dest="groups", default=[],
-        help="Select all repos in this group (repeatable)",
-    )
-    create_p.add_argument(
-        "-r", "--repo", action="append", dest="repos", default=[],
-        help="Select a specific repo by name (repeatable)",
-    )
-    create_p.add_argument(
-        "--no-install", action="store_true",
-        help="Skip running install tasks",
-    )
-    create_p.add_argument(
-        "--no-zed", action="store_true",
-        help="Don't open in Zed",
-    )
+    create_p.add_argument("name", help="Workspace name")
+    create_p.add_argument("--no-install", action="store_true",
+                          help="Skip running workspace-install")
+    create_p.add_argument("--no-zed", action="store_true",
+                          help="Don't open in Zed")
 
-    # update
-    update_p = sub.add_parser("update", help="Regenerate configs from current config.toml")
-    update_p.add_argument("name", nargs="?", help="Workspace name (or auto-detect from cwd)")
-    update_p.add_argument("-e", "--edit", action="store_true", help="Add/remove repos via TUI")
-    update_p.add_argument(
-        "-a", "--add", action="append", dest="add_repos", default=[],
-        help="Add a repo by name (repeatable)",
-    )
-    update_p.add_argument(
-        "--add-group", action="append", dest="add_groups", default=[],
-        help="Add all repos in a group (repeatable)",
-    )
+    # sync
+    sync_p = sub.add_parser("sync", help="Re-sync symlinks from grove root")
+    sync_p.add_argument("name", nargs="?",
+                        help="Workspace name (or auto-detect from cwd)")
 
     # delete
     del_p = sub.add_parser("delete", help="Delete a workspace")
-    del_p.add_argument("name", nargs="?", help="Workspace name (or auto-detect from cwd, with confirmation)")
-
-    # review-open
-    ro_p = sub.add_parser("review-open", help="Open original repos in Zed for reviewing workspace changes")
-    ro_p.add_argument("name", nargs="?", help="Workspace name (or auto-detect from cwd)")
-
-    # review
-    rev_p = sub.add_parser("review", help="TUI controller for browsing and switching workspace commits")
-    rev_p.add_argument("name", nargs="?", help="Workspace name (or auto-detect from cwd)")
+    del_p.add_argument("name", nargs="?",
+                       help="Workspace name (or auto-detect from cwd)")
 
     # list
-    sub.add_parser("list", help="List existing workspaces")
+    sub.add_parser("list", help="List workspaces in current grove")
 
-    args = parser.parse_args()
+    # review
+    rev_p = sub.add_parser("review", help="TUI for browsing workspace commits")
+    rev_p.add_argument("name", nargs="?",
+                       help="Workspace name (or auto-detect from cwd)")
 
-    # Default to create when no subcommand
-    if args.command is None:
-        args.command = "create"
-        args.name = None
-        args.groups = []
-        args.repos = []
-        args.no_install = False
-        args.no_zed = False
-
-    return args
-
-
-def resolve_repos_from_args(
-    all_repos: list[dict],
-    group_names: list[str],
-    repo_names: list[str],
-) -> list[dict]:
-    """Resolve repos from --group and --repo flags."""
-    groups = get_groups(all_repos)
-    selected_indices: set[int] = set()
-
-    for g in group_names:
-        if g not in groups:
-            die(f"unknown group: {g} (available: {', '.join(groups)})")
-        selected_indices |= set(groups[g])
-
-    repo_name_map = {r["name"]: i for i, r in enumerate(all_repos)}
-    for r in repo_names:
-        if r not in repo_name_map:
-            die(f"unknown repo: {r} (available: {', '.join(repo_name_map)})")
-        selected_indices.add(repo_name_map[r])
-
-    return [all_repos[i] for i in sorted(selected_indices)]
+    return parser.parse_args()
 
 
 def main() -> None:
-    config = load_config()
     args = parse_args()
 
-    if args.command == "create":
-        all_repos = config.get("repos", [])
-        if not all_repos:
-            die("no repos configured in config.toml")
+    if not args.command:
+        # No subcommand — show help
+        parse_args.__wrapped__ = True  # type: ignore
+        sys.argv.append("--help")
+        parse_args()
+        return
 
-        # Resolve name
-        name = args.name
-        if not name:
-            name = curses.wrapper(tui_input, "Workspace name:", validate_name)
-            if not name:
-                print("Cancelled.")
-                sys.exit(0)
-        else:
-            err = validate_name(name)
-            if err:
-                die(err)
+    if args.command == "init":
+        init_grove()
+        return
 
-        workspace_root = Path(config["workspace_root"]).expanduser()
-        if (workspace_root / name).exists():
-            die(f"workspace already exists: {workspace_root / name}")
-
-        # Resolve repo selection
-        if args.groups or args.repos:
-            selected = resolve_repos_from_args(all_repos, args.groups, args.repos)
-            if not selected:
-                die("no repos matched the given groups/repos")
-        else:
-            selected = curses.wrapper(tui_select_repos, all_repos)
-            if not selected:
-                print("Cancelled.")
-                sys.exit(0)
-
-        create_workspace(config, name, selected,
-                         skip_install=args.no_install,
-                         skip_zed=args.no_zed)
-
-    elif args.command == "update":
-        update_workspace(config, args.name, edit=args.edit,
-                         add_repos=args.add_repos, add_groups=args.add_groups)
-    elif args.command == "delete":
-        delete_workspace(config, args.name)
-    elif args.command == "review-open":
-        review_open(config, args.name)
-    elif args.command == "review":
+    if args.command == "review":
+        # Review supports standalone mode (single repo, no grove)
         if args.name:
-            review_tui(config, args.name)
+            grove_root = find_grove_root()
+            review_tui(grove_root, args.name)
         else:
             jj_root = find_jj_root()
             if jj_root:
-                review_tui(config, None, standalone_dir=jj_root)
+                # Check if we're in a grove workspace or standalone repo
+                try:
+                    grove_root = find_grove_root()
+                    review_tui(grove_root, None)
+                except SystemExit:
+                    review_tui(None, None, standalone_dir=jj_root)
             else:
-                review_tui(config, None)
+                grove_root = find_grove_root()
+                review_tui(grove_root, None)
+        return
+
+    # All other commands need a grove
+    grove_root = find_grove_root()
+
+    if args.command == "create":
+        err = validate_name(args.name)
+        if err:
+            die(err)
+        create_workspace(grove_root, args.name,
+                         skip_install=args.no_install,
+                         skip_zed=args.no_zed)
+
+    elif args.command == "sync":
+        sync_workspace(grove_root, args.name)
+
+    elif args.command == "delete":
+        delete_workspace(grove_root, args.name)
+
     elif args.command == "list":
-        list_workspaces(config)
+        list_workspaces(grove_root)
 
 
 if __name__ == "__main__":
