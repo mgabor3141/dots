@@ -35,10 +35,10 @@
         "viewMode": "list"
     },
     "audio": {
-        "cavaFrameRate": 30,
         "mprisBlacklist": [
         ],
         "preferredPlayer": "",
+        "spectrumFrameRate": 30,
         "visualizerType": "none",
         "volumeFeedback": false,
         "volumeFeedbackSoundFile": "",
@@ -55,6 +55,7 @@
         "contentPadding": 2,
         "density": "comfortable",
         "displayMode": "always_visible",
+        "enableExclusionZoneInset": true,
         "floating": true,
         "fontScale": 1,
         "frameRadius": 12,
@@ -102,6 +103,7 @@
                     "enableScrollWheel": true,
                     "focusedColor": "primary",
                     "followFocusedScreen": false,
+                    "fontWeight": "bold",
                     "groupedBorderOpacity": 0,
                     "hideUnoccupied": true,
                     "iconScale": 0.95,
@@ -110,6 +112,7 @@
                     "occupiedColor": "secondary",
                     "pillSize": 0.6,
                     "showApplications": true,
+                    "showApplicationsHover": false,
                     "showBadge": true,
                     "showLabelsOnlyWhenOccupied": true,
                     "unfocusedIconsOpacity": 1
@@ -267,6 +270,7 @@
     "desktopWidgets": {
         "enabled": true,
         "gridSnap": true,
+        "gridSnapScale": false,
         "monitorWidgets": [
             {
                 "name": "DP-2",
@@ -451,6 +455,10 @@
         "manualSunset": "18:30",
         "nightTemp": "4000"
     },
+    "noctaliaPerformance": {
+        "disableDesktopWidgets": true,
+        "disableWallpaper": true
+    },
     "notifications": {
         "backgroundOpacity": 0.8,
         "clearDismissed": true,
@@ -559,7 +567,7 @@
         "showHeader": false,
         "showKeybinds": true
     },
-    "settingsVersion": 56,
+    "settingsVersion": 57,
     "systemMonitor": {
         "batteryCriticalThreshold": 5,
         "batteryWarningThreshold": 20,
@@ -596,9 +604,11 @@
         "fontFixedScale": 1,
         "panelBackgroundOpacity": 0.93,
         "panelsAttachedToBar": false,
+        "scrollbarAlwaysVisible": true,
         "settingsPanelMode": "window",
         "settingsPanelSideBarCardStyle": false,
-        "tooltipsEnabled": false
+        "tooltipsEnabled": false,
+        "translucentWidgets": false
     },
     "wallpaper": {
         "automationEnabled": false,
