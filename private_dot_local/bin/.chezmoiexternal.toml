@@ -23,19 +23,20 @@
 {{ end -}}
 
 {{- if ne .chezmoi.os "darwin" }}
+{{- $gmuxVersion := (gitHubLatestRelease "gmuxapp/gmux").TagName }}
 ["gmux"]
     type = "archive-file"
-    url = "https://github.com/gmuxapp/gmux/releases/download/v0.2.1/gmux_0.2.1_linux_{{ .chezmoi.arch }}.tar.gz"
+    url = "https://github.com/gmuxapp/gmux/releases/download/{{ $gmuxVersion }}/gmux_{{ trimPrefix "v" $gmuxVersion }}_linux_{{ .chezmoi.arch }}.tar.gz"
     executable = true
     path = "gmux"
-    checksum.sha256 = {{ if eq .chezmoi.arch "amd64" -}} "0032bde4203005d3e1e6ca64deaa3e5d3fa2836c173b0617975e7ae7776e4aab" {{- else -}} "abefd279086ed0b76021a03acaed6735f4a866731b4880db9cbcaa37057edcd5" {{- end }}
+    refreshPeriod = "168h"
 
 ["gmuxd"]
     type = "archive-file"
-    url = "https://github.com/gmuxapp/gmux/releases/download/v0.2.1/gmux_0.2.1_linux_{{ .chezmoi.arch }}.tar.gz"
+    url = "https://github.com/gmuxapp/gmux/releases/download/{{ $gmuxVersion }}/gmux_{{ trimPrefix "v" $gmuxVersion }}_linux_{{ .chezmoi.arch }}.tar.gz"
     executable = true
     path = "gmuxd"
-    checksum.sha256 = {{ if eq .chezmoi.arch "amd64" -}} "0032bde4203005d3e1e6ca64deaa3e5d3fa2836c173b0617975e7ae7776e4aab" {{- else -}} "abefd279086ed0b76021a03acaed6735f4a866731b4880db9cbcaa37057edcd5" {{- end }}
+    refreshPeriod = "168h"
 {{- end }}
 
 ["difft"]
