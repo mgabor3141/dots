@@ -3,6 +3,7 @@
 card="alsa_card.usb-Focusrite_Scarlett_8i6_USB_F8D9XVT150B68B-00"
 sink="alsa_output.usb-Focusrite_Scarlett_8i6_USB_F8D9XVT150B68B-00.analog-surround-21"
 
+# Wait for the Scarlett to appear (up to 30s at boot, instant on KVM reconnect)
 i=0
 while [ "$i" -lt 30 ]; do
   if /usr/bin/pactl set-card-profile "$card" output:analog-surround-21+input:multichannel-input; then
@@ -11,6 +12,10 @@ while [ "$i" -lt 30 ]; do
   i=$((i + 1))
   sleep 1
 done
+
+# Restore ALSA mixer state (output routing, volumes). Critical after KVM switch
+# since alsa-restore.service only runs at boot.
+/usr/bin/alsactl restore USB 2>/dev/null || true
 
 /usr/bin/pactl list modules short | /usr/bin/awk '
   /module-null-sink/ && /sink_name=(system-audio|discord-audio)/ {print $1}

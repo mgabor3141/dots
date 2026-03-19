@@ -62,20 +62,11 @@ Rather than fighting the default-sink change, we work with it:
 
 ### KVM switch reconnect
 
-`~/.config/scarlett-kvm/` contains a udev rule and systemd service that automatically restore audio after a KVM switch.
+See [KVM documentation](kvm.md) for the full picture. Audio-specific summary:
 
-**Problem:** When the KVM switches away and back, the Scarlett re-enumerates on USB. `alsa-restore` and `system-audio-sink.service` only run at boot, so:
-- The Scarlett's ALSA mixer state may not be restored
-- The PipeWire loopback modules have stale connections to the old ALSA device
+`~/.config/scarlett-kvm/` contains a udev rule and systemd service that automatically restore audio after a KVM switch. The udev rule detects the Scarlett's USB arrival and triggers `scarlett-kvm-reconnect.service`, which waits 10s for the KVM hub to stabilize, verifies the Scarlett is still present, restores ALSA mixer state, and recreates virtual sinks/loopbacks.
 
-**Solution:** The udev rule (`99-scarlett-kvm.rules`) detects the Scarlett's USB arrival and triggers `scarlett-kvm-reconnect.service`, which:
-1. Waits 3s for the ALSA card to initialize
-2. Runs `alsactl restore USB` to push saved mixer state to hardware
-3. Restarts `system-audio-sink.service` to recreate virtual sinks and loopbacks with fresh connections
-
-**Note:** Apps that were playing audio (Spotify, browsers) will lose their PipeWire connection when the loopbacks are recreated and need to be restarted. This is unavoidable since PipeWire itself gets a new ALSA device.
-
-**Critical:** The service waits 10 seconds and verifies the Scarlett is still present before starting audio. KVM hubs bounce (connect/disconnect/reconnect) during switches. If PipeWire starts streaming to the Scarlett during a bounce, `snd_usb_audio` gets stuck URBs that deadlock the xHCI controller, killing ALL USB (keyboard, mouse, everything — requires hard reboot).
+Apps playing audio will lose their PipeWire connection and need to be restarted.
 
 ### ALSA buffer config
 
