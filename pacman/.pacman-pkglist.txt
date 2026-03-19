@@ -54,6 +54,7 @@ font-manager
 fsarchiver
 git-lfs
 glances
+gpu-screen-recorder-ui
 grim
 haveged
 hdparm

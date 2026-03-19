@@ -13,6 +13,7 @@ trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 OUTDIR="$HOME/Videos/screenrec"
 LOGFILE="/tmp/gpu-screen-recorder.log"
 PIDFILE="/tmp/gpu-screen-recorder.pid"
+REGIONFILE="/tmp/gpu-screen-recorder.region"
 AUDIO=false
 
 for arg in "$@"; do
@@ -40,7 +41,12 @@ else
     rm -f "$PIDFILE"
     mkdir -p "$OUTDIR"
     # slurp outputs "X,Y WxH", convert to "WxH+X+Y" for gpu-screen-recorder -w
-    SLURP=$(slurp) || exit 0
+    # Feed last region to slurp as a predefined rectangle for quick re-selection
+    SLURP_ARGS=()
+    if [[ -f "$REGIONFILE" ]]; then
+        SLURP_ARGS=(-B 4040ff40 -b 00000080)
+    fi
+    SLURP=$(cat "$REGIONFILE" 2>/dev/null | slurp "${SLURP_ARGS[@]}") || exit 0
     X=$(echo "$SLURP" | cut -d',' -f1)
     REST=$(echo "$SLURP" | cut -d',' -f2)
     Y=$(echo "$REST" | cut -d' ' -f1)
@@ -84,6 +90,7 @@ else
 
     if kill -0 "$RECORDER_PID" 2>/dev/null; then
         echo "$RECORDER_PID" > "$PIDFILE"
+        echo "$SLURP" > "$REGIONFILE"
         if $AUDIO; then
             notify-send -t 3000 "Screen Recording" "Recording started (with audio)..."
         else
