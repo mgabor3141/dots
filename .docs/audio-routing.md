@@ -75,6 +75,8 @@ Rather than fighting the default-sink change, we work with it:
 
 **Note:** Apps that were playing audio (Spotify, browsers) will lose their PipeWire connection when the loopbacks are recreated and need to be restarted. This is unavoidable since PipeWire itself gets a new ALSA device.
 
+**Critical:** The service waits 10 seconds and verifies the Scarlett is still present before starting audio. KVM hubs bounce (connect/disconnect/reconnect) during switches. If PipeWire starts streaming to the Scarlett during a bounce, `snd_usb_audio` gets stuck URBs that deadlock the xHCI controller, killing ALL USB (keyboard, mouse, everything — requires hard reboot).
+
 ### ALSA buffer config
 
 `50-alsa-config.conf` sets `api.alsa.period-size` and `api.alsa.headroom` for ALSA output nodes.

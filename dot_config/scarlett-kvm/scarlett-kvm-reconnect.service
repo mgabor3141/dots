@@ -6,8 +6,15 @@ Description=Reconnect Scarlett 8i6 audio after KVM switch
 [Service]
 Type=oneshot
 
-# Wait for the ALSA card to be fully initialized
-ExecStartPre=/bin/sleep 3
+# Wait for the KVM to settle — it can bounce multiple times during a switch.
+# The Scarlett's snd_usb_audio driver deadlocks the xHCI controller if yanked
+# mid-stream, killing ALL USB. A long delay avoids starting audio playback
+# while the hub is still unstable.
+ExecStartPre=/bin/sleep 10
+
+# Verify the Scarlett is still present after the settle delay.
+# If the KVM switched away again, abort gracefully.
+ExecStartPre=/bin/bash -c 'grep -rqs "Scarlett" /sys/bus/usb/devices/*/product || exit 1'
 
 # Restore saved ALSA mixer state (output routing, volumes, etc.)
 ExecStart=/usr/bin/alsactl restore USB
