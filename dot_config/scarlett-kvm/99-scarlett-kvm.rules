@@ -1,0 +1,4 @@
+# Reconnect audio routing when Scarlett 8i6 USB appears (e.g. after KVM switch).
+# Triggers scarlett-kvm-reconnect.service which restores ALSA mixer state
+# and recreates PipeWire virtual sinks and loopbacks.
+ACTION=="add", SUBSYSTEM=="sound", ATTRS{idVendor}=="1235", ATTRS{idProduct}=="8213", TAG+="systemd", ENV{SYSTEMD_WANTS}="scarlett-kvm-reconnect.service"

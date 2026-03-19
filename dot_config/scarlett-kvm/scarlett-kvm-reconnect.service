@@ -1,0 +1,16 @@
+[Unit]
+Description=Reconnect Scarlett 8i6 audio after KVM switch
+# Avoid running multiple times during the same enumeration burst
+# (sound subsystem may fire multiple add events per device)
+
+[Service]
+Type=oneshot
+
+# Wait for the ALSA card to be fully initialized
+ExecStartPre=/bin/sleep 3
+
+# Restore saved ALSA mixer state (output routing, volumes, etc.)
+ExecStart=/usr/bin/alsactl restore USB
+
+# Restart the user's audio routing (virtual sinks + loopbacks)
+ExecStart=/usr/bin/systemctl --user --machine=mg@ restart system-audio-sink.service

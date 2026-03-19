@@ -60,6 +60,21 @@ Rather than fighting the default-sink change, we work with it:
 - Discord stays on `discord-audio` via stream-restore, so it's excluded from the stream
 - On session end, the loopback is removed and `system-audio` is restored as default
 
+### KVM switch reconnect
+
+`~/.config/scarlett-kvm/` contains a udev rule and systemd service that automatically restore audio after a KVM switch.
+
+**Problem:** When the KVM switches away and back, the Scarlett re-enumerates on USB. `alsa-restore` and `system-audio-sink.service` only run at boot, so:
+- The Scarlett's ALSA mixer state may not be restored
+- The PipeWire loopback modules have stale connections to the old ALSA device
+
+**Solution:** The udev rule (`99-scarlett-kvm.rules`) detects the Scarlett's USB arrival and triggers `scarlett-kvm-reconnect.service`, which:
+1. Waits 3s for the ALSA card to initialize
+2. Runs `alsactl restore USB` to push saved mixer state to hardware
+3. Restarts `system-audio-sink.service` to recreate virtual sinks and loopbacks with fresh connections
+
+**Note:** Apps that were playing audio (Spotify, browsers) will lose their PipeWire connection when the loopbacks are recreated and need to be restarted. This is unavoidable since PipeWire itself gets a new ALSA device.
+
 ### ALSA buffer config
 
 `50-alsa-config.conf` sets `api.alsa.period-size` and `api.alsa.headroom` for ALSA output nodes.
