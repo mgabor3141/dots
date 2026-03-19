@@ -30,23 +30,32 @@ if [[ -f "$PIDFILE" ]] && PID=$(< "$PIDFILE") && kill -0 "$PID" 2>/dev/null; the
     tail --pid="$PID" -f /dev/null 2>/dev/null &
     wait $! 2>/dev/null || true
     rm -f "$PIDFILE"
+    # Find the most recent recording
+    LATEST=$(ls -t "$OUTDIR"/*.mp4 2>/dev/null | head -1)
+
     # Check if the log has errors from the session
     if [[ -s "$LOGFILE" ]] && grep -qi 'error\|fail\|fatal' "$LOGFILE" 2>/dev/null; then
         ERR_MSG=$(tail -5 "$LOGFILE")
         notify-send -u critical -t 8000 "Screen Recording" "Recording may have errors:\n$ERR_MSG"
     else
-        notify-send -t 3000 "Screen Recording" "Recording saved to $OUTDIR"
+        # Notification with action to open the file — runs in background so script can exit
+        (
+            ACTION=$(notify-send -t 8000 \
+                -A "open=Show in Files" \
+                "Screen Recording" "Recording saved")
+            [[ "$ACTION" == "open" ]] && xdg-open "$(dirname "$LATEST")" 2>/dev/null
+        ) &
     fi
 else
     rm -f "$PIDFILE"
     mkdir -p "$OUTDIR"
     # slurp outputs "X,Y WxH", convert to "WxH+X+Y" for gpu-screen-recorder -w
     # Feed last region to slurp as a predefined rectangle for quick re-selection
-    SLURP_ARGS=()
     if [[ -f "$REGIONFILE" ]]; then
-        SLURP_ARGS=(-B 4040ff40 -b 00000080)
+        SLURP=$(slurp -B 4040ff40 -b 00000080 < "$REGIONFILE") || exit 0
+    else
+        SLURP=$(slurp) || exit 0
     fi
-    SLURP=$(cat "$REGIONFILE" 2>/dev/null | slurp "${SLURP_ARGS[@]}") || exit 0
     X=$(echo "$SLURP" | cut -d',' -f1)
     REST=$(echo "$SLURP" | cut -d',' -f2)
     Y=$(echo "$REST" | cut -d' ' -f1)
