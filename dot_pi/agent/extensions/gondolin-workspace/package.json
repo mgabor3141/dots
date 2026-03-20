@@ -1,0 +1,10 @@
+{
+  "name": "gondolin-workspace",
+  "private": true,
+  "dependencies": {
+    "@earendil-works/gondolin": "^0.6.0"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
