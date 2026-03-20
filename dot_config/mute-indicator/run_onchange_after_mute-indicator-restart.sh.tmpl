@@ -15,16 +15,6 @@ set -Eeuo pipefail
 # {{ end }}
 
 systemctl --user daemon-reload
-systemctl --user restart mute-indicator.service
+systemctl --user restart mute-indicator.service mute-events-handler.service
 
-# Kill any stale handle-mute-events.sh processes and start a fresh one.
-# The handler is normally spawned by niri at login, but after chezmoi apply
-# the old process may reference a stale path or be dead.
-pkill -f 'handle-mute-events\.sh' || true
-sleep 0.3
-setsid bash -c 'pactl subscribe | "{{ joinPath .chezmoi.homeDir ".config/mute-indicator/handle-mute-events.sh" }}"' </dev/null &>/dev/null &
-
-echo "Restarted mute-indicator.service and handle-mute-events.sh"
-echo "View logs with:"
-echo -e "\tjournalctl --user -xeu mute-indicator.service"
- 
+echo "Restarted mute-indicator.service and mute-events-handler.service"

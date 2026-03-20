@@ -1,0 +1,12 @@
+[Unit]
+Description=Mic mute event handler (pactl subscribe → mute indicator)
+After=pipewire-pulse.service
+BindsTo=pipewire-pulse.service
+
+[Service]
+ExecStart=/bin/bash -c 'pactl subscribe | %h/.config/mute-indicator/handle-mute-events.sh'
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
