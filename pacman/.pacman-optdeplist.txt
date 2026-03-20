@@ -7,7 +7,6 @@ ffmpegthumbs
 filelight
 flite
 glib2-devel
-gtk4-layer-shell
 inotify-tools
 intel-media-driver
 jdk-openjdk
@@ -19,7 +18,6 @@ kimageformats
 kio-admin
 kompare
 konsole
-libappindicator
 liboggz
 libva-intel-driver
 noise-suppression-for-voice
@@ -31,9 +29,12 @@ python-brotlicffi
 python-html5lib
 python-mutagen
 python-openai-whisper
+python-pip
 python-pycryptodome
+python-pyudev
 python-pyxattr
 python-secretstorage
+python-setuptools
 python-srt_equalizer
 python-truststore
 python-vosk

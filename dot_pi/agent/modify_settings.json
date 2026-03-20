@@ -13,7 +13,11 @@
     "npm:pi-rtk",
     "npm:@cegersdo/pi-ptc",
     "npm:pi-bash-trim",
-    "npm:pi-desktop-notify"
+    "npm:pi-desktop-notify",
+    "npm:pi-skills-sh",
+    "npm:pi-github",
+    "npm:pi-annotated-reply",
+    "npm:pi-anycopy"
   ],
   "terminal": {
     "clearOnShrink": true
