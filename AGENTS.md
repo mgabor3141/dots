@@ -19,6 +19,7 @@ These apply to almost every task:
 3. **External files**: Some files come from `.chezmoiexternal.toml` (e.g., fish plugins). Update the external config, not the files.
 4. **Platform-specific files**: Conditionally ignored via `.chezmoiignore` based on `chezmoi.os` and the `.headless` variable. Check ignore files before assuming something should exist. When creating configuration that applies to only one system, make sure the ignores are set up for the other systems correctly.
 5. **Prefer subfolder `.chezmoiignore`** over the global one. Keeps rules localized.
+6. **Use `exact_` prefix on pure-config directories**: Directories that only contain chezmoi-managed files (no software-generated state) should use the `exact_` prefix so chezmoi removes stale files on apply. Don't use it on directories where other software writes files (e.g., `systemd/user/`).
 7. **Use chezmoi template variables for paths**: In `.tmpl` files, use `.chezmoi.homeDir`, `.chezmoi.sourceDir`, `.chezmoi.targetFile`, `.chezmoi.sourceFile` and `joinPath` instead of hardcoding paths.
 
 ## Branching

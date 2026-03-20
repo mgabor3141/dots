@@ -151,7 +151,7 @@
                     "displayMode": "onhover",
                     "iconColor": "none",
                     "id": "Volume",
-                    "middleClickCommand": "pavucontrol || pwvucontrol",
+                    "middleClickCommand": "pwvucontrol",
                     "textColor": "none"
                 },
                 {

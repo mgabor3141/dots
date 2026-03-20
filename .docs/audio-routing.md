@@ -1,115 +1,106 @@
 # Audio Routing
 
-PipeWire/WirePlumber setup for separate Discord audio and Sunshine streaming.
+PipeWire/WirePlumber setup with Focusrite Scarlett 8i6 USB Gen 3, supporting separate comms audio and MacBook integration via the Scarlett's hardware mixer.
 
 ## Architecture
 
-**Normal (no streaming):**
 ```
-Apps (Spotify, games, etc.)
-  → system-audio (virtual sink, default)
-    → loopback → Scarlett 8i6 (local playback)
-
-Discord / Vesktop
-  → discord-audio (virtual sink, via stream-restore)
-    → loopback → Scarlett 8i6 (local playback)
-```
-
-**During Sunshine streaming:**
-```
-Apps (Spotify, games, etc.)
-  → sink-sunshine-stereo (Sunshine's sink, becomes default)
-    → Sunshine captures .monitor (streaming to Moonlight)
-    → loopback → Scarlett 8i6 (local playback, created by sunshine-audio-fix)
-
-Discord / Vesktop
-  → discord-audio (unchanged, excluded from stream)
-    → loopback → Scarlett 8i6 (local playback)
+┌─────────────┐       USB (direct, always on)       ┌──────────────┐
+│  Linux PC   │────────────────────────────────────→ │  Scarlett    │
+│             │       PCM 1–6 in/out                 │  8i6 USB     │
+└──────┬──────┘                                      │              │
+       │ DP/HDMI                                     │  HP1 ──→ 🎧  │
+       │                                             │              │
+┌──────┴──────┐       3.5mm jack                     │  Line In     │
+│  M32U       │─────────────────────────────────────→│  3/4         │
+│  Monitor    │       (audio from active input)      │              │
+│  (KVM)      │                                      │  HP2 ──→ ┐   │
+└──────┬──────┘                                      └──────────┼───┘
+       │ USB-C (video + KVM hub)                                │
+       │                                              RCA cable │
+┌──────┴──────┐       KVM USB hub                    ┌──────────┴───┐
+│  MacBook    │╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌→ │  Behringer   │
+│             │       (only when KVM = MacBook)       │  UCA         │
+└─────────────┘                                      └──────────────┘
 ```
 
-## Components
+**Key design:** The Scarlett is direct-connected to the Linux PC (not on the KVM). This eliminates USB bounce issues and xHCI deadlock risk. MacBook audio reaches the Scarlett via the monitor's headphone jack → analogue inputs.
 
-### Virtual sinks & loopbacks
+## PipeWire virtual sinks
 
-Created by `system-audio-sink.service` → `~/.local/bin/system-audio-setup`.
+Defined declaratively in `~/.config/pipewire/pipewire.conf.d/10-virtual-sinks.conf` using `libpipewire-module-loopback`. Each module creates a sink (capture side) and auto-links to the Scarlett (playback side via `target.object`).
 
-Runs at boot via systemd (oneshot). Uses `pactl load-module` to create:
-- `system-audio` null-sink + loopback → Scarlett
-- `discord-audio` null-sink + loopback → Scarlett
+| Sink | Purpose | Volume control |
+|------|---------|----------------|
+| `system-audio` | All apps (default sink) | `wpctl set-volume system-audio <level>` |
+| `comms` | Discord/comms (via stream-restore) | `wpctl set-volume comms <level>` |
 
-Also sets the Scarlett card profile and `system-audio` as the default sink.
+No scripts, no systemd services — PipeWire creates everything at startup.
 
-### WirePlumber config
+## Scarlett hardware mixer
 
-`~/.config/wireplumber/wireplumber.conf.d/51-audio-routing.conf`
+Configured via `alsa-scarlett-gui` or `amixer -c USB`. The internal mixer combines Linux PCM + MacBook analogue input:
 
-- Sets `default.configured.audio.sink = "system-audio"` so streams go there by default
-- Deprioritizes `sink-sunshine-*` sinks (`priority.session = 0`, `node.autoconnect = false`)
+```
+Mixer Inputs:
+  01 = Analogue 3   (MacBook L, via monitor headphone jack)
+  02 = Analogue 4   (MacBook R, via monitor headphone jack)
+  03 = PCM 1        (Linux L)
+  04 = PCM 2        (Linux R)
+  08 = Analogue 1   (mic)
+
+Mix A = Input 01 + Input 03  →  Analogue Output 01 (HP1 L) + S/PDIF Out 1
+Mix B = Input 02 + Input 04  →  Analogue Output 02 (HP1 R) + S/PDIF Out 2
+Mix H                        →  Analogue Output 03/04 (HP2, return to MacBook)
+```
+
+Full ALSA mixer state saved in `.docs/scarlett-mixer.state` (load via `alsa-scarlett-gui` import or `alsactl restore -f`). Runtime state persisted with `sudo alsactl store USB`.
+
+## WirePlumber config
+
+`~/.config/wireplumber/wireplumber.conf.d/51-audio-routing.conf`:
+- Sets `system-audio` as the default configured sink
+- Deprioritizes Sunshine sinks (`priority.session = 0`)
 - Prevents Scarlett mic from auto-connecting
 
-**Important:** WirePlumber 0.5's `node.rules` in `wireplumber.profiles` only applies to device nodes, not stream nodes. Stream routing relies on the default sink and WirePlumber's stream-restore (saved per-stream targets). The Discord routing is persisted via stream-restore's saved `"target":"discord-audio"` in `~/.local/state/wireplumber/stream-properties`.
+Discord routing to `comms` is persisted via stream-restore in `~/.local/state/wireplumber/stream-properties`.
 
-### Sunshine audio
+## Sunshine streaming
 
-Sunshine hardcodes creating `sink-sunshine-{stereo,surround51,surround71}` and calling `pa_context_set_default_sink()` on every session — there is no config option to disable this.
+Sunshine creates `sink-sunshine-stereo` and sets it as default. Apps follow the default there. `~/.local/bin/sunshine-audio-fix` restores `system-audio` as default when the session ends.
 
-Rather than fighting the default-sink change, we work with it:
-- Sunshine sets `sink-sunshine-stereo` as default → app audio flows there
-- Sunshine captures from `sink-sunshine-stereo.monitor` → streams to Moonlight
-- `~/.local/bin/sunshine-audio-fix` (triggered by `global_prep_cmd` in `sunshine.conf`) creates a loopback from `sink-sunshine-stereo → Scarlett` for local playback
-- Discord stays on `discord-audio` via stream-restore, so it's excluded from the stream
-- On session end, the loopback is removed and `system-audio` is restored as default
+## MacBook integration
 
-### KVM switch reconnect
+When the KVM switches to the MacBook:
+- MacBook audio → USB-C → monitor → 3.5mm headphone jack → Scarlett Line In 3/4
+- Scarlett hardware mixer combines it with Linux PCM in Mix A/B → HP1
+- Behringer UCA (on KVM hub) provides mic return: Scarlett HP2 → RCA → Behringer → MacBook
 
-See [KVM documentation](kvm.md) for the full picture. Audio-specific summary:
-
-`~/.config/scarlett-kvm/` contains a udev rule and systemd service that automatically restore audio after a KVM switch. The udev rule detects the Scarlett's USB arrival and triggers `scarlett-kvm-reconnect.service`, which waits 10s for the KVM hub to stabilize, verifies the Scarlett is still present, restores ALSA mixer state, and recreates virtual sinks/loopbacks.
-
-Apps playing audio will lose their PipeWire connection and need to be restarted.
-
-### ALSA buffer config
-
-`50-alsa-config.conf` sets `api.alsa.period-size` and `api.alsa.headroom` for ALSA output nodes.
+When KVM is on Linux: MacBook audio doesn't flow (monitor jack follows active input). Linux audio works normally.
 
 ## Volume control
 
-System audio and Discord have independent volume via their virtual sinks:
+Per-sink volume available in pwvucontrol or via CLI:
 
 ```sh
-# Adjust Discord volume (0.0-1.0 normal, >1.0 to boost)
-wpctl set-volume discord-audio 1.5
-
-# Adjust system audio volume
-wpctl set-volume system-audio 0.8
-
-# Check current volumes
-wpctl status
+wpctl set-volume system-audio 0.8   # games/music
+wpctl set-volume comms 1.0          # comms
 ```
 
 ## Troubleshooting
 
-Check current routing:
 ```sh
+# Check routing
 wpctl status
-```
 
-If streams are on the wrong sink, set the default and they'll follow:
-```sh
+# Check links
+pw-link -l
+
+# Reset default sink
 pactl set-default-sink system-audio
-```
 
-If Discord isn't routing to `discord-audio`, the stream-restore state may be missing. Play some audio in Discord and manually move it:
-```sh
-# Find Discord's sink-input index
+# If Discord isn't on comms, play audio and move it manually:
 pactl list sink-inputs short | grep -i chromium
-# Move it
-pactl move-sink-input <index> discord-audio
-```
-This gets saved by stream-restore and persists across restarts.
-
-Clear all saved stream routing (nuclear option):
-```sh
-rm ~/.local/state/wireplumber/stream-properties
-systemctl --user restart wireplumber
+pactl move-sink-input <index> comms
+# Persists via stream-restore
 ```

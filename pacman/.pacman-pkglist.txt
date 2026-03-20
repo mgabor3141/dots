@@ -105,9 +105,9 @@ os-prober
 pamixer
 parsec-bin
 partclone
-pavucontrol
 protonup-qt
 pv
+pwvucontrol
 python-pywal
 qpwgraph
 qt5ct

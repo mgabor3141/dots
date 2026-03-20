@@ -1,0 +1,13 @@
+verbosity = "WARN"
+media_minimum_duration = 5
+idle_inhibitor = "wayland"
+sink_whitelist = []
+
+# Blacklist PipeWire loopback streams (system-audio and comms sink routing)
+# and speech-dispatcher. These are always connected and un-corked, which
+# makes the idle inhibitor think audio is always playing.
+[[node_blacklist]]
+name = ".*loopback.*"
+
+[[node_blacklist]]
+name = "speech-dispatcher.*"
