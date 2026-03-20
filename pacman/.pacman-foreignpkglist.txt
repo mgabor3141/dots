@@ -1,7 +1,7 @@
 abduco-git
 blackwidow-macro-git
 customizepkg-git
-hyprwhspr
+handy-bin
 it87-dkms-git
 kanata-bin
 llama.cpp-cuda

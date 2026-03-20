@@ -118,6 +118,7 @@ binds {
     XF86AudioPrev                      allow-when-locked=true { spawn-sh "playerctl previous"; }
 
     F13                                allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
+    F14                                allow-when-locked=true { spawn-sh "handy --toggle-transcription"; }
 
     // ─── Brightness Controls ───
     XF86MonBrightnessUp                 allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call brightness increase"; }

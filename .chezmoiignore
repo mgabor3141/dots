@@ -84,7 +84,7 @@ CLAUDE.md
 .config/sddm
 .config/pipewire
 .config/sunshine
-.config/hyprwhspr
+.config/handy
 .config/systemd
 .config/qt5ct
 .config/mute-indicator
