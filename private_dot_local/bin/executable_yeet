@@ -1,72 +1,174 @@
 #!/usr/bin/env bash
-# yeet - push the current change to a remote branch.
+# yeet - commit, push, and PR workflow for jj repos.
+#
+# Usage:
+#   yeet                  Commit @ with an AI-generated message.
+#   yeet push             Commit + create/move bookmark + push.
+#   yeet pr               Commit + push + create/update a draft PR.
+#
+# Flags:
+#   -m "message"          Use this commit message instead of generating one.
+#   -n, --new             Force a new bookmark (for stacked PRs).
 trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
-#
-# Default: find the nearest ancestor bookmark between trunk and the target
-#          commit, move it to the target, and push. Falls back to creating a
-#          new bookmark if none exists.
-# --new/-n: always create a new bookmark and branch (for stacked PRs).
-# --noai:   skip AI-generated PR title/description.
 
-# Parse flags.
+# --- Parse arguments ---
+subcommand=""
 new_flag=false
-noai_flag=false
-args=""
-for arg in "$@"; do
-    case "$arg" in
-        -n|--new) new_flag=true ;;
-        --noai) noai_flag=true ;;
-        *) args="$args $arg" ;;
+manual_message=""
+extra_push_args=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        push|pr)
+            subcommand="$1" ;;
+        -n|--new)
+            new_flag=true ;;
+        -m)
+            shift
+            manual_message="$1" ;;
+        *)
+            extra_push_args="$extra_push_args $1" ;;
     esac
+    shift
 done
 
+# --- Helpers ---
+
 open_url() {
-    if command -v open >/dev/null 2>&1; then
+    if command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$1" 2>/dev/null &
+    elif command -v open >/dev/null 2>&1; then
         open "$1"
-    elif command -v xdg-open >/dev/null 2>&1; then
-        xdg-open "$1"
     fi
 }
 
-# If @ has changes but no description, generate one with AI and commit.
-has_changes=$(jj log -r '@ ~ empty()' --count --no-pager 2>/dev/null)
-current_desc=$(jj log -r '@' --no-graph -T 'description' --no-pager 2>/dev/null | sed '/^$/d')
-if [ "$has_changes" -gt 0 ] && [ -z "$current_desc" ]; then
-    echo "Working change has no description — generating one..."
-    commit_diff=$(jj diff -r '@' --no-pager 2>/dev/null)
+# Resolve a cheap model for background AI tasks via pi-budget-model.
+resolve_budget_model() {
+    if command -v yeet-model >/dev/null 2>&1; then
+        yeet-model 2>/dev/null || echo "anthropic/claude-haiku-4-5"
+    else
+        echo "anthropic/claude-haiku-4-5"
+    fi
+}
 
-    # Grab recent commit descriptions from trunk as style examples.
-    example_commits=$(jj log -r 'trunk()- | trunk()-' --no-graph --limit 10 \
+# Call pi in non-interactive mode with the budget model.
+# Uses JSON mode to get clean output without ANSI escape codes,
+# preserving markdown formatting in the response.
+#
+# Usage: pi_generate <system_prompt> <user_prompt>
+pi_generate() {
+    local system_prompt="$1"
+    local user_prompt="$2"
+    local model tmpfile
+    model=$(resolve_budget_model)
+    tmpfile=$(mktemp)
+    trap "rm -f '$tmpfile'" RETURN
+
+    pi -p --no-session --no-tools --no-extensions --no-skills \
+        --model "$model" --mode json \
+        --system-prompt "$system_prompt" \
+        "$user_prompt" \
+        2>/dev/null > "$tmpfile"
+
+    # Extract the final assistant text from the JSON stream, skipping thinking blocks.
+    grep '"type":"agent_end"' "$tmpfile" \
+        | jq -r '.messages[-1].content[] | select(.type=="text") | .text'
+}
+
+# Gather recent commit messages from trunk as style examples.
+get_commit_style_examples() {
+    local examples
+    examples=$(jj log -r 'trunk()- | trunk()--' --no-graph --limit 10 \
         -T 'description.first_line() ++ "\n"' --no-pager 2>/dev/null \
         | sed '/^$/d' | head -10)
-    examples_section=""
-    if [ -n "$example_commits" ]; then
-        examples_section="
-Here are recent commit messages from this repo — match their style and conventions:
-$example_commits
-"
+    if [ -n "$examples" ]; then
+        printf '\nHere are recent commit messages from this repo. Match their style and conventions:\n%s\n' "$examples"
+    fi
+}
+
+# --- Step 1: Commit ---
+
+commit_if_needed() {
+    local has_changes current_desc
+    has_changes=$(jj log -r '@ ~ empty()' --count --no-pager 2>/dev/null)
+    current_desc=$(jj log -r '@' --no-graph -T 'description' --no-pager 2>/dev/null | sed '/^$/d')
+
+    # If a manual message was provided, use it directly.
+    if [ -n "$manual_message" ]; then
+        if [ "$has_changes" -eq 0 ]; then
+            echo "Working change is empty. Nothing to commit."
+            return 1
+        fi
+        jj commit -m "$manual_message"
+        return 0
     fi
 
-    commit_prompt="You are writing a jj/git commit description.
+    if [ "$has_changes" -eq 0 ]; then
+        # Working change is empty. If parent has a description, that's our
+        # committed change and there's nothing more to do.
+        local parent_desc
+        parent_desc=$(jj log -r '@-' --no-graph -T 'description' --no-pager 2>/dev/null | sed '/^$/d')
+        if [ -n "$parent_desc" ]; then
+            return 0
+        fi
+        echo "Working change is empty and parent has no description. Nothing to commit."
+        return 1
+    fi
 
-Below is the diff for the current change:
-$commit_diff
-${examples_section}
-Write a concise commit description. First line is a short summary (imperative mood, no period).
-If needed, add a blank line then a brief body. No filler.
-Match the style of the example commits if provided."
+    # Already has a description (from `jj describe`); commit with it.
+    if [ -n "$current_desc" ]; then
+        jj commit -m "$current_desc"
+        return 0
+    fi
 
-    if commit_msg=$(pi -p --no-session --no-tools "$commit_prompt" 2>/dev/null); then
+    # No description, no manual message: generate one with AI.
+    echo "Generating commit message..."
+
+    local diff summary examples sys_prompt user_prompt commit_msg
+    diff=$(jj diff -r '@' --no-pager 2>/dev/null)
+    summary=$(jj diff -r '@' --stat --no-pager 2>/dev/null)
+    examples=$(get_commit_style_examples)
+
+    sys_prompt="You generate jj/git commit messages. Your entire output IS the commit message — nothing else. No preamble, no explanation, no markdown fencing.
+
+Rules:
+- First line: short summary in imperative mood, no trailing period, under 72 characters.
+- If the change is non-trivial, add a blank line then a concise body explaining what and why.
+- No filler, no repeating filenames that are obvious from the diff stat.
+- Match the style of the example commits if provided."
+
+    user_prompt="Changed files:
+$summary
+
+Full diff:
+$diff
+${examples}"
+
+    if commit_msg=$(pi_generate "$sys_prompt" "$user_prompt"); then
+        # Strip any markdown fencing the model might wrap the output in.
+        commit_msg=$(printf '%s' "$commit_msg" | sed '/^```/d' | sed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba;}')
+
         echo ""
-        printf '%s\n' "$commit_msg"
+        printf '  %s\n' "$commit_msg"
         echo ""
         jj commit -m "$commit_msg"
     else
-        echo "AI description generation failed — commit with an empty description or describe manually."
-        exit 1
+        echo "AI commit message generation failed."
+        echo "Describe it manually:  jj describe -m '...'"
+        return 1
     fi
+}
+
+# Exit here if no subcommand (just commit).
+if [ -z "$subcommand" ]; then
+    commit_if_needed
+    exit $?
 fi
+
+# --- Step 2: Push (for "push" and "pr" subcommands) ---
+
+commit_if_needed
 
 # Fetch and rebase before pushing.
 jj git fetch
@@ -74,14 +176,14 @@ reheat
 
 # Abort if there are conflicts after rebasing.
 if [ "$(jj log -r 'trunk()..@ & conflicts()' --count --no-pager)" -gt 0 ]; then
-    echo "conflicts detected after rebase — resolve them before pushing"
+    echo "Conflicts detected after rebase. Resolve them before pushing."
     exit 1
 fi
 
 # Target: current commit if not empty, parent if empty.
 target='(@ ~ empty()) | parents(@ & empty())'
 
-# Decide mode: if --new, or no ancestor bookmark exists, create new.
+# Decide bookmark: reuse existing ancestor bookmark, or create new.
 bookmark=""
 if [ "$new_flag" = false ]; then
     bookmark=$(jj log -r "trunk()..($target) & bookmarks()" --no-graph \
@@ -90,139 +192,158 @@ if [ "$new_flag" = false ]; then
 fi
 
 if [ -n "$bookmark" ]; then
-    # Move existing bookmark to target and push.
     jj bookmark move "$bookmark" --to "$target" 2>&1
-    output=$(jj git push --bookmark "$bookmark" $args 2>&1)
+    output=$(jj git push --bookmark "$bookmark" $extra_push_args 2>&1)
     rc=$?
 else
-    # Create a new bookmark via the push-new alias.
-    output=$(jj push-new $args 2>&1)
+    output=$(jj push-new $extra_push_args 2>&1)
     rc=$?
+    # Extract the bookmark name that was just created.
+    bookmark=$(printf '%s\n' "$output" \
+        | sed -n 's/.*Creating bookmark \([^ ]*\).*/\1/p' | head -1)
 fi
 
 printf '%s\n' "$output"
 
-# Auto-open "create PR" links (contain /pull/new/ or /compare/).
-url=$(printf '%s\n' "$output" | grep -oE 'https?://[^ ]+' | head -1 || true)
-if [ -n "$url" ]; then
-    case "$url" in
-        */pull/new/*|*/compare/*)
-            # Determine the pushed branch name.
-            if [ -n "$bookmark" ]; then
-                branch="$bookmark"
-            else
-                branch=$(printf '%s\n' "$output" \
-                    | sed -n 's/.*Creating bookmark \([^ ]*\).*/\1/p' | head -1)
-            fi
+if [ "$rc" -ne 0 ]; then
+    exit $rc
+fi
 
-            # Generate PR title + description with AI, create a draft PR.
-            if [ "$noai_flag" = false ] && command -v pi >/dev/null 2>&1 \
-                    && command -v gh >/dev/null 2>&1 && [ -n "$branch" ]; then
-                descriptions=$(jj log -r "trunk()..($target)" --no-graph \
-                    -T 'description ++ "\n---\n"' 2>/dev/null)
-                diff_stat=$(jj diff -r "trunk()..($target)" --stat 2>/dev/null)
+# Exit here if subcommand is just "push".
+if [ "$subcommand" = "push" ]; then
+    exit 0
+fi
 
-                # Look for a PR template in the repo.
-                pr_template=""
-                repo_root=$(jj workspace root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || true)
-                if [ -n "$repo_root" ]; then
-                    for tmpl_path in \
-                        ".github/pull_request_template.md" \
-                        ".github/PULL_REQUEST_TEMPLATE.md" \
-                        "PULL_REQUEST_TEMPLATE.md" \
-                        "pull_request_template.md" \
-                        "docs/pull_request_template.md"; do
-                        if [ -f "$repo_root/$tmpl_path" ]; then
-                            pr_template=$(cat "$repo_root/$tmpl_path")
-                            break
-                        fi
-                    done
-                    # Also check the directory form (use the first .md found).
-                    if [ -z "$pr_template" ]; then
-                        for tmpl_dir in \
-                            ".github/PULL_REQUEST_TEMPLATE" \
-                            ".github/pull_request_template"; do
-                            if [ -d "$repo_root/$tmpl_dir" ]; then
-                                first_tmpl=$(find "$repo_root/$tmpl_dir" -name '*.md' -type f | head -1)
-                                if [ -n "$first_tmpl" ]; then
-                                    pr_template=$(cat "$first_tmpl")
-                                    break
-                                fi
-                            fi
-                        done
-                    fi
+# --- Step 3: PR (for "pr" subcommand) ---
+
+if ! command -v gh >/dev/null 2>&1; then
+    echo "gh CLI not found. Install it to create PRs."
+    exit 1
+fi
+
+if [ -z "$bookmark" ]; then
+    echo "No bookmark found or created. Cannot create a PR without a branch."
+    exit 1
+fi
+
+# Check if a PR already exists for this branch.
+existing_pr=$(gh pr view "$bookmark" --json number,url --jq '.url' 2>/dev/null || true)
+
+# Gather context for AI generation.
+descriptions=$(jj log -r "trunk()..($target)" --no-graph \
+    -T 'description ++ "\n---\n"' 2>/dev/null)
+diff_stat=$(jj diff -r "trunk()..($target)" --stat 2>/dev/null)
+diff_full=$(jj diff -r "trunk()..($target)" 2>/dev/null)
+
+# Look for a PR template in the repo.
+pr_template=""
+repo_root=$(jj workspace root 2>/dev/null || true)
+if [ -n "$repo_root" ]; then
+    for tmpl_path in \
+        ".github/pull_request_template.md" \
+        ".github/PULL_REQUEST_TEMPLATE.md" \
+        "PULL_REQUEST_TEMPLATE.md" \
+        "pull_request_template.md" \
+        "docs/pull_request_template.md"; do
+        if [ -f "$repo_root/$tmpl_path" ]; then
+            pr_template=$(cat "$repo_root/$tmpl_path")
+            break
+        fi
+    done
+    if [ -z "$pr_template" ]; then
+        for tmpl_dir in \
+            ".github/PULL_REQUEST_TEMPLATE" \
+            ".github/pull_request_template"; do
+            if [ -d "$repo_root/$tmpl_dir" ]; then
+                first_tmpl=$(find "$repo_root/$tmpl_dir" -name '*.md' -type f | head -1)
+                if [ -n "${first_tmpl:-}" ]; then
+                    pr_template=$(cat "$first_tmpl")
+                    break
                 fi
+            fi
+        done
+    fi
+fi
 
-                template_section=""
-                if [ -n "$pr_template" ]; then
-                    template_section="
+template_section=""
+if [ -n "$pr_template" ]; then
+    template_section="
 The repository has a PR template. Follow its structure for the description:
 $pr_template
 
 Template filling rules:
-- Fill every section as best you can from the commits and diff stat.
-- For sections or checkboxes that are not relevant to this PR, put N/A.
-- For things you are unsure about or lack information for (e.g. ticket numbers, links), put TODO.
-- Keep the description well-formatted, clear, and concise.
+- Fill every section from the commits and diff.
+- For irrelevant sections or checkboxes, put N/A.
+- For things you lack information for (e.g. ticket numbers), put TODO.
 "
-                fi
+fi
 
-                # Fetch recent merged PR titles as style examples.
-                pr_examples=""
-                if recent_prs=$(gh pr list --state merged --limit 10 \
-                        --json title --jq '.[].title' 2>/dev/null); then
-                    if [ -n "$recent_prs" ]; then
-                        pr_examples="
-Here are recent PR titles from this repo — match their style and conventions:
+# Fetch recent merged PR titles as style examples.
+pr_examples=""
+if recent_prs=$(gh pr list --state merged --limit 10 \
+        --json title --jq '.[].title' 2>/dev/null); then
+    if [ -n "$recent_prs" ]; then
+        pr_examples="
+Here are recent PR titles from this repo. Match their style and conventions:
 $recent_prs
 "
-                    fi
-                fi
+    fi
+fi
 
-                prompt="You are writing a GitHub pull request title and description.
+echo "Generating PR title and description..."
 
-Below are the commit descriptions and a diff stat for this PR.
+pr_sys_prompt="You generate GitHub pull request titles and descriptions. Your entire output IS the PR content: line 1 is the title, then a blank line, then the markdown description. Nothing else.
 
-Commit descriptions:
+Rules:
+- Title: one line, no prefix like 'PR:' or 'feat:' unless the style examples use them.
+- Description: summarize what changed and why based on the commits and diff.
+- Keep it concise. No filler, no restating the title in the body.
+- If a PR template is provided, follow its structure.
+- If style examples are provided, match their conventions."
+
+pr_user_prompt="Commit descriptions:
 $descriptions
 
 Diff stat:
 $diff_stat
-${template_section}${pr_examples}
-Write a concise PR title (one line, no prefix like 'PR:') and a PR description in markdown.
-The description should summarize what changed and why, based on the commit messages.
-Keep it concise — no filler, no restating the title in the body.
-If a PR template was provided, follow its structure instead of freeform markdown.
-If example PR titles were provided, match their style and conventions.
-Output the title on the first line, then a blank line, then the description."
 
-                echo "Generating PR title and description..."
-                if pr_text=$(pi -p --no-session --no-tools "$prompt" 2>/dev/null); then
-                    pr_title=$(printf '%s\n' "$pr_text" | head -1)
-                    pr_body=$(printf '%s\n' "$pr_text" | tail -n +3)
+Full diff:
+$diff_full
+${template_section}${pr_examples}"
 
-                    echo ""
-                    printf '%s\n' "$pr_text"
-                    echo ""
-
-                    if pr_url=$(gh pr create --draft --title "$pr_title" \
-                            --body "$pr_body" --head "$branch" 2>&1); then
-                        echo "Draft PR created: $pr_url"
-                        open_url "$pr_url"
-                    else
-                        echo "Failed to create draft PR: $pr_url"
-                        echo "Opening PR creation page instead."
-                        open_url "$url"
-                    fi
-                else
-                    echo "AI generation failed, opening PR creation page."
-                    open_url "$url"
-                fi
-            else
-                open_url "$url"
-            fi
-            ;;
-    esac
+if ! pr_text=$(pi_generate "$pr_sys_prompt" "$pr_user_prompt"); then
+    echo "AI PR generation failed."
+    echo "Create the PR manually:  gh pr create --head $bookmark"
+    exit 1
 fi
 
-exit $rc
+pr_title=$(printf '%s\n' "$pr_text" | head -1)
+pr_body=$(printf '%s\n' "$pr_text" | tail -n +3)
+
+echo ""
+printf '  Title: %s\n' "$pr_title"
+echo ""
+printf '  %s\n' "$pr_body"
+echo ""
+
+if [ -n "$existing_pr" ]; then
+    # Update the existing PR.
+    if gh pr edit "$bookmark" --title "$pr_title" --body "$pr_body" 2>&1; then
+        echo "PR updated: $existing_pr"
+    else
+        echo "Failed to update PR. Edit it manually."
+    fi
+else
+    # Create a new draft PR.
+    if pr_url=$(gh pr create --draft --title "$pr_title" \
+            --body "$pr_body" --head "$bookmark" 2>&1); then
+        echo "Draft PR created: $pr_url"
+        open_url "$pr_url"
+    else
+        echo "Failed to create draft PR: $pr_url"
+        url=$(printf '%s\n' "$output" | grep -oE 'https?://[^ ]+' | head -1 || true)
+        if [ -n "$url" ]; then
+            open_url "$url"
+        fi
+    fi
+fi

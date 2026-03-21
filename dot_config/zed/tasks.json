@@ -44,5 +44,20 @@
     "command": "pi --resume",
     "allow_concurrent_runs": true,
     "use_new_terminal": true
+  },
+  {
+    "label": "yeet",
+    "command": "yeet",
+    "tags": ["yeet"]
+  },
+  {
+    "label": "yeet push",
+    "command": "yeet push",
+    "tags": ["yeet"]
+  },
+  {
+    "label": "yeet pr",
+    "command": "yeet pr",
+    "tags": ["yeet"]
   }
 ]

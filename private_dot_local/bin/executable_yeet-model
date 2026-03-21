@@ -1,0 +1,66 @@
+#!/usr/bin/env node
+
+// yeet-model — resolve the cheapest available model for background AI tasks.
+// Uses pi-budget-model with the pi model registry and auth storage.
+// Outputs "provider/model-id" to stdout. Falls back to a hardcoded default on error.
+
+import { readFileSync } from "fs";
+import { join } from "path";
+
+const FALLBACK = "anthropic/claude-haiku-4-5";
+
+// Resolve absolute paths to globally installed pi packages.
+const piAgentPkg = join(
+  process.env.HOME,
+  ".local/lib/node_modules/@mariozechner/pi-coding-agent/dist/index.js",
+);
+const budgetModelPkg = join(
+  process.env.HOME,
+  ".local/lib/node_modules/pi-budget-model/dist/index.js",
+);
+
+try {
+  const { AuthStorage, ModelRegistry } = await import(piAgentPkg);
+  const { findBudgetModel } = await import(budgetModelPkg);
+
+  const auth = AuthStorage.create();
+  const registry = new ModelRegistry(auth);
+
+  // Read pi settings to determine the reference model.
+  // Use the most expensive model the user has enabled as the reference point,
+  // so findBudgetModel has room to find something significantly cheaper.
+  const settingsPath = join(process.env.HOME, ".pi/agent/settings.json");
+  let provider = "anthropic";
+  let modelId = "claude-sonnet-4-5";
+  let enabledModels = [];
+
+  try {
+    const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
+    provider = settings.defaultProvider || provider;
+    modelId = settings.defaultModel || modelId;
+    enabledModels = settings.enabledModels || [];
+  } catch {
+    // Settings file missing or unreadable; use defaults.
+  }
+
+  // Find the most expensive enabled model as the reference.
+  let refModel = registry.find(provider, modelId);
+  for (const spec of enabledModels) {
+    const [p, m] = spec.includes("/") ? spec.split("/", 2) : [provider, spec];
+    const model = registry.find(p, m);
+    if (model && (!refModel || model.cost.input > refModel.cost.input)) {
+      refModel = model;
+    }
+  }
+
+  if (!refModel) {
+    console.log(FALLBACK);
+    process.exit(0);
+  }
+
+  const ctx = { modelRegistry: registry, model: refModel };
+  const { model } = await findBudgetModel(ctx);
+  console.log(`${model.provider}/${model.id}`);
+} catch {
+  console.log(FALLBACK);
+}
