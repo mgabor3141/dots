@@ -148,13 +148,6 @@
                     "textColor": "none"
                 },
                 {
-                    "displayMode": "onhover",
-                    "iconColor": "none",
-                    "id": "Volume",
-                    "middleClickCommand": "pwvucontrol",
-                    "textColor": "none"
-                },
-                {
                     "clockColor": "none",
                     "customFont": "",
                     "formatHorizontal": "dddd, MMM dd – HH:mm",
