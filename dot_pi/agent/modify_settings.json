@@ -17,7 +17,8 @@
     "npm:pi-skills-sh",
     "npm:pi-github",
     "npm:pi-annotated-reply",
-    "npm:pi-anycopy"
+    "npm:pi-anycopy",
+    "/*# .chezmoi.homeDir *//dev/yapp/packages/enclave"
   ],
   "terminal": {
     "clearOnShrink": true
