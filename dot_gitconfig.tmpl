@@ -11,6 +11,12 @@
 	helper =
 	helper = !/usr/bin/env gh auth git-credential
 {{- end }}
+[diff]
+	tool = rtk
+[difftool "rtk"]
+	cmd = "rtk diff \"$LOCAL\" \"$REMOTE\""
+[difftool]
+	prompt = false
 [push]
 	autoSetupRemote = true
 [pull]

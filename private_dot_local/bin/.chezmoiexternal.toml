@@ -45,3 +45,10 @@
     executable = true
     path = "difft"
     checksum.sha256 = "328e1ab028a36b81ae990c9fc40a1c8eb618e14559e0d67a0a63f328ad85de09"
+
+["rtk"]
+    type = "archive-file"
+    url = "https://github.com/rtk-ai/rtk/releases/download/v0.31.0/rtk-x86_64-unknown-linux-musl.tar.gz"
+    executable = true
+    path = "rtk"
+    checksum.sha256 = "b01211a7011e70e2746938e7d6b317053288bf8f606974bbb8893e9d9d8411e9"

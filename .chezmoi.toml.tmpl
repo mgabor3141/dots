@@ -3,8 +3,8 @@ managed = {{ promptBoolOnce . "managed" "managed device" }}
 headless = {{ promptBoolOnce . "headless" "headless server" }}
 
 [diff]
-command = "difft"
-args = ["--background", "light"]
+command = "rtk"
+args = ["diff"]
 exclude = ["scripts"]
 
 [data.git]
