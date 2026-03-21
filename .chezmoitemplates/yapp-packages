@@ -1,0 +1,73 @@
+{{- /*
+yapp-packages: resolve yapp packages to local paths or npm references.
+
+For each package, checks if the local dev repo exists at
+~/dev/yapp/packages/<name-without-pi-prefix>/, compares its version
+against the published npm version, and uses whichever is newer.
+
+All npm lookups are batched into a single shell invocation.
+
+Args (dict):
+  - names: list of npm package names (e.g. list "pi-enclave" "pi-bash-trim")
+
+Returns: comma-separated quoted JSON values, one per line with 4-space indent,
+  suitable for embedding in a JSON array. No trailing comma.
+*/ -}}
+
+{{- $names := .names -}}
+{{- $homeDir := .chezmoi.homeDir -}}
+
+{{- /* Batch npm version lookup: one shell call for all packages */ -}}
+{{- $npmScript := "set -e" -}}
+{{- range $names -}}
+  {{- $npmScript = printf "%s\nv=$(npm view %s version 2>/dev/null || true); printf '%s=%s\\n' '%s' \"$v\"" $npmScript . "%s" "%s" . -}}
+{{- end -}}
+{{- $npmRaw := output "bash" "-c" $npmScript -}}
+
+{{- /* Parse npm output into a map */ -}}
+{{- $npmVersions := dict -}}
+{{- range splitList "\n" $npmRaw -}}
+  {{- if contains "=" . -}}
+    {{- $parts := splitList "=" . -}}
+    {{- $_ := set $npmVersions (index $parts 0) (index $parts 1) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Resolve each package */ -}}
+{{- $results := list -}}
+{{- range $names -}}
+  {{- $name := . -}}
+  {{- $dir := trimPrefix "pi-" $name -}}
+  {{- $localDir := joinPath $homeDir "dev/yapp/packages" $dir -}}
+  {{- $localPkg := joinPath $localDir "package.json" -}}
+
+  {{- $hasLocal := false -}}
+  {{- $localVersion := "" -}}
+  {{- if stat $localPkg -}}
+    {{- $hasLocal = true -}}
+    {{- $localVersion = (include $localPkg | fromJson | dig "version" "0.0.0") -}}
+  {{- end -}}
+
+  {{- $npmVersion := get $npmVersions $name | default "" -}}
+
+  {{- if and $hasLocal (eq $npmVersion "") -}}
+    {{- $results = append $results $localDir -}}
+  {{- else if and (not $hasLocal) (ne $npmVersion "") -}}
+    {{- $results = append $results (printf "npm:%s" $name) -}}
+  {{- else if and $hasLocal (ne $npmVersion "") -}}
+    {{- if semverCompare (printf ">%s" $npmVersion) $localVersion -}}
+      {{- $results = append $results $localDir -}}
+    {{- else -}}
+      {{- $results = append $results (printf "npm:%s" $name) -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $results = append $results (printf "npm:%s" $name) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Output as JSON array entries */ -}}
+{{- $last := sub (len $results) 1 -}}
+{{- range $i, $val := $results -}}
+{{- "\n    " }}"{{ $val }}"
+{{- if ne $i $last }},{{ end -}}
+{{- end -}}

@@ -12,13 +12,10 @@
     "npm:@tmustier/pi-ralph-wiggum",
     "npm:pi-rtk",
     "npm:@cegersdo/pi-ptc",
-    "npm:pi-bash-trim",
-    "npm:pi-desktop-notify",
     "npm:pi-skills-sh",
     "npm:pi-github",
     "npm:pi-annotated-reply",
-    "npm:pi-anycopy",
-    "/*# .chezmoi.homeDir *//dev/yapp/packages/enclave"
+    "npm:pi-anycopy",/*# includeTemplate "yapp-packages" (dict "names" (list "pi-bash-trim" "pi-desktop-notify" "pi-enclave") "chezmoi" .chezmoi) */
   ],
   "terminal": {
     "clearOnShrink": true
