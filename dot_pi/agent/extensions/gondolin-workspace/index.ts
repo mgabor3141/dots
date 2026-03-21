@@ -38,25 +38,23 @@ const GUEST_WORKSPACE = "/workspace";
 // ── Grove detection ─────────────────────────────────────────────────
 
 /**
- * Find the grove root by checking cwd for .grove.toml, then deriving
- * from the .pi symlink (which always points to the grove root's .pi/).
+ * Find the grove root by walking up from cwd looking for .grove.toml.
+ *
+ * Handles three cases:
+ *   1. Running from the grove root itself
+ *   2. Running from a workspace (.workspaces/<name>/)
+ *   3. Running from inside a repo within a workspace
+ *
  * Returns null if not inside a grove.
  */
 function findGroveRoot(cwd: string): string | null {
-  // Direct: running from grove root
-  if (fs.existsSync(path.join(cwd, ".grove.toml"))) return cwd;
-
-  // Workspace: .pi is a symlink to <grove-root>/.pi
-  const piDir = path.join(cwd, ".pi");
-  try {
-    const resolved = fs.realpathSync(piDir);
-    const candidate = path.dirname(resolved);
-    if (fs.existsSync(path.join(candidate, ".grove.toml"))) return candidate;
-  } catch {
-    // .pi doesn't exist or isn't a symlink
+  let dir = cwd;
+  while (true) {
+    if (fs.existsSync(path.join(dir, ".grove.toml"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
   }
-
-  return null;
 }
 
 // ── Config parsing ──────────────────────────────────────────────────

@@ -33,6 +33,11 @@ from pathlib import Path
 MOON_CONFIG = "moon.yml"
 
 
+def has_moon() -> bool:
+    """Check if moon is available on PATH."""
+    return shutil.which("moon") is not None
+
+
 def die(msg: str) -> None:
     print(f"error: {msg}", file=sys.stderr)
     sys.exit(1)
@@ -339,9 +344,17 @@ def _sync_moon_dir(moon_src: Path, moon_dst: Path) -> None:
 # ── Workspace operations ────────────────────────────────────────────
 
 
-def init_grove() -> None:
-    """Mark current directory as a grove root."""
-    cwd = Path.cwd()
+def init_grove(name: str | None = None) -> None:
+    """Initialize a grove. Creates a subdirectory if name is given."""
+    if name:
+        err = validate_name(name)
+        if err:
+            die(err)
+        cwd = Path.cwd() / name
+        cwd.mkdir(parents=True, exist_ok=True)
+    else:
+        cwd = Path.cwd()
+
     grove_file = cwd / ".grove.toml"
 
     if grove_file.exists():
@@ -350,11 +363,40 @@ def init_grove() -> None:
 
     repos = find_repos(cwd)
     grove_file.write_text(
+        "# Grove configuration\n"
+        "# https://github.com/gmuxapp/grove\n"
+        "\n"
+        "# ── Moon tasks ───────────────────────────────────────────────\n"
+        "# Tasks are written into each repo's moon.yml and run with moon.\n"
+        "# Requires: moon (https://moonrepo.dev)\n"
+        "\n"
         "[tasks]\n"
         '# install = "ni"\n'
         '# lint = "ni run lint"\n'
         '# test = "ni run test"\n'
         '# build = "ni run build"\n'
+        "\n"
+        "# ── Sandbox ──────────────────────────────────────────────────\n"
+        "# Run pi agents inside a Gondolin micro-VM.\n"
+        "# Requires: qemu-system-aarch64\n"
+        "\n"
+        "# [sandbox]\n"
+        '# packages = ["git", "github-cli", "jq"]\n'
+        "\n"
+        "# [sandbox.secrets]\n"
+        "# # Values come from host env vars. The VM sees a placeholder;\n"
+        "# # Gondolin replaces it on the wire only for the listed hosts.\n"
+        '# GH_TOKEN = ["api.github.com", "github.com"]\n'
+        "\n"
+        "# [sandbox.network]\n"
+        '# allow-hosts = ["api.github.com", "github.com", "*.githubusercontent.com"]\n'
+        "\n"
+        "# [sandbox.policy.api-github-com]\n"
+        "# # Section name = hostname with dots replaced by dashes.\n"
+        "# # Methods list allowed path patterns. Unmatched requests prompt the user.\n"
+        '# GET = ["*"]\n'
+        '# POST = ["/graphql", "/repos/*/*/pulls"]\n'
+        '# deny = ["/repos/*/*/pulls/*/merge"]\n'
     )
     (cwd / ".workspaces").mkdir(exist_ok=True)
 
@@ -408,13 +450,16 @@ def add_repo(grove_root: Path, url: str, name: str | None,
 
     # Run install task if available
     if not no_moon and "install" in tasks:
-        print(f"\n  Running install in {name}...")
-        result = subprocess.run(
-            ["moon", "run", f"{name}:install"],
-            cwd=grove_root,
-        )
-        if result.returncode != 0:
-            print(f"  warning: install failed for {name}", file=sys.stderr)
+        if has_moon():
+            print(f"\n  Running install in {name}...")
+            result = subprocess.run(
+                ["moon", "run", f"{name}:install"],
+                cwd=grove_root,
+            )
+            if result.returncode != 0:
+                print(f"  warning: install failed for {name}", file=sys.stderr)
+        else:
+            print(f"  Skipping install (moon not found)")
 
     print(f"\nRepo added: {name}")
 
@@ -452,14 +497,19 @@ def create_workspace(grove_root: Path, name: str,
         print(f"  Opening in Zed...")
         subprocess.run(["zed", "-n", str(ws_dir)])
 
-    if not skip_install and (grove_root / ".moon").is_dir():
-        print(f"\n  Running moon run :install...\n")
-        result = subprocess.run(
-            ["moon", "run", ":install"],
-            cwd=ws_dir,
-        )
-        if result.returncode != 0:
-            print(f"  warning: install had failures", file=sys.stderr)
+    config = load_grove_config(grove_root)
+    tasks = get_tasks(config)
+    if not skip_install and "install" in tasks and (grove_root / ".moon").is_dir():
+        if has_moon():
+            print(f"\n  Running moon run :install...\n")
+            result = subprocess.run(
+                ["moon", "run", ":install"],
+                cwd=ws_dir,
+            )
+            if result.returncode != 0:
+                print(f"  warning: install had failures", file=sys.stderr)
+        else:
+            print(f"  Skipping install (moon not found)")
 
     print(f"\nWorkspace ready: {ws_dir}")
 
@@ -671,7 +721,9 @@ def parse_args() -> argparse.Namespace:
     )
     sub = parser.add_subparsers(dest="command", metavar="command")
 
-    sub.add_parser("init", help="Initialize current directory as a grove")
+    init_p = sub.add_parser("init", help="Initialize a new grove")
+    init_p.add_argument("name", nargs="?",
+                        help="Directory name (default: current directory)")
 
     add_p = sub.add_parser("add-repo", help="Clone a repo into the grove")
     add_p.add_argument("url", help="Git URL to clone")
@@ -710,7 +762,7 @@ def main() -> None:
         return
 
     if args.command == "init":
-        init_grove()
+        init_grove(args.name)
         return
 
     grove_root = find_grove_root()
