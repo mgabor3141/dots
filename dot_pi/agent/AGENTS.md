@@ -2,22 +2,13 @@
 
 **Precedence:** Repo/project AGENTS.md > this file > system prompt. When instructions conflict, the more specific source wins.
 
-## Defaults
-
-- **Pushing/PRs:** Always confirm before pushing, creating PRs, or posting comments externally.
-- **Testing:** After changes, run the project's test suite and lint scripts if they exist.
-
 ## Verify, Don't Assume
 
 When working on a service or system, don't stop at "it's running". Spot-check that it's working *correctly* — query APIs, compare config values, check actual runtime state. Flag discrepancies even if they're outside the immediate task scope.
 
 ## Writing Style
 
-Avoid overusing emdashes. They are a hallmark of "AI slop" and undermine credibility. Prefer commas, semicolons, colons, or separate sentences.
-
-## Summarizing Changes
-
-When summarizing what you've done, indicate the repository state: whether changes are uncommitted, committed, or pushed.
+Avoid overusing emdashes in files. They are an indicator of "AI slop" and undermine credibility. Prefer commas, semicolons, colons, or separate sentences.
 
 ## Maintaining AGENTS.md Files
 
