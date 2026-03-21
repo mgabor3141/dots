@@ -6,6 +6,10 @@
     "jq" `{ lastChangelogVersion, enabledModels, defaultProvider, defaultModel, hideThinkingBlock, defaultThinkingLevel, compaction }`
   ) */
   "packages": [
+    /*# includeTemplate "indent" (dict "n" 4 "text"
+      (includeTemplate "yapp-packages" (dict "names"
+        (list "pi-bash-trim" "pi-desktop-notify" "pi-enclave") "chezmoi" .chezmoi)))
+    */
     "npm:@aliou/pi-processes",
     "npm:pi-librarian",
     "npm:pi-brave-search",
@@ -15,7 +19,7 @@
     "npm:pi-skills-sh",
     "npm:pi-github",
     "npm:pi-annotated-reply",
-    "npm:pi-anycopy",/*# includeTemplate "yapp-packages" (dict "names" (list "pi-bash-trim" "pi-desktop-notify" "pi-enclave") "chezmoi" .chezmoi) */
+    "npm:pi-anycopy"
   ],
   "terminal": {
     "clearOnShrink": true

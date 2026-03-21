@@ -1,0 +1,19 @@
+{{- /*
+indent: prefix each non-empty line of text with n spaces.
+The first line is emitted as-is (it inherits context indentation).
+
+Args (dict):
+  - text: string to indent
+  - n:    number of spaces (default 2)
+*/ -}}
+
+{{- $n := .n | default 2 -}}
+{{- $pad := repeat $n " " -}}
+{{- range $i, $line := splitList "\n" .text -}}
+  {{- if $i }}{{ "\n" }}{{ end -}}
+  {{- if eq $i 0 -}}
+    {{ $line }}
+  {{- else if ne $line "" -}}
+    {{ $pad }}{{ $line }}
+  {{- end -}}
+{{- end -}}

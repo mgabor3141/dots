@@ -10,8 +10,8 @@ All npm lookups are batched into a single shell invocation.
 Args (dict):
   - names: list of npm package names (e.g. list "pi-enclave" "pi-bash-trim")
 
-Returns: comma-separated quoted JSON values, one per line with 4-space indent,
-  suitable for embedding in a JSON array. No trailing comma.
+Returns: comma-separated quoted JSON values, one per line without indentation,
+  with trailing comma. Wrap with the "indent" template for indentation.
 */ -}}
 
 {{- $names := .names -}}
@@ -65,9 +65,8 @@ Returns: comma-separated quoted JSON values, one per line with 4-space indent,
   {{- end -}}
 {{- end -}}
 
-{{- /* Output as JSON array entries */ -}}
-{{- $last := sub (len $results) 1 -}}
+{{- /* Output as JSON array entries with trailing comma */ -}}
 {{- range $i, $val := $results -}}
-{{- "\n    " }}"{{ $val }}"
-{{- if ne $i $last }},{{ end -}}
+  {{- if $i }}{{ "\n" }}{{ end -}}
+  "{{ $val }}",
 {{- end -}}
