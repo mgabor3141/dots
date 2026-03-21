@@ -9,7 +9,10 @@
     /*# includeTemplate "indent" (dict "n" 4 "text"
       (includeTemplate "yapp-packages" (dict "names"
         (list "pi-bash-trim" "pi-desktop-notify" "pi-enclave") "chezmoi" .chezmoi)))
-    */
+    -*/
+    /*#- if stat (joinPath .chezmoi.homeDir "dev/yapp/packages/jj/package.json") */
+    /*# joinPath .chezmoi.homeDir "dev/yapp/packages/jj" | printf `"%s",` */
+    /*# end -*/
     "npm:@aliou/pi-processes",
     "npm:pi-librarian",
     "npm:pi-brave-search",
