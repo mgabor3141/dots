@@ -3,8 +3,7 @@ managed = {{ promptBoolOnce . "managed" "managed device" }}
 headless = {{ promptBoolOnce . "headless" "headless server" }}
 
 [diff]
-command = "rtk"
-args = ["diff"]
+command = "{{ .chezmoi.sourceDir }}/.helpers/chezmoi-diff"
 exclude = ["scripts"]
 
 [data.git]

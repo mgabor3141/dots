@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+# Chezmoi diff dispatcher: difft for interactive terminals, rtk for pipes/CI.
+if [ -t 1 ]; then
+    exec difft --background light "$@"
+else
+    exec rtk diff "$@"
+fi
