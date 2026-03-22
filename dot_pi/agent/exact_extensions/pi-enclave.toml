@@ -1,0 +1,16 @@
+# pi-enclave global configuration
+# See: https://github.com/mgabor3141/yapp/tree/main/packages/enclave
+
+# Default for projects without their own .pi/enclave.toml:
+# enabled = false
+
+# Alpine packages to install in the VM:
+packages = ["git", "curl", "jq", "github-cli", "jujutsu"]
+
+# Service policies live in pi-enclave.d/ as drop-in files.
+# See pi-enclave.d/github.toml for an example.
+
+# Additional secrets:
+# [secrets.OPENAI_API_KEY]
+# env = "OPENAI_API_KEY"
+# hosts = ["api.openai.com"]
