@@ -51,4 +51,9 @@
     "command": "chezmoi re-add --source-path $ZED_FILE",
     "show_command": false,
   },
+  {
+    "label": "push to main",
+    "command": "jj b s -r @- main && jj gp",
+    "hide": "on_success",
+  },
 ]
