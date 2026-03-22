@@ -437,7 +437,7 @@ def create_workspace(project_root: Path, name: str,
         print(f"  Opening in {editor[0]}...")
         subprocess.run([*editor, str(ws_dir)])
 
-    print(f"\nWorkspace ready: {ws_dir}")
+    print(f"\nWorkspace ready: {GROVE_DIR}/{name}")
 
 
 def sync_all_workspaces(project_root: Path) -> None:
@@ -505,6 +505,38 @@ def delete_workspace(project_root: Path, name: str | None,
     print(f"Deleted workspace: {ws_name}")
 
 
+def _collect_workspace_info(project_root: Path, repos: list[Path],
+                           ws_name: str) -> dict:
+    """Collect aggregated info for a workspace across all repos."""
+    is_single_repo = len(repos) == 1 and repos[0] == project_root
+
+    if is_single_repo:
+        return jj_workspace_info(project_root, ws_name)
+
+    total_commits = 0
+    total_ins = 0
+    total_dels = 0
+    best_desc = ""
+    best_desc_len = 0
+
+    for repo_dir in repos:
+        jj_ws_name = f"{ws_name}-{repo_dir.name}"
+        info = jj_workspace_info(repo_dir, jj_ws_name)
+        total_commits += info["commits_ahead"]
+        total_ins += info["insertions"]
+        total_dels += info["deletions"]
+        if len(info["description"]) > best_desc_len:
+            best_desc = info["description"]
+            best_desc_len = len(info["description"])
+
+    return {
+        "commits_ahead": total_commits,
+        "insertions": total_ins,
+        "deletions": total_dels,
+        "description": best_desc,
+    }
+
+
 def list_workspaces(project_root: Path) -> None:
     """List workspaces with status info."""
     grove_dir = project_root / GROVE_DIR
@@ -515,44 +547,26 @@ def list_workspaces(project_root: Path) -> None:
         return
 
     repos = find_repos(project_root)
-    is_single_repo = len(repos) == 1 and repos[0] == project_root
+    cur = current_workspace_name(project_root)
 
     for ws in workspaces:
-        ws_name = ws.name
-
-        if is_single_repo:
-            # Single repo: query directly
-            info = jj_workspace_info(project_root, ws_name)
-            _print_workspace_line(ws_name, info)
-        else:
-            # Multi repo: aggregate across repos
-            total_commits = 0
-            total_ins = 0
-            total_dels = 0
-            best_desc = ""
-            best_desc_len = 0
-
-            for repo_dir in repos:
-                repo_name = repo_dir.name
-                jj_ws_name = f"{ws_name}-{repo_name}"
-                info = jj_workspace_info(repo_dir, jj_ws_name)
-                total_commits += info["commits_ahead"]
-                total_ins += info["insertions"]
-                total_dels += info["deletions"]
-                if len(info["description"]) > best_desc_len:
-                    best_desc = info["description"]
-                    best_desc_len = len(info["description"])
-
-            combined = {
-                "commits_ahead": total_commits,
-                "insertions": total_ins,
-                "deletions": total_dels,
-                "description": best_desc,
-            }
-            _print_workspace_line(ws_name, combined)
+        info = _collect_workspace_info(project_root, repos, ws.name)
+        _print_workspace_line(ws.name, info, current=(ws.name == cur))
 
 
-def _print_workspace_line(name: str, info: dict) -> None:
+def current_workspace_name(project_root: Path) -> str | None:
+    """Return the name of the workspace we're currently inside, or None."""
+    cwd = Path.cwd().resolve()
+    grove_dir = (project_root / GROVE_DIR).resolve()
+    try:
+        rel = cwd.relative_to(grove_dir)
+        return rel.parts[0] if rel.parts else None
+    except ValueError:
+        return None
+
+
+def _print_workspace_line(name: str, info: dict,
+                          current: bool = False) -> None:
     """Format and print a single workspace line."""
     parts = []
 
@@ -573,10 +587,11 @@ def _print_workspace_line(name: str, info: dict) -> None:
     status = ", ".join(parts) if parts else "clean"
     desc = info.get("description", "")
 
+    marker = "▸ " if current else "  "
     if desc:
-        print(f"  {name:<16s} {status:<28s} {desc}")
+        print(f"{marker}{name:<16s} {status:<28s} {desc}")
     else:
-        print(f"  {name:<16s} {status}")
+        print(f"{marker}{name:<16s} {status}")
 
 
 # ── Status ───────────────────────────────────────────────────────────
@@ -618,35 +633,10 @@ def grove_status(project_root: Path | None) -> None:
     workspaces = find_workspaces(grove_dir) if grove_dir.exists() else []
     print(f"\nWorkspaces: {len(workspaces)}")
     if workspaces:
-        # Reuse list_workspaces logic
-        is_single_repo = len(repos) == 1 and repos[0] == project_root
+        cur = current_workspace_name(project_root)
         for ws in workspaces:
-            ws_name = ws.name
-            if is_single_repo:
-                info = jj_workspace_info(project_root, ws_name)
-                _print_workspace_line(ws_name, info)
-            else:
-                total_commits = 0
-                total_ins = 0
-                total_dels = 0
-                best_desc = ""
-                best_desc_len = 0
-                for repo_dir in repos:
-                    jj_ws_name = f"{ws_name}-{repo_dir.name}"
-                    info = jj_workspace_info(repo_dir, jj_ws_name)
-                    total_commits += info["commits_ahead"]
-                    total_ins += info["insertions"]
-                    total_dels += info["deletions"]
-                    if len(info["description"]) > best_desc_len:
-                        best_desc = info["description"]
-                        best_desc_len = len(info["description"])
-                combined = {
-                    "commits_ahead": total_commits,
-                    "insertions": total_ins,
-                    "deletions": total_dels,
-                    "description": best_desc,
-                }
-                _print_workspace_line(ws_name, combined)
+            info = _collect_workspace_info(project_root, repos, ws.name)
+            _print_workspace_line(ws.name, info, current=(ws.name == cur))
 
 
 def _print_repo_status(repos: list[Path], project_root: Path) -> None:
