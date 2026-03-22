@@ -105,11 +105,14 @@ def write_default_config(grove_dir: Path) -> None:
 # ── Project detection ────────────────────────────────────────────────
 
 
-def find_project_root(start: Path | None = None) -> Path:
+def find_project_root(start: Path | None = None,
+                      allow_create: bool = False,
+                      auto_confirm: bool = False) -> Path:
     """Walk up from start looking for .grove/ or a .jj/ directory.
 
     If .grove/ is found, the project root is its parent.
-    Otherwise, the nearest directory containing .jj/ is the root.
+    If only a jj repo is found and allow_create is True, prompts
+    the user to confirm before using it as the project root.
     """
     d = (start or Path.cwd()).resolve()
     # First: check if we're inside a workspace (.grove/<name>/...)
@@ -121,35 +124,49 @@ def find_project_root(start: Path | None = None) -> Path:
             if (candidate / GROVE_DIR).is_dir():
                 return candidate
 
-    # Walk up looking for .grove/, .jj/, or a directory containing child repos
-    best_jj = None
-    best_multi = None
+    # Walk up looking for .grove/ (established grove)
     d = (start or Path.cwd()).resolve()
     while True:
         if (d / GROVE_DIR).is_dir():
             return d
-        if (d / ".jj").is_dir() and best_jj is None:
-            best_jj = d
-        # Check for child repos (multi-repo root)
-        if best_multi is None:
-            child_repos = sum(
-                1 for sub in d.iterdir()
-                if sub.is_dir() and not sub.name.startswith(".")
-                and (sub / ".jj").is_dir()
-            ) if d.is_dir() else 0
-            if child_repos >= 2:
-                best_multi = d
         parent = d.parent
         if parent == d:
             break
         d = parent
 
-    if best_jj:
-        return best_jj
-    if best_multi:
-        return best_multi
+    if not allow_create:
+        die("not inside a grove (no .grove/ found)\n"
+            "  Run 'grove create <name>' from a project directory to get started.")
 
-    die("not inside a project (no .jj/ or .grove/ found)")
+    # No .grove/ found. Look for a project root candidate (jj repo).
+    cwd = (start or Path.cwd()).resolve()
+    if (cwd / ".jj").is_dir():
+        candidate = cwd
+    else:
+        # Check for child repos
+        child_repos = [
+            sub for sub in cwd.iterdir()
+            if sub.is_dir() and not sub.name.startswith(".")
+            and (sub / ".jj").is_dir()
+        ]
+        if child_repos:
+            candidate = cwd
+        else:
+            die("no jj repos found in current directory")
+
+    repos = find_repos(candidate)
+    repo_desc = ", ".join(
+        r.name if r != candidate else candidate.name for r in repos
+    )
+    if not auto_confirm:
+        print(f"No .grove/ found. Initialize grove in {candidate}?")
+        print(f"  Repos: {repo_desc}")
+        confirm = input("  Continue? [y/N] ").strip()
+        if confirm.lower() != "y":
+            print("Cancelled.")
+            sys.exit(0)
+
+    return candidate
 
 
 def find_repos(project_root: Path) -> list[Path]:
@@ -545,6 +562,8 @@ def parse_args() -> argparse.Namespace:
     create_p.add_argument("name", help="Workspace name")
     create_p.add_argument("--no-zed", action="store_true",
                           help="Don't open in Zed")
+    create_p.add_argument("-y", "--yes", action="store_true",
+                          help="Skip confirmation when initializing .grove/")
 
     sync_p = sub.add_parser("sync", help="Re-sync symlinks")
     sync_p.add_argument("name", nargs="?",
@@ -569,7 +588,11 @@ def main() -> None:
         parse_args()
         return
 
-    project_root = find_project_root()
+    allow_create = args.command == "create"
+    project_root = find_project_root(
+        allow_create=allow_create,
+        auto_confirm=getattr(args, "yes", False),
+    )
 
     if args.command == "create":
         err = validate_name(args.name)
