@@ -50,13 +50,20 @@ Returns: comma-separated quoted JSON values, one per line without indentation,
 
   {{- $npmVersion := get $npmVersions $name | default "" -}}
 
+  {{- /* Local dev: point at src/index.ts for jiti loading if it exists */ -}}
+  {{- $srcEntry := joinPath $localDir "src/index.ts" -}}
+  {{- $localEntry := $localDir -}}
+  {{- if stat $srcEntry -}}
+    {{- $localEntry = $srcEntry -}}
+  {{- end -}}
+
   {{- if and $hasLocal (eq $npmVersion "") -}}
-    {{- $results = append $results $localDir -}}
+    {{- $results = append $results $localEntry -}}
   {{- else if and (not $hasLocal) (ne $npmVersion "") -}}
     {{- $results = append $results (printf "npm:%s" $name) -}}
   {{- else if and $hasLocal (ne $npmVersion "") -}}
     {{- if semverCompare (printf ">%s" $npmVersion) $localVersion -}}
-      {{- $results = append $results $localDir -}}
+      {{- $results = append $results $localEntry -}}
     {{- else -}}
       {{- $results = append $results (printf "npm:%s" $name) -}}
     {{- end -}}
