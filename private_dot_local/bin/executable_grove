@@ -13,14 +13,15 @@ Configuration lives in .grove/grove.toml (optional):
 
 Usage:
     grove new [name]                Create a new workspace (random tree name if omitted)
-    grove sync [name]               Re-sync symlinks
+    grove sync                      Re-sync symlinks for all workspaces
     grove delete [name]             Delete a workspace
-    grove list                      List workspaces
-    grove status                    Show status across repos and workspaces
-    grove review [path]             Browse commits across repos (TUI)
+    grove list (ls)                 List workspaces with status
+    grove status                    Show project and repo overview
 """
 
 import argparse
+import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -67,7 +68,6 @@ def load_config(grove_dir: Path) -> dict:
             k, v = line.split("=", 1)
             k = k.strip()
             v = v.strip()
-            # Parse arrays
             if v.startswith("["):
                 items = v[1:-1].split(",")
                 section[k] = [
@@ -112,12 +112,14 @@ def write_default_config(grove_dir: Path) -> None:
 
 def find_project_root(start: Path | None = None,
                       allow_create: bool = False,
-                      auto_confirm: bool = False) -> Path:
+                      auto_confirm: bool = False,
+                      optional: bool = False) -> Path | None:
     """Walk up from start looking for .grove/ or a .jj/ directory.
 
     If .grove/ is found, the project root is its parent.
     If only a jj repo is found and allow_create is True, prompts
     the user to confirm before using it as the project root.
+    If optional is True, returns None instead of dying when not found.
     """
     d = (start or Path.cwd()).resolve()
     # First: check if we're inside a workspace (.grove/<name>/...)
@@ -139,16 +141,18 @@ def find_project_root(start: Path | None = None,
             break
         d = parent
 
+    if optional:
+        return None
+
     if not allow_create:
         die("not inside a grove (no .grove/ found)\n"
-            "  Run 'grove create <name>' from a project directory to get started.")
+            "  Run 'grove new' from a project directory to get started.")
 
     # No .grove/ found. Look for a project root candidate (jj repo).
     cwd = (start or Path.cwd()).resolve()
     if (cwd / ".jj").is_dir():
         candidate = cwd
     else:
-        # Check for child repos
         child_repos = [
             sub for sub in cwd.iterdir()
             if sub.is_dir() and not sub.name.startswith(".")
@@ -180,17 +184,29 @@ def find_repos(project_root: Path) -> list[Path]:
     Checks the project root itself and its immediate children.
     """
     repos = []
-
-    # Root itself might be a repo
     if (project_root / ".jj").is_dir():
         repos.append(project_root)
-
-    # Child directories
     for d in sorted(project_root.iterdir()):
         if d.is_dir() and not d.name.startswith(".") and (d / ".jj").is_dir():
             repos.append(d)
-
     return repos
+
+
+def find_workspaces(grove_dir: Path) -> list[Path]:
+    """Find all workspace directories inside .grove/."""
+    if not grove_dir.exists():
+        return []
+    return sorted(
+        d for d in grove_dir.iterdir()
+        if d.is_dir() and not d.name.startswith(".")
+        and (
+            (d / ".jj").is_dir()
+            or any(
+                sub.is_dir() and (sub / ".jj").is_dir()
+                for sub in d.iterdir() if sub.is_dir()
+            )
+        )
+    )
 
 
 def resolve_workspace(project_root: Path, name: str | None) -> Path:
@@ -203,7 +219,6 @@ def resolve_workspace(project_root: Path, name: str | None) -> Path:
     cwd = Path.cwd().resolve()
     grove_resolved = grove_dir.resolve()
 
-    # Check if cwd is inside a workspace
     try:
         rel = cwd.relative_to(grove_resolved)
         ws_name = rel.parts[0] if rel.parts else None
@@ -215,7 +230,7 @@ def resolve_workspace(project_root: Path, name: str | None) -> Path:
     die("not inside a workspace; pass a name or cd into one")
 
 
-# ── jj auto-track ───────────────────────────────────────────────────
+# ── jj helpers ───────────────────────────────────────────────────────
 
 
 def jj_exclude_grove(repo_dir: Path) -> None:
@@ -235,17 +250,68 @@ def jj_exclude_grove(repo_dir: Path) -> None:
     else:
         new_value = f'{current} & ~glob:"{pattern}"'
 
-    # jj config set expects TOML value; the value itself is a quoted string
     escaped = new_value.replace('"', '\\"')
     run(["jj", "config", "set", "--repo",
          "snapshot.auto-track", f'"{escaped}"'],
         cwd=repo_dir)
 
-    # Untrack any already-tracked .grove files
     subprocess.run(
         ["jj", "file", "untrack", GROVE_DIR],
         cwd=repo_dir, capture_output=True, text=True,
     )
+
+
+def jj_workspace_info(repo_dir: Path, ws_name: str) -> dict:
+    """Get workspace info: commits ahead of trunk, diff stats, best description."""
+    info: dict = {"commits_ahead": 0, "insertions": 0, "deletions": 0,
+                  "description": ""}
+
+    # Get commits ahead of trunk with descriptions and diff stats
+    result = subprocess.run(
+        ["jj", "log", "--no-pager", "--ignore-working-copy",
+         "-r", f"trunk()..{ws_name}@",
+         "--no-graph",
+         "-T", 'separate("\t", change_id.shortest(), description.first_line()) ++ "\n"'],
+        cwd=repo_dir, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return info
+
+    commits = []
+    for line in result.stdout.strip().split("\n"):
+        if not line.strip():
+            continue
+        parts = line.split("\t", 1)
+        short_id = parts[0].strip()
+        desc = parts[1].strip() if len(parts) > 1 else ""
+        if desc:
+            commits.append({"short_id": short_id, "description": desc})
+
+    info["commits_ahead"] = len(commits)
+
+    # Get total diff stats for trunk..workspace
+    result = subprocess.run(
+        ["jj", "diff", "--no-pager", "--ignore-working-copy",
+         "-r", f"trunk()..{ws_name}@", "--stat"],
+        cwd=repo_dir, capture_output=True, text=True,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        # Last line is summary: "N files changed, X insertions(+), Y deletions(-)"
+        lines = result.stdout.strip().split("\n")
+        summary = lines[-1] if lines else ""
+        if "insertion" in summary or "deletion" in summary:
+            import re
+            ins = re.search(r"(\d+) insertion", summary)
+            dels = re.search(r"(\d+) deletion", summary)
+            info["insertions"] = int(ins.group(1)) if ins else 0
+            info["deletions"] = int(dels.group(1)) if dels else 0
+
+    # Find the commit with the longest description (most meaningful)
+    if commits:
+        best = max(commits, key=lambda c: len(c["description"]))
+        info["description"] = best["description"]
+
+    return info
 
 
 # ── Symlinking ───────────────────────────────────────────────────────
@@ -262,7 +328,7 @@ def sync_symlinks(project_root: Path, workspace_dir: Path,
         target = workspace_dir / item_name
 
         if not source.exists():
-            print(f"  warning: sync item not found: {item_name}")
+            print(f"    warning: sync item not found: {item_name}")
             continue
 
         _ensure_symlink(target, source)
@@ -278,10 +344,8 @@ def sync_symlinks(project_root: Path, workspace_dir: Path,
         except (ValueError, OSError):
             continue
         if not link_target.exists():
-            print(f"  Removing stale symlink: {item.name}")
+            print(f"    Removing stale symlink: {item.name}")
             item.unlink()
-
-    print(f"  Synced symlinks ({len(sync_list)} items)")
 
 
 def _ensure_symlink(link_path: Path, target: Path) -> None:
@@ -292,7 +356,7 @@ def _ensure_symlink(link_path: Path, target: Path) -> None:
             return
         link_path.unlink()
     elif link_path.exists():
-        print(f"  warning: {link_path.name} exists and is not a symlink, skipping")
+        print(f"    warning: {link_path.name} exists and is not a symlink, skipping")
         return
     link_path.parent.mkdir(parents=True, exist_ok=True)
     link_path.symlink_to(resolved)
@@ -309,7 +373,6 @@ def ensure_grove_dir(project_root: Path) -> Path:
     write_default_config(grove_dir)
 
     if created:
-        # Set up jj auto-track exclusion for each repo
         for repo in find_repos(project_root):
             jj_exclude_grove(repo)
         print(f"  Created {GROVE_DIR}/ (excluded from jj tracking)")
@@ -319,8 +382,6 @@ def ensure_grove_dir(project_root: Path) -> Path:
 
 def get_editor() -> list[str] | None:
     """Get the editor command from $VISUAL or $EDITOR."""
-    import os
-    import shlex
     for var in ("VISUAL", "EDITOR"):
         val = os.environ.get(var)
         if val:
@@ -379,8 +440,8 @@ def create_workspace(project_root: Path, name: str,
     print(f"\nWorkspace ready: {ws_dir}")
 
 
-def sync_workspace(project_root: Path, name: str | None) -> None:
-    """Re-sync symlinks for a workspace."""
+def sync_all_workspaces(project_root: Path) -> None:
+    """Re-sync symlinks for all workspaces."""
     grove_dir = project_root / GROVE_DIR
     config = load_config(grove_dir)
     sync_list = get_sync_list(config)
@@ -390,22 +451,27 @@ def sync_workspace(project_root: Path, name: str | None) -> None:
         print(f"  Hint: add sync = [\".pi\", \".envrc\"] to {GROVE_DIR}/{GROVE_CONFIG}")
         return
 
-    ws_dir = resolve_workspace(project_root, name)
-    if not ws_dir.exists():
-        die(f"workspace not found: {ws_dir}")
+    workspaces = find_workspaces(grove_dir)
+    if not workspaces:
+        print("No workspaces to sync.")
+        return
 
-    print(f"Syncing workspace: {ws_dir.name}\n")
-    sync_symlinks(project_root, ws_dir, sync_list)
+    print(f"Syncing {len(workspaces)} workspace{'s' if len(workspaces) != 1 else ''}...\n")
+    for ws_dir in workspaces:
+        print(f"  {ws_dir.name}:")
+        sync_symlinks(project_root, ws_dir, sync_list)
+    print(f"\nDone.")
 
 
-def delete_workspace(project_root: Path, name: str | None) -> None:
+def delete_workspace(project_root: Path, name: str | None,
+                     force: bool = False) -> None:
     """Delete a workspace."""
     ws_dir = resolve_workspace(project_root, name)
 
     if not ws_dir.exists():
         die(f"workspace not found: {ws_dir}")
 
-    if not name:
+    if not force:
         confirm = input(f"Delete workspace {ws_dir.name}? [y/N] ").strip()
         if confirm.lower() != "y":
             print("Cancelled.")
@@ -440,50 +506,102 @@ def delete_workspace(project_root: Path, name: str | None) -> None:
 
 
 def list_workspaces(project_root: Path) -> None:
-    """List workspaces."""
+    """List workspaces with status info."""
     grove_dir = project_root / GROVE_DIR
-    if not grove_dir.exists():
-        print("No workspaces. Run 'grove create <name>' to get started.")
-        return
-
-    workspaces = sorted(
-        d for d in grove_dir.iterdir()
-        if d.is_dir() and d.name != GROVE_CONFIG and not d.name.startswith(".")
-    )
-    # Filter out non-workspace entries (like config files)
-    workspaces = [
-        d for d in workspaces
-        if (d / ".jj").is_dir() or any(
-            sub.is_dir() and (sub / ".jj").is_dir()
-            for sub in d.iterdir() if sub.is_dir()
-        )
-    ]
+    workspaces = find_workspaces(grove_dir)
 
     if not workspaces:
-        print("No workspaces. Run 'grove create <name>' to get started.")
+        print("No workspaces. Run 'grove new' to get started.")
         return
 
+    repos = find_repos(project_root)
+    is_single_repo = len(repos) == 1 and repos[0] == project_root
+
     for ws in workspaces:
-        # Check for repos inside the workspace
-        sub_repos = [
-            d.name for d in sorted(ws.iterdir())
-            if d.is_dir() and not d.name.startswith(".")
-            and (d / ".jj").is_dir()
-        ]
-        if (ws / ".jj").is_dir():
-            # Single-repo workspace
-            print(f"  {ws.name}")
-        elif sub_repos:
-            print(f"  {ws.name}: {', '.join(sub_repos)}")
+        ws_name = ws.name
+
+        if is_single_repo:
+            # Single repo: query directly
+            info = jj_workspace_info(project_root, ws_name)
+            _print_workspace_line(ws_name, info)
         else:
-            print(f"  {ws.name}: (empty)")
+            # Multi repo: aggregate across repos
+            total_commits = 0
+            total_ins = 0
+            total_dels = 0
+            best_desc = ""
+            best_desc_len = 0
+
+            for repo_dir in repos:
+                repo_name = repo_dir.name
+                jj_ws_name = f"{ws_name}-{repo_name}"
+                info = jj_workspace_info(repo_dir, jj_ws_name)
+                total_commits += info["commits_ahead"]
+                total_ins += info["insertions"]
+                total_dels += info["deletions"]
+                if len(info["description"]) > best_desc_len:
+                    best_desc = info["description"]
+                    best_desc_len = len(info["description"])
+
+            combined = {
+                "commits_ahead": total_commits,
+                "insertions": total_ins,
+                "deletions": total_dels,
+                "description": best_desc,
+            }
+            _print_workspace_line(ws_name, combined)
+
+
+def _print_workspace_line(name: str, info: dict) -> None:
+    """Format and print a single workspace line."""
+    parts = []
+
+    commits = info["commits_ahead"]
+    if commits > 0:
+        parts.append(f"{commits} commit{'s' if commits != 1 else ''}")
+
+    ins = info["insertions"]
+    dels = info["deletions"]
+    if ins > 0 or dels > 0:
+        diff_parts = []
+        if ins > 0:
+            diff_parts.append(f"+{ins}")
+        if dels > 0:
+            diff_parts.append(f"-{dels}")
+        parts.append(" ".join(diff_parts))
+
+    status = ", ".join(parts) if parts else "clean"
+    desc = info.get("description", "")
+
+    if desc:
+        print(f"  {name:<16s} {status:<28s} {desc}")
+    else:
+        print(f"  {name:<16s} {status}")
 
 
 # ── Status ───────────────────────────────────────────────────────────
 
 
-def grove_status(project_root: Path) -> None:
-    """Show status across repos and workspaces."""
+def grove_status(project_root: Path | None) -> None:
+    """Show project and repo overview."""
+    if project_root is None:
+        # Try to find repos in cwd even without .grove/
+        cwd = Path.cwd().resolve()
+        repos = []
+        if (cwd / ".jj").is_dir():
+            repos.append(cwd)
+        for d in sorted(cwd.iterdir()):
+            if d.is_dir() and not d.name.startswith(".") and (d / ".jj").is_dir():
+                repos.append(d)
+
+        if not repos:
+            die("no jj repos found")
+
+        print(f"Project: {cwd}")
+        print(f"Grove: not initialized (run 'grove new' to get started)\n")
+        _print_repo_status(repos, cwd)
+        return
+
     repos = find_repos(project_root)
     grove_dir = project_root / GROVE_DIR
     config = load_config(grove_dir) if grove_dir.exists() else {}
@@ -494,13 +612,51 @@ def grove_status(project_root: Path) -> None:
         print(f"Sync: {', '.join(sync_list)}")
     print()
 
+    _print_repo_status(repos, project_root)
+
+    # Workspaces
+    workspaces = find_workspaces(grove_dir) if grove_dir.exists() else []
+    print(f"\nWorkspaces: {len(workspaces)}")
+    if workspaces:
+        # Reuse list_workspaces logic
+        is_single_repo = len(repos) == 1 and repos[0] == project_root
+        for ws in workspaces:
+            ws_name = ws.name
+            if is_single_repo:
+                info = jj_workspace_info(project_root, ws_name)
+                _print_workspace_line(ws_name, info)
+            else:
+                total_commits = 0
+                total_ins = 0
+                total_dels = 0
+                best_desc = ""
+                best_desc_len = 0
+                for repo_dir in repos:
+                    jj_ws_name = f"{ws_name}-{repo_dir.name}"
+                    info = jj_workspace_info(repo_dir, jj_ws_name)
+                    total_commits += info["commits_ahead"]
+                    total_ins += info["insertions"]
+                    total_dels += info["deletions"]
+                    if len(info["description"]) > best_desc_len:
+                        best_desc = info["description"]
+                        best_desc_len = len(info["description"])
+                combined = {
+                    "commits_ahead": total_commits,
+                    "insertions": total_ins,
+                    "deletions": total_dels,
+                    "description": best_desc,
+                }
+                _print_workspace_line(ws_name, combined)
+
+
+def _print_repo_status(repos: list[Path], project_root: Path) -> None:
+    """Print status lines for each repo."""
     print("Repos:")
     for repo_dir in repos:
         name = repo_dir.name if repo_dir != project_root else project_root.name
         colocated = (repo_dir / ".git").is_dir()
         tag = "colocated" if colocated else "jj-only"
 
-        # Working copy changes
         result = subprocess.run(
             ["jj", "diff", "--no-pager", "--ignore-working-copy",
              "--stat", "--summary"],
@@ -511,7 +667,6 @@ def grove_status(project_root: Path) -> None:
             lines = [l for l in result.stdout.strip().split("\n") if l.strip()]
             changed_files = len(lines)
 
-        # Commits ahead of trunk
         result = subprocess.run(
             ["jj", "log", "--no-pager", "--ignore-working-copy",
              "-r", "trunk()..@", "--no-graph",
@@ -541,31 +696,15 @@ def grove_status(project_root: Path) -> None:
 
         print("".join(parts))
 
-    # Workspaces
-    if grove_dir.exists():
-        workspaces = sorted(
-            d for d in grove_dir.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
-            and d.name != GROVE_CONFIG
-        )
-    else:
-        workspaces = []
-
-    print(f"\nWorkspaces: {len(workspaces)}")
-    for ws_dir in workspaces:
-        ws_name = ws_dir.name
-        print(f"  {ws_name}")
-
 
 # ── Name generation ──────────────────────────────────────────────────
 
+# One tree per letter of the alphabet (V and X have no good candidates).
 TREE_NAMES = [
-    "alder", "ash", "aspen", "beech", "birch", "cedar", "cherry",
-    "chestnut", "cypress", "elm", "fig", "fir", "hazel", "hemlock",
-    "hickory", "holly", "ivy", "juniper", "larch", "laurel", "linden",
-    "magnolia", "maple", "myrtle", "oak", "olive", "palm", "pine",
-    "poplar", "rowan", "spruce", "sumac", "sycamore", "teak", "walnut",
-    "willow", "yew",
+    "ash", "birch", "cedar", "dogwood", "elm", "fig", "ginkgo",
+    "hazel", "ironwood", "juniper", "kauri", "larch", "maple",
+    "nutmeg", "oak", "pine", "quince", "rowan", "spruce", "teak",
+    "upas", "willow", "yew", "zelkova",
 ]
 
 
@@ -579,7 +718,6 @@ def pick_workspace_name(grove_dir: Path) -> str:
 
     available = [n for n in TREE_NAMES if n not in existing]
     if not available:
-        # All tree names used, fall back to numbered
         i = 1
         while f"ws-{i}" in existing:
             i += 1
@@ -620,17 +758,19 @@ def parse_args() -> argparse.Namespace:
     new_p.add_argument("-y", "--yes", action="store_true",
                        help="Skip confirmation when initializing .grove/")
 
-    sync_p = sub.add_parser("sync", help="Re-sync symlinks")
-    sync_p.add_argument("name", nargs="?",
-                        help="Workspace name (default: auto-detect from cwd)")
+    sub.add_parser("sync", help="Re-sync symlinks for all workspaces")
 
-    del_p = sub.add_parser("delete", help="Delete a workspace")
+    del_p = sub.add_parser("delete", aliases=["rm"],
+                           help="Delete a workspace")
     del_p.add_argument("name", nargs="?",
                        help="Workspace name (or auto-detect from cwd)")
+    del_p.add_argument("-f", "--force", action="store_true",
+                       help="Skip confirmation")
 
-    sub.add_parser("list", help="List workspaces")
+    sub.add_parser("list", aliases=["ls"],
+                   help="List workspaces with status")
 
-    sub.add_parser("status", help="Show status across repos and workspaces")
+    sub.add_parser("status", help="Show project and repo overview")
 
     return parser.parse_args()
 
@@ -643,13 +783,11 @@ def main() -> None:
         parse_args()
         return
 
-    allow_create = args.command == "new"
-    project_root = find_project_root(
-        allow_create=allow_create,
-        auto_confirm=getattr(args, "yes", False),
-    )
-
     if args.command == "new":
+        project_root = find_project_root(
+            allow_create=True,
+            auto_confirm=args.yes,
+        )
         name = args.name
         if not name:
             grove_dir = project_root / GROVE_DIR
@@ -662,20 +800,23 @@ def main() -> None:
         elif args.editor:
             open_editor = True
         else:
-            open_editor = None  # defer to config
-        create_workspace(project_root, name,
-                         open_editor=open_editor)
+            open_editor = None
+        create_workspace(project_root, name, open_editor=open_editor)
 
     elif args.command == "sync":
-        sync_workspace(project_root, args.name)
+        project_root = find_project_root()
+        sync_all_workspaces(project_root)
 
-    elif args.command == "delete":
-        delete_workspace(project_root, args.name)
+    elif args.command in ("delete", "rm"):
+        project_root = find_project_root()
+        delete_workspace(project_root, args.name, force=args.force)
 
-    elif args.command == "list":
+    elif args.command in ("list", "ls"):
+        project_root = find_project_root()
         list_workspaces(project_root)
 
     elif args.command == "status":
+        project_root = find_project_root(optional=True)
         grove_status(project_root)
 
 
