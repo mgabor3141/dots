@@ -1,6 +1,5 @@
 **/README.md
 AGENTS.md
-CLAUDE.md
 
 {{- if .headless }}
 # Headless: ignore everything, then whitelist essentials
