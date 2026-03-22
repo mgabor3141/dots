@@ -6,6 +6,11 @@
     "show_summary": false
   },
   {
+    "label": "jj squash",
+    "command": "jj squash",
+    "hide": "on_success"
+  },
+  {
     "label": "$ZED_CUSTOM_TYPESCRIPT_RUNNER run test $ZED_SYMBOL",
     "command": "$ZED_CUSTOM_TYPESCRIPT_RUNNER run test",
     "args": [
