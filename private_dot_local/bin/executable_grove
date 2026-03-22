@@ -1,27 +1,23 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-"""Create workspaces from jj repos in a grove (a collection of related repositories).
+"""Lightweight workspace manager for jj repositories.
 
-A grove is a directory containing colocated jj+git repo clones alongside shared
-config files (AGENTS.md, .moon/, .zed/, etc.). Workspaces are created in
-.workspaces/<name>/ with jj workspace copies of each repo and symlinks to the
-shared files. Per-repo moon.yml files live directly in the grove root repos and
-are symlinked into workspaces.
+grove creates isolated workspaces from any directory containing jj repos.
+It works with single repos and multi-repo setups alike. Workspaces live in
+.grove/<name>/ and consist of jj workspace copies (for repos) and symlinks
+(for configured shared files).
 
-Configuration lives in .grove.toml (TOML):
-    [tasks]
-    install = "ni"
-    lint = "ni run lint"
+Configuration lives in .grove/grove.toml (optional):
+    sync = [".pi", ".envrc", "AGENTS.md"]
 
 Usage:
-    grove init                      Mark current directory as a grove
-    grove add-repo <url> [--name x] Clone a repo into the grove
     grove create <name>             Create a new workspace
-    grove sync [name]               Re-sync symlinks (grove root if no name)
+    grove sync [name]               Re-sync symlinks
     grove delete [name]             Delete a workspace
-    grove list                      List workspaces in current grove
-    grove status                    Show status across all repos and workspaces
+    grove list                      List workspaces
+    grove status                    Show status across repos and workspaces
+    grove review [path]             Browse commits across repos (TUI)
 """
 
 import argparse
@@ -30,12 +26,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-MOON_CONFIG = "moon.yml"
-
-
-def has_moon() -> bool:
-    """Check if moon is available on PATH."""
-    return shutil.which("moon") is not None
+GROVE_DIR = ".grove"
+GROVE_CONFIG = "grove.toml"
+SKIP_ITEMS = {GROVE_DIR, ".git", ".jj", ".DS_Store"}
 
 
 def die(msg: str) -> None:
@@ -51,21 +44,18 @@ def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
     return result
 
 
-# ── Grove config ─────────────────────────────────────────────────────
+# ── Config ───────────────────────────────────────────────────────────
 
 
-def load_grove_config(grove_root: Path) -> dict:
-    """Load .grove.toml TOML config. Returns empty dict if marker is empty.
-
-    Supports a minimal subset: [section] headers and key = "value" pairs.
-    """
-    grove_file = grove_root / ".grove.toml"
-    if not grove_file.exists() or grove_file.stat().st_size == 0:
+def load_config(grove_dir: Path) -> dict:
+    """Load grove.toml config. Returns empty dict if missing or empty."""
+    config_file = grove_dir / GROVE_CONFIG
+    if not config_file.exists() or config_file.stat().st_size == 0:
         return {}
 
     config: dict = {}
     section = config
-    for line in grove_file.read_text().splitlines():
+    for line in config_file.read_text().splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -76,199 +66,200 @@ def load_grove_config(grove_root: Path) -> dict:
         elif "=" in line:
             k, v = line.split("=", 1)
             k = k.strip()
-            v = v.strip().strip('"').strip("'")
-            section[k] = v
+            v = v.strip()
+            # Parse arrays
+            if v.startswith("["):
+                items = v[1:-1].split(",")
+                section[k] = [
+                    i.strip().strip('"').strip("'")
+                    for i in items if i.strip()
+                ]
+            else:
+                section[k] = v.strip('"').strip("'")
     return config
 
 
-def get_tasks(config: dict) -> dict[str, str]:
-    """Get task definitions from grove config."""
-    return config.get("tasks", {})
+def get_sync_list(config: dict) -> list[str]:
+    """Get list of files/dirs to symlink into workspaces."""
+    return config.get("sync", [])
 
 
-# ── Grove detection ──────────────────────────────────────────────────
+def write_default_config(grove_dir: Path) -> None:
+    """Write a default grove.toml with commented-out options."""
+    config_file = grove_dir / GROVE_CONFIG
+    if config_file.exists():
+        return
+
+    config_file.write_text(
+        "# Grove configuration\n"
+        "# https://github.com/gmuxapp/grove\n"
+        "\n"
+        "# Files and directories to symlink into workspaces.\n"
+        "# Paths are relative to the project root.\n"
+        "# Run 'grove sync' after changing this list.\n"
+        '#\n'
+        '# sync = [".pi", ".envrc", "AGENTS.md", ".zed"]\n'
+    )
 
 
-def find_grove_root(start: Path | None = None) -> Path:
-    """Walk up from start (default cwd) looking for .grove.toml marker."""
+# ── Project detection ────────────────────────────────────────────────
+
+
+def find_project_root(start: Path | None = None) -> Path:
+    """Walk up from start looking for .grove/ or a .jj/ directory.
+
+    If .grove/ is found, the project root is its parent.
+    Otherwise, the nearest directory containing .jj/ is the root.
+    """
+    d = (start or Path.cwd()).resolve()
+    # First: check if we're inside a workspace (.grove/<name>/...)
+    # and return the project root above .grove/
+    parts = d.parts
+    for i, part in enumerate(parts):
+        if part == GROVE_DIR and i > 0:
+            candidate = Path(*parts[:i])
+            if (candidate / GROVE_DIR).is_dir():
+                return candidate
+
+    # Walk up looking for .grove/, .jj/, or a directory containing child repos
+    best_jj = None
+    best_multi = None
     d = (start or Path.cwd()).resolve()
     while True:
-        if (d / ".grove.toml").exists():
+        if (d / GROVE_DIR).is_dir():
             return d
+        if (d / ".jj").is_dir() and best_jj is None:
+            best_jj = d
+        # Check for child repos (multi-repo root)
+        if best_multi is None:
+            child_repos = sum(
+                1 for sub in d.iterdir()
+                if sub.is_dir() and not sub.name.startswith(".")
+                and (sub / ".jj").is_dir()
+            ) if d.is_dir() else 0
+            if child_repos >= 2:
+                best_multi = d
         parent = d.parent
         if parent == d:
-            die("not inside a grove (no .grove.toml marker found)\n"
-                "  Run 'grove init' in the grove root first.")
+            break
         d = parent
 
+    if best_jj:
+        return best_jj
+    if best_multi:
+        return best_multi
 
-def find_repos(grove_root: Path) -> list[Path]:
-    """Find all repo directories (containing .jj/) in the grove root."""
+    die("not inside a project (no .jj/ or .grove/ found)")
+
+
+def find_repos(project_root: Path) -> list[Path]:
+    """Find all jj repo directories.
+
+    Checks the project root itself and its immediate children.
+    """
     repos = []
-    for d in sorted(grove_root.iterdir()):
+
+    # Root itself might be a repo
+    if (project_root / ".jj").is_dir():
+        repos.append(project_root)
+
+    # Child directories
+    for d in sorted(project_root.iterdir()):
         if d.is_dir() and not d.name.startswith(".") and (d / ".jj").is_dir():
             repos.append(d)
+
     return repos
 
 
-def resolve_workspace_dir(grove_root: Path, name: str | None) -> Path:
+def resolve_workspace(project_root: Path, name: str | None) -> Path:
     """Resolve workspace directory from name or cwd."""
-    ws_root = grove_root / ".workspaces"
+    grove_dir = project_root / GROVE_DIR
 
     if name:
-        return ws_root / name
+        return grove_dir / name
 
     cwd = Path.cwd().resolve()
-    ws_root_resolved = ws_root.resolve()
+    grove_resolved = grove_dir.resolve()
 
-    if cwd.parent == ws_root_resolved:
-        return cwd
+    # Check if cwd is inside a workspace
+    try:
+        rel = cwd.relative_to(grove_resolved)
+        ws_name = rel.parts[0] if rel.parts else None
+        if ws_name:
+            return grove_dir / ws_name
+    except ValueError:
+        pass
 
-    for parent in cwd.parents:
-        if parent.parent == ws_root_resolved:
-            return parent
-
-    die("not inside a workspace — pass a name or cd into one")
-
-
-# ── Moon config generation ───────────────────────────────────────────
-
-
-def generate_moon_config(repo_dir: Path, tasks: dict[str, str]) -> None:
-    """Generate or update a moon.yml with grove-managed tasks.
-
-    Tasks defined in .grove.toml [tasks] are written into the moon.yml.
-    Any existing tasks NOT in the grove config are preserved.
-    """
-    moon_file = repo_dir / MOON_CONFIG
-
-    # Parse existing tasks to preserve manual ones
-    existing_tasks: dict[str, str] = {}
-    if moon_file.exists():
-        current_task = None
-        for line in moon_file.read_text().splitlines():
-            stripped = line.strip()
-            if stripped.startswith("- ") or stripped == "tasks:":
-                continue
-            if line.startswith("  ") and not line.startswith("    ") and stripped.endswith(":"):
-                current_task = stripped[:-1]
-            elif current_task and "command:" in stripped:
-                cmd = stripped.split("command:", 1)[1].strip().strip('"').strip("'")
-                existing_tasks[current_task] = cmd
-                current_task = None
-
-    # Merge: grove tasks overwrite, manual tasks preserved
-    merged = dict(existing_tasks)
-    merged.update(tasks)
-
-    # Write
-    lines = ["tasks:"]
-    for name, command in merged.items():
-        lines.append(f"  {name}:")
-        lines.append(f'    command: "{command}"')
-    lines.append("")
-
-    moon_file.write_text("\n".join(lines))
-    grove_keys = ", ".join(tasks.keys())
-    print(f"  {repo_dir.name}: updated moon.yml ({grove_keys})")
+    die("not inside a workspace; pass a name or cd into one")
 
 
-def update_moon_workspace(grove_root: Path) -> None:
-    """Update .moon/workspace.yml to list all repos."""
-    moon_dir = grove_root / ".moon"
-    moon_dir.mkdir(exist_ok=True)
-    ws_file = moon_dir / "workspace.yml"
+# ── jj auto-track ───────────────────────────────────────────────────
 
-    repos = find_repos(grove_root)
-    lines = ["projects:"]
-    for repo in repos:
-        name = repo.name
-        lines.append(f'  {name}: "{name}"')
-    lines.append("")
 
-    ws_file.write_text("\n".join(lines))
-    print(f"  Updated .moon/workspace.yml ({len(repos)} projects)")
+def jj_exclude_grove(repo_dir: Path) -> None:
+    """Configure jj to ignore .grove/ via snapshot.auto-track."""
+    result = subprocess.run(
+        ["jj", "config", "get", "--repository", "snapshot.auto-track"],
+        cwd=repo_dir, capture_output=True, text=True,
+    )
+    current = result.stdout.strip() if result.returncode == 0 else ""
+
+    pattern = '.grove/**'
+    if pattern in current:
+        return
+
+    if not current or current == "all()":
+        new_value = f'all() & ~glob:"{pattern}"'
+    else:
+        new_value = f'{current} & ~glob:"{pattern}"'
+
+    # jj config set expects TOML value; the value itself is a quoted string
+    escaped = new_value.replace('"', '\\"')
+    run(["jj", "config", "set", "--repo",
+         "snapshot.auto-track", f'"{escaped}"'],
+        cwd=repo_dir)
+
+    # Untrack any already-tracked .grove files
+    subprocess.run(
+        ["jj", "file", "untrack", GROVE_DIR],
+        cwd=repo_dir, capture_output=True, text=True,
+    )
 
 
 # ── Symlinking ───────────────────────────────────────────────────────
 
 
-# Items at grove root that are never symlinked into workspaces.
-SKIP_ITEMS = {".grove.toml", ".workspaces", ".git", ".jj", ".DS_Store"}
+def sync_symlinks(project_root: Path, workspace_dir: Path,
+                  sync_list: list[str]) -> None:
+    """Create/update symlinks for configured files."""
+    if not sync_list:
+        return
 
+    for item_name in sync_list:
+        source = project_root / item_name
+        target = workspace_dir / item_name
 
-def sync_symlinks(grove_root: Path, workspace_dir: Path) -> None:
-    """Create/update symlinks from grove root into workspace.
-
-    Everything in the grove root is symlinked except:
-    - .grove.toml, .workspaces, .git, .jj (infrastructure)
-    - Repo directories (these get jj workspaces instead)
-    - .moon/ is handled specially: contents are symlinked but cache/ stays local
-
-    Repo moon.yml files are symlinked from the grove root repo into the
-    workspace repo.
-    """
-    repo_names = {r.name for r in find_repos(grove_root)}
-    grove_resolved = grove_root.resolve()
-
-    # Create/update symlinks for shared files
-    for item in sorted(grove_root.iterdir()):
-        if item.name in SKIP_ITEMS or item.name in repo_names:
+        if not source.exists():
+            print(f"  warning: sync item not found: {item_name}")
             continue
 
-        target = workspace_dir / item.name
+        _ensure_symlink(target, source)
 
-        if item.name == ".moon":
-            _sync_moon_dir(item, target)
-        else:
-            _ensure_symlink(target, item)
-
-    # Symlink moon.yml from grove root repos into workspace repos
-    for repo_name in repo_names:
-        grove_moon = grove_root / repo_name / MOON_CONFIG
-        ws_moon = workspace_dir / repo_name / MOON_CONFIG
-        if grove_moon.exists() and (workspace_dir / repo_name).is_dir():
-            _ensure_symlink(ws_moon, grove_moon)
-
-    # Clean up stale symlinks pointing into the grove
-    _cleanup_stale_symlinks(workspace_dir, grove_resolved)
-
-    moon_dst = workspace_dir / ".moon"
-    if moon_dst.is_dir() and not moon_dst.is_symlink():
-        _cleanup_stale_symlinks(moon_dst, grove_resolved, prefix=".moon/")
-
-    print(f"  Synced symlinks")
-
-
-def sync_grove_root(grove_root: Path) -> None:
-    """Update moon configs from .grove.toml, set up jj auto-track, update workspace.yml."""
-    config = load_grove_config(grove_root)
-    tasks = get_tasks(config)
-
-    for repo_dir in find_repos(grove_root):
-        if tasks:
-            generate_moon_config(repo_dir, tasks)
-        if (repo_dir / MOON_CONFIG).exists():
-            _jj_auto_track_exclude(repo_dir, [MOON_CONFIG])
-
-    update_moon_workspace(grove_root)
-    print(f"  Synced grove root")
-
-
-def _cleanup_stale_symlinks(directory: Path, grove_resolved: Path,
-                            prefix: str = "") -> None:
-    """Remove symlinks in directory that point into grove but whose target is gone."""
-    for item in sorted(directory.iterdir()):
+    # Clean stale symlinks
+    project_resolved = project_root.resolve()
+    for item in sorted(workspace_dir.iterdir()):
         if not item.is_symlink():
             continue
-        link_target = item.resolve()
         try:
-            link_target.relative_to(grove_resolved)
-        except ValueError:
+            link_target = item.resolve()
+            link_target.relative_to(project_resolved)
+        except (ValueError, OSError):
             continue
         if not link_target.exists():
-            print(f"  Removing stale symlink: {prefix}{item.name}")
+            print(f"  Removing stale symlink: {item.name}")
             item.unlink()
+
+    print(f"  Synced symlinks ({len(sync_list)} items)")
 
 
 def _ensure_symlink(link_path: Path, target: Path) -> None:
@@ -281,209 +272,56 @@ def _ensure_symlink(link_path: Path, target: Path) -> None:
     elif link_path.exists():
         print(f"  warning: {link_path.name} exists and is not a symlink, skipping")
         return
+    link_path.parent.mkdir(parents=True, exist_ok=True)
     link_path.symlink_to(resolved)
-
-
-def _jj_auto_track_exclude(repo_dir: Path, filenames: list[str]) -> None:
-    """Configure snapshot.auto-track to exclude files and untrack them.
-
-    Uses jj's repo-level config which is shared across all workspaces.
-    """
-    result = subprocess.run(
-        ["jj", "config", "get", "snapshot.auto-track"],
-        cwd=repo_dir, capture_output=True, text=True,
-    )
-    current = result.stdout.strip() if result.returncode == 0 else "all()"
-
-    # Build exclude patterns for files not already excluded
-    excludes_needed = []
-    for fname in filenames:
-        pattern = f'glob:"{fname}"'
-        if pattern not in current:
-            excludes_needed.append(pattern)
-
-    if excludes_needed:
-        new_value = current
-        for pattern in excludes_needed:
-            new_value = f"{new_value} & ~{pattern}"
-
-        result = subprocess.run(
-            ["jj", "config", "path", "--repo"],
-            cwd=repo_dir, capture_output=True, text=True,
-        )
-        if result.returncode == 0:
-            config_path = Path(result.stdout.strip())
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-
-            existing = config_path.read_text() if config_path.exists() else ""
-            lines = [l for l in existing.splitlines()
-                     if not l.strip().startswith("auto-track")]
-            if "[snapshot]" not in existing:
-                lines.append("[snapshot]")
-            escaped = new_value.replace('"', '\\"')
-            lines.append(f'auto-track = "{escaped}"')
-            config_path.write_text("\n".join(lines) + "\n")
-
-    for fname in filenames:
-        subprocess.run(
-            ["jj", "file", "untrack", fname],
-            cwd=repo_dir, capture_output=True, text=True,
-        )
-
-
-def _sync_moon_dir(moon_src: Path, moon_dst: Path) -> None:
-    """Symlink .moon/ contents except cache/ (which stays workspace-local)."""
-    moon_dst.mkdir(exist_ok=True)
-
-    for item in sorted(moon_src.iterdir()):
-        if item.name == "cache":
-            continue
-        _ensure_symlink(moon_dst / item.name, item)
 
 
 # ── Workspace operations ────────────────────────────────────────────
 
 
-def init_grove(name: str | None = None) -> None:
-    """Initialize a grove. Creates a subdirectory if name is given."""
-    if name:
-        err = validate_name(name)
-        if err:
-            die(err)
-        cwd = Path.cwd() / name
-        cwd.mkdir(parents=True, exist_ok=True)
-    else:
-        cwd = Path.cwd()
+def ensure_grove_dir(project_root: Path) -> Path:
+    """Create .grove/ directory and config if they don't exist."""
+    grove_dir = project_root / GROVE_DIR
+    created = not grove_dir.exists()
+    grove_dir.mkdir(exist_ok=True)
+    write_default_config(grove_dir)
 
-    grove_file = cwd / ".grove.toml"
+    if created:
+        # Set up jj auto-track exclusion for each repo
+        for repo in find_repos(project_root):
+            jj_exclude_grove(repo)
+        print(f"  Created {GROVE_DIR}/ (excluded from jj tracking)")
 
-    if grove_file.exists():
-        print(f"Already a grove: {cwd}")
-        return
-
-    repos = find_repos(cwd)
-    grove_file.write_text(
-        "# Grove configuration\n"
-        "# https://github.com/gmuxapp/grove\n"
-        "\n"
-        "# ── Moon tasks ───────────────────────────────────────────────\n"
-        "# Tasks are written into each repo's moon.yml and run with moon.\n"
-        "# Requires: moon (https://moonrepo.dev)\n"
-        "\n"
-        "[tasks]\n"
-        '# install = "ni"\n'
-        '# lint = "ni run lint"\n'
-        '# test = "ni run test"\n'
-        '# build = "ni run build"\n'
-        "\n"
-        "# ── Sandbox ──────────────────────────────────────────────────\n"
-        "# Run pi agents inside a Gondolin micro-VM.\n"
-        "# Requires: qemu-system-aarch64\n"
-        "\n"
-        "# [sandbox]\n"
-        '# packages = ["git", "github-cli", "jq"]\n'
-        "\n"
-        "# [sandbox.secrets]\n"
-        "# # Values come from host env vars. The VM sees a placeholder;\n"
-        "# # Gondolin replaces it on the wire only for the listed hosts.\n"
-        '# GH_TOKEN = ["api.github.com", "github.com"]\n'
-        "\n"
-        "# [sandbox.network]\n"
-        '# allow-hosts = ["api.github.com", "github.com", "*.githubusercontent.com"]\n'
-        "\n"
-        "# [sandbox.policy.api-github-com]\n"
-        "# # Section name = hostname with dots replaced by dashes.\n"
-        "# # Methods list allowed path patterns. Unmatched requests prompt the user.\n"
-        '# GET = ["*"]\n'
-        '# POST = ["/graphql", "/repos/*/*/pulls"]\n'
-        '# deny = ["/repos/*/*/pulls/*/merge"]\n'
-    )
-    (cwd / ".workspaces").mkdir(exist_ok=True)
-
-    sync_grove_root(cwd)
-
-    print(f"Initialized grove: {cwd}")
-    if repos:
-        print(f"  Found repos: {', '.join(r.name for r in repos)}")
-    else:
-        print(f"  No repos found yet — use 'grove add-repo <url>' to add repos.")
+    return grove_dir
 
 
-def add_repo(grove_root: Path, url: str, name: str | None,
-             no_moon: bool = False) -> None:
-    """Clone a repo into the grove, set up moon config, update workspace.yml."""
-    # Determine repo name from URL if not specified
-    if not name:
-        name = url.rstrip("/").rsplit("/", 1)[-1]
-        if name.endswith(".git"):
-            name = name[:-4]
-
-    dest = grove_root / name
-    if dest.exists():
-        die(f"directory already exists: {dest}")
-
-    print(f"\nAdding repo: {name}\n")
-
-    # Clone
-    print(f"  Cloning {url}...")
-    run(["jj", "git", "clone", "--colocate", url, str(dest)])
-
-    # Generate moon.yml and run install
-    config = load_grove_config(grove_root)
-    tasks = get_tasks(config)
-
-    if not no_moon and tasks:
-        generate_moon_config(dest, tasks)
-    elif not no_moon:
-        print(f"  {name}: no [tasks] in .grove.toml, skipping moon.yml")
-        print(f"  Hint: add tasks to .grove.toml, e.g.:")
-        print(f'    [tasks]')
-        print(f'    install = "ni"')
-
-    # Update .moon/workspace.yml
-    update_moon_workspace(grove_root)
-
-    # Set up auto-track exclusion
-    if (dest / MOON_CONFIG).exists():
-        _jj_auto_track_exclude(dest, [MOON_CONFIG])
-        print(f"  Configured jj auto-track exclusion")
-
-    # Run install task if available
-    if not no_moon and "install" in tasks:
-        if has_moon():
-            print(f"\n  Running install in {name}...")
-            result = subprocess.run(
-                ["moon", "run", f"{name}:install"],
-                cwd=grove_root,
-            )
-            if result.returncode != 0:
-                print(f"  warning: install failed for {name}", file=sys.stderr)
-        else:
-            print(f"  Skipping install (moon not found)")
-
-    print(f"\nRepo added: {name}")
-
-
-def create_workspace(grove_root: Path, name: str,
-                     skip_install: bool = False, skip_zed: bool = False) -> None:
-    repos = find_repos(grove_root)
+def create_workspace(project_root: Path, name: str,
+                     skip_zed: bool = False) -> None:
+    """Create a new workspace."""
+    repos = find_repos(project_root)
     if not repos:
-        die(f"no repos found in {grove_root}")
+        die(f"no jj repos found in {project_root}")
 
-    ws_root = grove_root / ".workspaces"
-    ws_root.mkdir(exist_ok=True)
-    ws_dir = ws_root / name
+    grove_dir = ensure_grove_dir(project_root)
+    ws_dir = grove_dir / name
 
     if ws_dir.exists():
         die(f"workspace already exists: {ws_dir}")
 
     ws_dir.mkdir(parents=True)
-    print(f"\nCreating workspace: {ws_dir}\n")
+    is_single_repo = len(repos) == 1 and repos[0] == project_root
+
+    print(f"\nCreating workspace: {name}\n")
 
     for repo_dir in repos:
-        repo_name = repo_dir.name
-        jj_ws_name = f"{name}-{repo_name}"
-        dest = ws_dir / repo_name
+        if is_single_repo:
+            repo_name = project_root.name
+            jj_ws_name = name
+            dest = ws_dir
+        else:
+            repo_name = repo_dir.name
+            jj_ws_name = f"{name}-{repo_name}"
+            dest = ws_dir / repo_name
 
         print(f"  {repo_name}: fetching and creating jj workspace...")
         subprocess.run(["jj", "git", "fetch"], cwd=repo_dir,
@@ -491,129 +329,137 @@ def create_workspace(grove_root: Path, name: str,
         run(["jj", "workspace", "add", "--name", jj_ws_name,
              "--revision", "trunk()", str(dest)], cwd=repo_dir)
 
-    sync_symlinks(grove_root, ws_dir)
+    # Sync configured symlinks
+    config = load_config(grove_dir)
+    sync_list = get_sync_list(config)
+    if sync_list:
+        sync_symlinks(project_root, ws_dir, sync_list)
 
-    if not skip_zed:
+    if not skip_zed and shutil.which("zed"):
         print(f"  Opening in Zed...")
         subprocess.run(["zed", "-n", str(ws_dir)])
-
-    config = load_grove_config(grove_root)
-    tasks = get_tasks(config)
-    if not skip_install and "install" in tasks and (grove_root / ".moon").is_dir():
-        if has_moon():
-            print(f"\n  Running moon run :install...\n")
-            result = subprocess.run(
-                ["moon", "run", ":install"],
-                cwd=ws_dir,
-            )
-            if result.returncode != 0:
-                print(f"  warning: install had failures", file=sys.stderr)
-        else:
-            print(f"  Skipping install (moon not found)")
 
     print(f"\nWorkspace ready: {ws_dir}")
 
 
-def sync_workspace(grove_root: Path, name: str | None) -> None:
-    """Re-sync symlinks for an existing workspace, or the grove root."""
-    if name is None:
-        cwd = Path.cwd().resolve()
-        grove_resolved = grove_root.resolve()
-        ws_root = (grove_root / ".workspaces").resolve()
+def sync_workspace(project_root: Path, name: str | None) -> None:
+    """Re-sync symlinks for a workspace."""
+    grove_dir = project_root / GROVE_DIR
+    config = load_config(grove_dir)
+    sync_list = get_sync_list(config)
 
-        in_workspace = False
-        if ws_root.exists():
-            try:
-                cwd.relative_to(ws_root)
-                in_workspace = True
-            except ValueError:
-                pass
+    if not sync_list:
+        print("No sync items configured in grove.toml")
+        print(f"  Hint: add sync = [\".pi\", \".envrc\"] to {GROVE_DIR}/{GROVE_CONFIG}")
+        return
 
-        if not in_workspace and cwd == grove_resolved:
-            print(f"Syncing grove root: {grove_root}\n")
-            sync_grove_root(grove_root)
-            print(f"\nGrove root synced.")
-            return
-
-    ws_dir = resolve_workspace_dir(grove_root, name)
+    ws_dir = resolve_workspace(project_root, name)
     if not ws_dir.exists():
         die(f"workspace not found: {ws_dir}")
 
-    print(f"Syncing workspace: {ws_dir}\n")
-    sync_symlinks(grove_root, ws_dir)
-    print(f"\nWorkspace synced.")
+    print(f"Syncing workspace: {ws_dir.name}\n")
+    sync_symlinks(project_root, ws_dir, sync_list)
 
 
-def delete_workspace(grove_root: Path, name: str | None) -> None:
-    if name:
-        ws_dir = grove_root / ".workspaces" / name
-    else:
-        ws_dir = resolve_workspace_dir(grove_root, None)
+def delete_workspace(project_root: Path, name: str | None) -> None:
+    """Delete a workspace."""
+    ws_dir = resolve_workspace(project_root, name)
+
+    if not ws_dir.exists():
+        die(f"workspace not found: {ws_dir}")
+
+    if not name:
         confirm = input(f"Delete workspace {ws_dir.name}? [y/N] ").strip()
         if confirm.lower() != "y":
             print("Cancelled.")
             return
 
-    if not ws_dir.exists():
-        die(f"workspace not found: {ws_dir}")
-
-    repo_dirs = {r.name: r for r in find_repos(grove_root)}
+    repos = find_repos(project_root)
+    repo_dirs = {r.name: r for r in repos}
     ws_name = ws_dir.name
+    is_single_repo = len(repos) == 1 and repos[0] == project_root
 
-    for subdir in sorted(ws_dir.iterdir()):
-        if not subdir.is_dir() or subdir.name.startswith("."):
-            continue
-        if subdir.name in repo_dirs and (subdir / ".jj").is_dir():
-            jj_ws_name = f"{ws_name}-{subdir.name}"
-            print(f"  {subdir.name}: forgetting jj workspace")
-            result = subprocess.run(
-                ["jj", "workspace", "forget", jj_ws_name],
-                cwd=repo_dirs[subdir.name],
-                capture_output=True, text=True,
-            )
-            if result.returncode != 0:
-                print(f"  warning: forget failed for {subdir.name}: "
-                      f"{result.stderr.strip()}")
+    if is_single_repo:
+        print(f"  Forgetting jj workspace: {ws_name}")
+        subprocess.run(
+            ["jj", "workspace", "forget", ws_name],
+            cwd=project_root, capture_output=True, text=True,
+        )
+    else:
+        for subdir in sorted(ws_dir.iterdir()):
+            if not subdir.is_dir() or subdir.name.startswith("."):
+                continue
+            if subdir.name in repo_dirs and (subdir / ".jj").is_dir():
+                jj_ws_name = f"{ws_name}-{subdir.name}"
+                print(f"  {subdir.name}: forgetting jj workspace")
+                subprocess.run(
+                    ["jj", "workspace", "forget", jj_ws_name],
+                    cwd=repo_dirs[subdir.name],
+                    capture_output=True, text=True,
+                )
 
     shutil.rmtree(ws_dir)
-    print(f"Deleted workspace: {ws_dir}")
+    print(f"Deleted workspace: {ws_name}")
 
 
-def list_workspaces(grove_root: Path) -> None:
-    ws_root = grove_root / ".workspaces"
-    if not ws_root.exists():
-        print("No workspaces.")
+def list_workspaces(project_root: Path) -> None:
+    """List workspaces."""
+    grove_dir = project_root / GROVE_DIR
+    if not grove_dir.exists():
+        print("No workspaces. Run 'grove create <name>' to get started.")
         return
 
-    workspaces = sorted(d for d in ws_root.iterdir() if d.is_dir())
+    workspaces = sorted(
+        d for d in grove_dir.iterdir()
+        if d.is_dir() and d.name != GROVE_CONFIG and not d.name.startswith(".")
+    )
+    # Filter out non-workspace entries (like config files)
+    workspaces = [
+        d for d in workspaces
+        if (d / ".jj").is_dir() or any(
+            sub.is_dir() and (sub / ".jj").is_dir()
+            for sub in d.iterdir() if sub.is_dir()
+        )
+    ]
+
     if not workspaces:
-        print("No workspaces.")
+        print("No workspaces. Run 'grove create <name>' to get started.")
         return
 
     for ws in workspaces:
-        repos = [d.name for d in sorted(ws.iterdir())
-                 if d.is_dir() and not d.name.startswith(".")]
-        print(f"  {ws.name}: {', '.join(repos) if repos else '(empty)'}")
+        # Check for repos inside the workspace
+        sub_repos = [
+            d.name for d in sorted(ws.iterdir())
+            if d.is_dir() and not d.name.startswith(".")
+            and (d / ".jj").is_dir()
+        ]
+        if (ws / ".jj").is_dir():
+            # Single-repo workspace
+            print(f"  {ws.name}")
+        elif sub_repos:
+            print(f"  {ws.name}: {', '.join(sub_repos)}")
+        else:
+            print(f"  {ws.name}: (empty)")
 
 
 # ── Status ───────────────────────────────────────────────────────────
 
 
-def grove_status(grove_root: Path) -> None:
-    """Show status across all repos and workspaces."""
-    repos = find_repos(grove_root)
-    ws_root = grove_root / ".workspaces"
-    config = load_grove_config(grove_root)
+def grove_status(project_root: Path) -> None:
+    """Show status across repos and workspaces."""
+    repos = find_repos(project_root)
+    grove_dir = project_root / GROVE_DIR
+    config = load_config(grove_dir) if grove_dir.exists() else {}
+    sync_list = get_sync_list(config)
 
-    print(f"Grove: {grove_root}")
-    tasks = get_tasks(config)
-    if tasks:
-        print(f"Tasks: {', '.join(tasks.keys())}")
+    print(f"Project: {project_root}")
+    if sync_list:
+        print(f"Sync: {', '.join(sync_list)}")
     print()
 
     print("Repos:")
     for repo_dir in repos:
-        name = repo_dir.name
+        name = repo_dir.name if repo_dir != project_root else project_root.name
         colocated = (repo_dir / ".git").is_dir()
         tag = "colocated" if colocated else "jj-only"
 
@@ -637,30 +483,20 @@ def grove_status(grove_root: Path) -> None:
         )
         commits_ahead = 0
         if result.returncode == 0:
-            commits_ahead = len([l for l in result.stdout.strip().split("\n") if l.strip()])
-
-        # Stale check
-        stale = False
-        result = subprocess.run(
-            ["jj", "status"],
-            cwd=repo_dir, capture_output=True, text=True,
-        )
-        if "stale" in result.stderr.lower():
-            stale = True
-
-        # Moon config
-        has_moon = (repo_dir / MOON_CONFIG).exists()
+            commits_ahead = len([
+                l for l in result.stdout.strip().split("\n") if l.strip()
+            ])
 
         parts = [f"  {name:<36s} [{tag}]"]
         status_parts = []
-        if stale:
-            status_parts.append("⚠ stale")
         if commits_ahead > 0:
-            status_parts.append(f"{commits_ahead} commit{'s' if commits_ahead != 1 else ''} ahead")
+            status_parts.append(
+                f"{commits_ahead} commit{'s' if commits_ahead != 1 else ''} ahead"
+            )
         if changed_files > 0:
-            status_parts.append(f"{changed_files} file{'s' if changed_files != 1 else ''} changed")
-        if has_moon:
-            status_parts.append("moon")
+            status_parts.append(
+                f"{changed_files} file{'s' if changed_files != 1 else ''} changed"
+            )
         if status_parts:
             parts.append("  " + ", ".join(status_parts))
         else:
@@ -669,37 +505,19 @@ def grove_status(grove_root: Path) -> None:
         print("".join(parts))
 
     # Workspaces
-    if ws_root.exists():
-        workspaces = sorted(d for d in ws_root.iterdir() if d.is_dir())
+    if grove_dir.exists():
+        workspaces = sorted(
+            d for d in grove_dir.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+            and d.name != GROVE_CONFIG
+        )
     else:
         workspaces = []
 
     print(f"\nWorkspaces: {len(workspaces)}")
     for ws_dir in workspaces:
         ws_name = ws_dir.name
-        ws_repos = []
-        stale_repos = []
-
-        for subdir in sorted(ws_dir.iterdir()):
-            if not subdir.is_dir() or subdir.name.startswith("."):
-                continue
-            if not (subdir / ".jj").is_dir():
-                continue
-
-            ws_repos.append(subdir.name)
-
-            result = subprocess.run(
-                ["jj", "status"],
-                cwd=subdir, capture_output=True, text=True,
-            )
-            if "stale" in result.stderr.lower():
-                stale_repos.append(subdir.name)
-
-        status = ""
-        if stale_repos:
-            status = f"  ⚠ stale: {', '.join(stale_repos)}"
-
-        print(f"  {ws_name}: {len(ws_repos)} repos{status}")
+        print(f"  {ws_name}")
 
 
 # ── CLI ──────────────────────────────────────────────────────────────
@@ -711,44 +529,34 @@ def validate_name(name: str) -> str | None:
         return "Cannot be empty."
     if not all(c.isalnum() or c in "-_" for c in name):
         return "Use only alphanumeric, hyphens, underscores."
+    if name == GROVE_CONFIG:
+        return f"Reserved name: {GROVE_CONFIG}"
     return None
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="grove",
-        description="Create and manage workspaces in a grove of jj repos.",
+        description="Lightweight workspace manager for jj repositories.",
     )
     sub = parser.add_subparsers(dest="command", metavar="command")
 
-    init_p = sub.add_parser("init", help="Initialize a new grove")
-    init_p.add_argument("name", nargs="?",
-                        help="Directory name (default: current directory)")
-
-    add_p = sub.add_parser("add-repo", help="Clone a repo into the grove")
-    add_p.add_argument("url", help="Git URL to clone")
-    add_p.add_argument("--name", help="Directory name (default: derived from URL)")
-    add_p.add_argument("--no-moon", action="store_true",
-                       help="Don't generate moon.yml")
-
     create_p = sub.add_parser("create", help="Create a new workspace")
     create_p.add_argument("name", help="Workspace name")
-    create_p.add_argument("--no-install", action="store_true",
-                          help="Skip running grove-install")
     create_p.add_argument("--no-zed", action="store_true",
                           help="Don't open in Zed")
 
-    sync_p = sub.add_parser("sync", help="Re-sync symlinks from grove root")
+    sync_p = sub.add_parser("sync", help="Re-sync symlinks")
     sync_p.add_argument("name", nargs="?",
-                        help="Workspace name (default: grove root or auto-detect from cwd)")
+                        help="Workspace name (default: auto-detect from cwd)")
 
     del_p = sub.add_parser("delete", help="Delete a workspace")
     del_p.add_argument("name", nargs="?",
                        help="Workspace name (or auto-detect from cwd)")
 
-    sub.add_parser("list", help="List workspaces in current grove")
+    sub.add_parser("list", help="List workspaces")
 
-    sub.add_parser("status", help="Show status across all repos and workspaces")
+    sub.add_parser("status", help="Show status across repos and workspaces")
 
     return parser.parse_args()
 
@@ -761,35 +569,26 @@ def main() -> None:
         parse_args()
         return
 
-    if args.command == "init":
-        init_grove(args.name)
-        return
+    project_root = find_project_root()
 
-    grove_root = find_grove_root()
-
-    if args.command == "add-repo":
-        add_repo(grove_root, args.url, args.name,
-                 no_moon=args.no_moon)
-
-    elif args.command == "create":
+    if args.command == "create":
         err = validate_name(args.name)
         if err:
             die(err)
-        create_workspace(grove_root, args.name,
-                         skip_install=args.no_install,
+        create_workspace(project_root, args.name,
                          skip_zed=args.no_zed)
 
     elif args.command == "sync":
-        sync_workspace(grove_root, args.name)
+        sync_workspace(project_root, args.name)
 
     elif args.command == "delete":
-        delete_workspace(grove_root, args.name)
+        delete_workspace(project_root, args.name)
 
     elif args.command == "list":
-        list_workspaces(grove_root)
+        list_workspaces(project_root)
 
     elif args.command == "status":
-        grove_status(grove_root)
+        grove_status(project_root)
 
 
 if __name__ == "__main__":
