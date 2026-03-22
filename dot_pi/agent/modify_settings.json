@@ -16,12 +16,7 @@
     "npm:@aliou/pi-processes",
     "npm:pi-librarian",
     "npm:pi-brave-search",
-    // "npm:@tmustier/pi-ralph-wiggum",
-    // "npm:pi-rtk",
-    // "npm:@cegersdo/pi-ptc",
-    // "npm:pi-skills-sh",
     "npm:pi-github",
-    // "npm:pi-annotated-reply",
     "npm:pi-anycopy"
   ],
   "terminal": {
