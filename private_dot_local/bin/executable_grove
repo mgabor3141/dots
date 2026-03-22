@@ -99,6 +99,11 @@ def write_default_config(grove_dir: Path) -> None:
         "# Run 'grove sync' after changing this list.\n"
         '#\n'
         '# sync = [".pi", ".envrc", "AGENTS.md", ".zed"]\n'
+        "\n"
+        "# Open workspaces in an editor after creation.\n"
+        "# Uses $VISUAL or $EDITOR from your environment.\n"
+        "#\n"
+        'editor = true\n'
     )
 
 
@@ -312,8 +317,19 @@ def ensure_grove_dir(project_root: Path) -> Path:
     return grove_dir
 
 
+def get_editor() -> list[str] | None:
+    """Get the editor command from $VISUAL or $EDITOR."""
+    import os
+    import shlex
+    for var in ("VISUAL", "EDITOR"):
+        val = os.environ.get(var)
+        if val:
+            return shlex.split(val)
+    return None
+
+
 def create_workspace(project_root: Path, name: str,
-                     skip_zed: bool = False) -> None:
+                     open_editor: bool | None = None) -> None:
     """Create a new workspace."""
     repos = find_repos(project_root)
     if not repos:
@@ -352,9 +368,13 @@ def create_workspace(project_root: Path, name: str,
     if sync_list:
         sync_symlinks(project_root, ws_dir, sync_list)
 
-    if not skip_zed and shutil.which("zed"):
-        print(f"  Opening in Zed...")
-        subprocess.run(["zed", "-n", str(ws_dir)])
+    # Resolve editor: CLI flag > config > default (true)
+    if open_editor is None:
+        open_editor = config.get("editor", "true") != "false"
+    editor = get_editor() if open_editor else None
+    if editor:
+        print(f"  Opening in {editor[0]}...")
+        subprocess.run([*editor, str(ws_dir)])
 
     print(f"\nWorkspace ready: {ws_dir}")
 
@@ -592,8 +612,11 @@ def parse_args() -> argparse.Namespace:
     new_p = sub.add_parser("new", help="Create a new workspace")
     new_p.add_argument("name", nargs="?",
                        help="Workspace name (default: random tree name)")
-    new_p.add_argument("--no-zed", action="store_true",
-                       help="Don't open in Zed")
+    editor_group = new_p.add_mutually_exclusive_group()
+    editor_group.add_argument("--editor", action="store_true", default=None,
+                              help="Open in editor")
+    editor_group.add_argument("--no-editor", action="store_true",
+                              help="Don't open in editor")
     new_p.add_argument("-y", "--yes", action="store_true",
                        help="Skip confirmation when initializing .grove/")
 
@@ -634,8 +657,14 @@ def main() -> None:
         err = validate_name(name)
         if err:
             die(err)
+        if args.no_editor:
+            open_editor = False
+        elif args.editor:
+            open_editor = True
+        else:
+            open_editor = None  # defer to config
         create_workspace(project_root, name,
-                         skip_zed=args.no_zed)
+                         open_editor=open_editor)
 
     elif args.command == "sync":
         sync_workspace(project_root, args.name)
