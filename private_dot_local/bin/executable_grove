@@ -32,6 +32,14 @@ GROVE_CONFIG = "grove.toml"
 SKIP_ITEMS = {GROVE_DIR, ".git", ".jj", ".DS_Store"}
 
 
+def short_path(p: Path) -> str:
+    """Shorten a path using ~ for home directory."""
+    try:
+        return "~/" + str(p.relative_to(Path.home()))
+    except ValueError:
+        return str(p)
+
+
 def die(msg: str) -> None:
     print(f"error: {msg}", file=sys.stderr)
     sys.exit(1)
@@ -164,12 +172,12 @@ def find_project_root(start: Path | None = None,
             die("no jj repos found in current directory")
 
     repos = find_repos(candidate)
-    repo_desc = ", ".join(
-        r.name if r != candidate else candidate.name for r in repos
-    )
     if not auto_confirm:
-        print(f"No .grove/ found. Initialize grove in {candidate}?")
-        print(f"  Repos: {repo_desc}")
+        display = short_path(candidate)
+        print(f"No .grove/ found. Initialize grove in {display}?")
+        if len(repos) > 1:
+            repo_desc = ", ".join(r.name for r in repos)
+            print(f"  Repos: {repo_desc}")
         confirm = input("  Continue? [y/N] ").strip()
         if confirm.lower() != "y":
             print("Cancelled.")
@@ -259,6 +267,25 @@ def jj_exclude_grove(repo_dir: Path) -> None:
         ["jj", "file", "untrack", GROVE_DIR],
         cwd=repo_dir, capture_output=True, text=True,
     )
+
+
+def _git_exclude_grove(repo_dir: Path) -> None:
+    """Add .grove to .git/info/exclude so git ignores it too."""
+    git_dir = repo_dir / ".git"
+    if not git_dir.is_dir():
+        return
+
+    exclude_file = git_dir / "info" / "exclude"
+    exclude_file.parent.mkdir(parents=True, exist_ok=True)
+
+    existing = exclude_file.read_text() if exclude_file.exists() else ""
+    if f"/{GROVE_DIR}" in existing:
+        return
+
+    with exclude_file.open("a") as f:
+        if existing and not existing.endswith("\n"):
+            f.write("\n")
+        f.write(f"/{GROVE_DIR}\n")
 
 
 def jj_workspace_info(repo_dir: Path, ws_name: str) -> dict:
@@ -375,17 +402,21 @@ def ensure_grove_dir(project_root: Path) -> Path:
     if created:
         for repo in find_repos(project_root):
             jj_exclude_grove(repo)
-        print(f"  Created {GROVE_DIR}/ (excluded from jj tracking)")
+            _git_exclude_grove(repo)
 
     return grove_dir
 
 
 def get_editor() -> list[str] | None:
-    """Get the editor command from $VISUAL or $EDITOR."""
-    for var in ("VISUAL", "EDITOR"):
-        val = os.environ.get(var)
-        if val:
-            return shlex.split(val)
+    """Get a GUI editor for opening workspace directories.
+
+    Only uses $VISUAL (intended for graphical editors).
+    Does not fall back to $EDITOR since terminal editors like
+    nano/vim can't usefully open a directory.
+    """
+    val = os.environ.get("VISUAL")
+    if val:
+        return shlex.split(val)
     return None
 
 
@@ -434,8 +465,11 @@ def create_workspace(project_root: Path, name: str,
         open_editor = config.get("editor", "true") != "false"
     editor = get_editor() if open_editor else None
     if editor:
-        print(f"  Opening in {editor[0]}...")
-        subprocess.run([*editor, str(ws_dir)])
+        # Strip --wait flag (common for $VISUAL but wrong for opening directories)
+        cmd = [arg for arg in editor if arg != "--wait"]
+        print(f"  Opening in {cmd[0]}...")
+        subprocess.Popen(cmd + [str(ws_dir)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     print(f"\nWorkspace ready: {GROVE_DIR}/{name}")
 
