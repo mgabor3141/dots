@@ -12,7 +12,7 @@ Configuration lives in .grove/grove.toml (optional):
     sync = [".pi", ".envrc", "AGENTS.md"]
 
 Usage:
-    grove create <name>             Create a new workspace
+    grove new [name]                Create a new workspace (random tree name if omitted)
     grove sync [name]               Re-sync symlinks
     grove delete [name]             Delete a workspace
     grove list                      List workspaces
@@ -537,6 +537,37 @@ def grove_status(project_root: Path) -> None:
         print(f"  {ws_name}")
 
 
+# ── Name generation ──────────────────────────────────────────────────
+
+TREE_NAMES = [
+    "alder", "ash", "aspen", "beech", "birch", "cedar", "cherry",
+    "chestnut", "cypress", "elm", "fig", "fir", "hazel", "hemlock",
+    "hickory", "holly", "ivy", "juniper", "larch", "laurel", "linden",
+    "magnolia", "maple", "myrtle", "oak", "olive", "palm", "pine",
+    "poplar", "rowan", "spruce", "sumac", "sycamore", "teak", "walnut",
+    "willow", "yew",
+]
+
+
+def pick_workspace_name(grove_dir: Path) -> str:
+    """Pick a random unused tree name for a workspace."""
+    import random
+
+    existing = set()
+    if grove_dir.exists():
+        existing = {d.name for d in grove_dir.iterdir() if d.is_dir()}
+
+    available = [n for n in TREE_NAMES if n not in existing]
+    if not available:
+        # All tree names used, fall back to numbered
+        i = 1
+        while f"ws-{i}" in existing:
+            i += 1
+        return f"ws-{i}"
+
+    return random.choice(available)
+
+
 # ── CLI ──────────────────────────────────────────────────────────────
 
 
@@ -558,12 +589,13 @@ def parse_args() -> argparse.Namespace:
     )
     sub = parser.add_subparsers(dest="command", metavar="command")
 
-    create_p = sub.add_parser("create", help="Create a new workspace")
-    create_p.add_argument("name", help="Workspace name")
-    create_p.add_argument("--no-zed", action="store_true",
-                          help="Don't open in Zed")
-    create_p.add_argument("-y", "--yes", action="store_true",
-                          help="Skip confirmation when initializing .grove/")
+    new_p = sub.add_parser("new", help="Create a new workspace")
+    new_p.add_argument("name", nargs="?",
+                       help="Workspace name (default: random tree name)")
+    new_p.add_argument("--no-zed", action="store_true",
+                       help="Don't open in Zed")
+    new_p.add_argument("-y", "--yes", action="store_true",
+                       help="Skip confirmation when initializing .grove/")
 
     sync_p = sub.add_parser("sync", help="Re-sync symlinks")
     sync_p.add_argument("name", nargs="?",
@@ -588,17 +620,21 @@ def main() -> None:
         parse_args()
         return
 
-    allow_create = args.command == "create"
+    allow_create = args.command == "new"
     project_root = find_project_root(
         allow_create=allow_create,
         auto_confirm=getattr(args, "yes", False),
     )
 
-    if args.command == "create":
-        err = validate_name(args.name)
+    if args.command == "new":
+        name = args.name
+        if not name:
+            grove_dir = project_root / GROVE_DIR
+            name = pick_workspace_name(grove_dir)
+        err = validate_name(name)
         if err:
             die(err)
-        create_workspace(project_root, args.name,
+        create_workspace(project_root, name,
                          skip_zed=args.no_zed)
 
     elif args.command == "sync":
