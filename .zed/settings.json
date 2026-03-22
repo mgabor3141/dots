@@ -7,6 +7,7 @@
       "**/dot_*profile.tmpl",
       "**/*.sh.tmpl",
       "**/modify_*.plist",
+      "**/environment.d/*.conf",
     ],
     "XML": ["**/*.plist.tmpl"],
   },
