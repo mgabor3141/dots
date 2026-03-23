@@ -420,9 +420,37 @@ def get_editor() -> list[str] | None:
     return None
 
 
+def find_incomplete_workspace(project_root: Path) -> str | None:
+    """Find a workspace that has fewer repos than expected.
+
+    Returns the workspace name if one is incomplete, None otherwise.
+    """
+    grove_dir = project_root / GROVE_DIR
+    if not grove_dir.exists():
+        return None
+
+    repos = find_repos(project_root)
+    is_single_repo = len(repos) == 1 and repos[0] == project_root
+    if is_single_repo:
+        return None  # single-repo workspaces can't be partially created
+
+    repo_names = {r.name for r in repos}
+    for ws_dir in find_workspaces(grove_dir):
+        ws_repos = {
+            d.name for d in ws_dir.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+            and (d / ".jj").is_dir()
+        }
+        if ws_repos and ws_repos < repo_names:
+            return ws_dir.name
+
+    return None
+
+
 def create_workspace(project_root: Path, name: str,
-                     open_editor: bool | None = None) -> None:
-    """Create a new workspace."""
+                     open_editor: bool | None = None,
+                     resume: bool = False) -> None:
+    """Create a new workspace, or resume an incomplete one."""
     repos = find_repos(project_root)
     if not repos:
         die(f"no jj repos found in {project_root}")
@@ -430,13 +458,14 @@ def create_workspace(project_root: Path, name: str,
     grove_dir = ensure_grove_dir(project_root)
     ws_dir = grove_dir / name
 
-    if ws_dir.exists():
+    if ws_dir.exists() and not resume:
         die(f"workspace already exists: {ws_dir}")
 
-    ws_dir.mkdir(parents=True)
+    ws_dir.mkdir(parents=True, exist_ok=True)
     is_single_repo = len(repos) == 1 and repos[0] == project_root
 
-    print(f"\nCreating workspace: {name}\n")
+    label = "Resuming" if resume else "Creating"
+    print(f"\n{label} workspace: {name}\n")
 
     for repo_dir in repos:
         if is_single_repo:
@@ -447,6 +476,10 @@ def create_workspace(project_root: Path, name: str,
             repo_name = repo_dir.name
             jj_ws_name = f"{name}-{repo_name}"
             dest = ws_dir / repo_name
+
+        if dest.exists() and (dest / ".jj").is_dir():
+            print(f"  {repo_name}: already exists, skipping")
+            continue
 
         print(f"  {repo_name}: fetching and creating jj workspace...")
         subprocess.run(["jj", "git", "fetch"], cwd=repo_dir,
@@ -814,10 +847,24 @@ def main() -> None:
             allow_create=True,
             auto_confirm=args.yes,
         )
+
+        # Check for an incomplete workspace to resume
+        resume = False
         name = args.name
         if not name:
-            grove_dir = project_root / GROVE_DIR
-            name = pick_workspace_name(grove_dir)
+            incomplete = find_incomplete_workspace(project_root)
+            if incomplete:
+                confirm = input(
+                    f"Incomplete workspace '{incomplete}' found. "
+                    f"Resume? [Y/n] "
+                ).strip()
+                if confirm.lower() != "n":
+                    name = incomplete
+                    resume = True
+            if not name:
+                grove_dir = project_root / GROVE_DIR
+                name = pick_workspace_name(grove_dir)
+
         err = validate_name(name)
         if err:
             die(err)
@@ -827,7 +874,8 @@ def main() -> None:
             open_editor = True
         else:
             open_editor = None
-        create_workspace(project_root, name, open_editor=open_editor)
+        create_workspace(project_root, name, open_editor=open_editor,
+                         resume=resume)
 
     elif args.command == "sync":
         project_root = find_project_root()
