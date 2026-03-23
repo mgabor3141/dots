@@ -29,6 +29,8 @@ from pathlib import Path
 
 GROVE_DIR = ".grove"
 GROVE_CONFIG = "grove.toml"
+GLOBAL_CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME",
+                                        Path.home() / ".config")) / "grove"
 SKIP_ITEMS = {GROVE_DIR, ".git", ".jj", ".DS_Store"}
 
 
@@ -56,9 +58,15 @@ def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
 # ── Config ───────────────────────────────────────────────────────────
 
 
-def load_config(grove_dir: Path) -> dict:
-    """Load grove.toml config. Returns empty dict if missing or empty."""
-    config_file = grove_dir / GROVE_CONFIG
+def load_config(grove_dir_or_file: Path) -> dict:
+    """Load a TOML config file. Returns empty dict if missing or empty.
+
+    Accepts either a directory (appends grove.toml) or a file path directly.
+    """
+    if grove_dir_or_file.is_file():
+        config_file = grove_dir_or_file
+    else:
+        config_file = grove_dir_or_file / GROVE_CONFIG
     if not config_file.exists() or config_file.stat().st_size == 0:
         return {}
 
@@ -101,9 +109,49 @@ def load_config(grove_dir: Path) -> dict:
     return config
 
 
+def load_global_config() -> dict:
+    """Load global config from ~/.config/grove/config.toml."""
+    return load_config(GLOBAL_CONFIG_DIR / "config.toml")
+
+
+def merged_config(grove_dir: Path) -> dict:
+    """Load global config, then overlay project config on top."""
+    global_cfg = load_global_config()
+    project_cfg = load_config(grove_dir)
+    merged = {**global_cfg, **project_cfg}
+    return merged
+
+
 def get_sync_list(config: dict) -> list[str]:
     """Get list of files/dirs to symlink into workspaces."""
     return config.get("sync", [])
+
+
+def ensure_global_config() -> None:
+    """Create global config on first use if it doesn't exist."""
+    config_file = GLOBAL_CONFIG_DIR / "config.toml"
+    if config_file.exists():
+        return
+
+    GLOBAL_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+    visual = os.environ.get("VISUAL", "")
+    if visual:
+        editor_line = f'editor = "{visual}"\n'
+    else:
+        editor_line = '# editor = "code"\n'
+
+    config_file.write_text(
+        "# Grove global configuration\n"
+        "# https://github.com/gmuxapp/grove\n"
+        "#\n"
+        "# Project-level settings go in .grove/grove.toml\n"
+        "# and override anything set here.\n"
+        "\n"
+        "# Editor to open workspaces in after creation.\n"
+        "#\n"
+        f"{editor_line}"
+    )
 
 
 def write_default_config(grove_dir: Path) -> None:
@@ -113,19 +161,17 @@ def write_default_config(grove_dir: Path) -> None:
         return
 
     config_file.write_text(
-        "# Grove configuration\n"
+        "# Grove project configuration\n"
         "# https://github.com/gmuxapp/grove\n"
+        "#\n"
+        "# Global defaults live in ~/.config/grove/config.toml\n"
+        "# Settings here override global config.\n"
         "\n"
         "# Files and directories to symlink into workspaces.\n"
         "# Paths are relative to the project root.\n"
         "# Run 'grove sync' after changing this list.\n"
         '#\n'
         '# sync = [".pi", ".envrc", "AGENTS.md", ".zed"]\n'
-        "\n"
-        "# Open workspaces in an editor after creation.\n"
-        "# Uses $VISUAL from your environment.\n"
-        "#\n"
-        'editor = true\n'
         "\n"
         "# Commands to run in each new workspace after creation.\n"
         "# Runs as bash with set -euo pipefail. Working directory\n"
@@ -417,6 +463,7 @@ def _ensure_symlink(link_path: Path, target: Path) -> None:
 
 def ensure_grove_dir(project_root: Path) -> Path:
     """Create .grove/ directory and config if they don't exist."""
+    ensure_global_config()
     grove_dir = project_root / GROVE_DIR
     created = not grove_dir.exists()
     grove_dir.mkdir(exist_ok=True)
@@ -428,19 +475,6 @@ def ensure_grove_dir(project_root: Path) -> Path:
             _git_exclude_grove(repo)
 
     return grove_dir
-
-
-def get_editor() -> list[str] | None:
-    """Get a GUI editor for opening workspace directories.
-
-    Only uses $VISUAL (intended for graphical editors).
-    Does not fall back to $EDITOR since terminal editors like
-    nano/vim can't usefully open a directory.
-    """
-    val = os.environ.get("VISUAL")
-    if val:
-        return shlex.split(val)
-    return None
 
 
 def find_incomplete_workspace(project_root: Path) -> str | None:
@@ -472,7 +506,8 @@ def find_incomplete_workspace(project_root: Path) -> str | None:
 
 def create_workspace(project_root: Path, name: str,
                      open_editor: bool | None = None,
-                     resume: bool = False) -> None:
+                     resume: bool = False,
+                     run_setup: bool = True) -> None:
     """Create a new workspace, or resume an incomplete one."""
     repos = find_repos(project_root)
     if not repos:
@@ -512,15 +547,17 @@ def create_workspace(project_root: Path, name: str,
         run(["jj", "workspace", "add", "--name", jj_ws_name,
              "--revision", "trunk()", str(dest)], cwd=repo_dir)
 
+    # Load merged config (global + project)
+    config = merged_config(grove_dir)
+
     # Sync configured symlinks
-    config = load_config(grove_dir)
     sync_list = get_sync_list(config)
     if sync_list:
         sync_symlinks(project_root, ws_dir, sync_list)
 
     # Run setup commands
     setup = config.get("setup", "")
-    if setup:
+    if setup and run_setup:
         print(f"\n  Running setup...", flush=True)
         result = subprocess.run(
             ["bash", "-euo", "pipefail", "-c", setup],
@@ -529,13 +566,15 @@ def create_workspace(project_root: Path, name: str,
         if result.returncode != 0:
             print(f"  warning: setup exited with code {result.returncode}")
 
-    # Resolve editor: CLI flag > config > default (true)
-    if open_editor is None:
-        open_editor = config.get("editor", "true") != "false"
-    editor = get_editor() if open_editor else None
-    if editor:
-        # Strip --wait flag (common for $VISUAL but wrong for opening directories)
-        cmd = [arg for arg in editor if arg != "--wait"]
+    # Open editor: CLI flag > config > nothing
+    editor_cmd = config.get("editor", "")
+    if open_editor is False:
+        editor_cmd = ""
+    elif open_editor is None and not editor_cmd:
+        editor_cmd = ""
+
+    if editor_cmd:
+        cmd = shlex.split(editor_cmd)
         print(f"  Opening in {cmd[0]}...")
         subprocess.Popen(cmd + [str(ws_dir)],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -546,7 +585,7 @@ def create_workspace(project_root: Path, name: str,
 def sync_all_workspaces(project_root: Path) -> None:
     """Re-sync symlinks for all workspaces."""
     grove_dir = project_root / GROVE_DIR
-    config = load_config(grove_dir)
+    config = merged_config(grove_dir)
     sync_list = get_sync_list(config)
 
     if not sync_list:
@@ -848,6 +887,8 @@ def parse_args() -> argparse.Namespace:
                               help="Open in editor")
     editor_group.add_argument("--no-editor", action="store_true",
                               help="Don't open in editor")
+    new_p.add_argument("--no-setup", action="store_true",
+                       help="Skip setup commands")
     new_p.add_argument("-y", "--yes", action="store_true",
                        help="Skip confirmation when initializing .grove/")
 
@@ -909,7 +950,7 @@ def main() -> None:
         else:
             open_editor = None
         create_workspace(project_root, name, open_editor=open_editor,
-                         resume=resume)
+                         resume=resume, run_setup=not args.no_setup)
 
     elif args.command == "sync":
         project_root = find_project_root()

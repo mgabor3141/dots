@@ -52,6 +52,7 @@ complete -c grove -n __grove_needs_command -a status -d 'Show project and repo o
 
 # grove new
 complete -c grove -n '__grove_using_command new' -a '(__grove_workspaces)' -d 'Workspace name'
+complete -c grove -n '__grove_using_command new' -l no-setup       -d 'Skip setup commands'
 complete -c grove -n '__grove_using_command new' -s y -l yes       -d 'Skip confirmation'
 complete -c grove -n '__grove_using_command new' -l editor         -d 'Open in editor'
 complete -c grove -n '__grove_using_command new' -l no-editor      -d "Don't open in editor"
