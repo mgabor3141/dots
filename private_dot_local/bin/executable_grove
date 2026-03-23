@@ -178,8 +178,8 @@ def find_project_root(start: Path | None = None,
         if len(repos) > 1:
             repo_desc = ", ".join(r.name for r in repos)
             print(f"  Repos: {repo_desc}")
-        confirm = input("  Continue? [y/N] ").strip()
-        if confirm.lower() != "y":
+        confirm = input("  Continue? [Y/n] ").strip()
+        if confirm.lower() == "n":
             print("Cancelled.")
             sys.exit(0)
 
@@ -450,6 +450,8 @@ def create_workspace(project_root: Path, name: str,
 
         print(f"  {repo_name}: fetching and creating jj workspace...")
         subprocess.run(["jj", "git", "fetch"], cwd=repo_dir,
+                       capture_output=True, text=True)
+        subprocess.run(["jj", "workspace", "update-stale"], cwd=repo_dir,
                        capture_output=True, text=True)
         run(["jj", "workspace", "add", "--name", jj_ws_name,
              "--revision", "trunk()", str(dest)], cwd=repo_dir)
