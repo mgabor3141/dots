@@ -62,7 +62,7 @@ Returns: comma-separated quoted JSON values, one per line without indentation,
   {{- else if and (not $hasLocal) (ne $npmVersion "") -}}
     {{- $results = append $results (printf "npm:%s" $name) -}}
   {{- else if and $hasLocal (ne $npmVersion "") -}}
-    {{- if semverCompare (printf ">%s" $npmVersion) $localVersion -}}
+    {{- if semverCompare (printf ">=%s" $npmVersion) $localVersion -}}
       {{- $results = append $results $localEntry -}}
     {{- else -}}
       {{- $results = append $results (printf "npm:%s" $name) -}}
