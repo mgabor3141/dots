@@ -64,8 +64,11 @@ def load_config(grove_dir: Path) -> dict:
 
     config: dict = {}
     section = config
-    for line in config_file.read_text().splitlines():
-        line = line.strip()
+    lines = config_file.read_text().splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        i += 1
         if not line or line.startswith("#"):
             continue
         if line.startswith("[") and line.endswith("]"):
@@ -76,11 +79,22 @@ def load_config(grove_dir: Path) -> dict:
             k, v = line.split("=", 1)
             k = k.strip()
             v = v.strip()
-            if v.startswith("["):
+            if v.startswith('"""'):
+                # Multiline string: collect until closing """
+                parts = [v[3:]]
+                while i < len(lines):
+                    next_line = lines[i]
+                    i += 1
+                    if '"""' in next_line:
+                        parts.append(next_line[:next_line.index('"""')])
+                        break
+                    parts.append(next_line)
+                section[k] = "\n".join(parts).strip()
+            elif v.startswith("["):
                 items = v[1:-1].split(",")
                 section[k] = [
-                    i.strip().strip('"').strip("'")
-                    for i in items if i.strip()
+                    item.strip().strip('"').strip("'")
+                    for item in items if item.strip()
                 ]
             else:
                 section[k] = v.strip('"').strip("'")
@@ -109,9 +123,18 @@ def write_default_config(grove_dir: Path) -> None:
         '# sync = [".pi", ".envrc", "AGENTS.md", ".zed"]\n'
         "\n"
         "# Open workspaces in an editor after creation.\n"
-        "# Uses $VISUAL or $EDITOR from your environment.\n"
+        "# Uses $VISUAL from your environment.\n"
         "#\n"
         'editor = true\n'
+        "\n"
+        "# Commands to run in each new workspace after creation.\n"
+        "# Runs as bash with set -euo pipefail. Working directory\n"
+        "# is the workspace root.\n"
+        "#\n"
+        '# setup = """\n'
+        '# npm install\n'
+        '# cp .env.example .env\n'
+        '# """\n'
     )
 
 
@@ -494,6 +517,17 @@ def create_workspace(project_root: Path, name: str,
     sync_list = get_sync_list(config)
     if sync_list:
         sync_symlinks(project_root, ws_dir, sync_list)
+
+    # Run setup commands
+    setup = config.get("setup", "")
+    if setup:
+        print(f"\n  Running setup...", flush=True)
+        result = subprocess.run(
+            ["bash", "-euo", "pipefail", "-c", setup],
+            cwd=ws_dir,
+        )
+        if result.returncode != 0:
+            print(f"  warning: setup exited with code {result.returncode}")
 
     # Resolve editor: CLI flag > config > default (true)
     if open_editor is None:
