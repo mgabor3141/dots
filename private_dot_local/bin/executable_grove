@@ -624,12 +624,90 @@ def link_workspaces(project_root: Path,
     print(f"\nDone.")
 
 
-def refresh_workspace(project_root: Path, name: str | None,
-                      all_workspaces: bool = False) -> None:
+def _reheat_workspace(repo_dir: Path, jj_ws_name: str) -> str:
+    """Rebase a workspace onto trunk and clean up merged commits.
+
+    Rebases the roots of the workspace's stack onto trunk, abandons
+    empty merge commits (from trunk-into-feature merges on remotes),
+    and resolves any conflicted bookmarks.
+
+    Returns a short status string.
+    """
+    ws_at = f"{jj_ws_name}@"
+
+    # Update stale workspace state before rebasing
+    subprocess.run(
+        ["jj", "workspace", "update-stale"],
+        cwd=repo_dir, capture_output=True, text=True,
+    )
+
+    # Rebase roots of the stack onto trunk
+    result = subprocess.run(
+        ["jj", "rebase", "-d", "trunk()",
+         "-s", f"roots(trunk()..stack({ws_at}))"],
+        cwd=repo_dir, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        return f"rebase failed: {stderr}"
+
+    rebased = "nothing changed" not in result.stdout.lower()
+
+    # Abandon empty merge commits left in the stack
+    merges_revset = (
+        f"(stack({ws_at}) ~ trunk()..{ws_at} ~ immutable())"
+        f" & merges() & empty()"
+    )
+    count_result = subprocess.run(
+        ["jj", "log", "-r", merges_revset, "--count", "--no-pager"],
+        cwd=repo_dir, capture_output=True, text=True,
+    )
+    merge_count = 0
+    if count_result.returncode == 0:
+        try:
+            merge_count = int(count_result.stdout.strip())
+        except ValueError:
+            pass
+
+    if merge_count > 0:
+        subprocess.run(
+            ["jj", "abandon", "--retain-bookmarks", merges_revset],
+            cwd=repo_dir, capture_output=True, text=True,
+        )
+
+        # Resolve conflicted bookmarks by keeping the copy on our stack
+        bm_result = subprocess.run(
+            ["jj", "log", "-r", f"trunk()..{ws_at} & bookmarks()",
+             "--no-graph",
+             "-T", 'local_bookmarks.map(|b| b.name() ++ "\t"'
+                   ' ++ change_id.short() ++ "\n").join("")'],
+            cwd=repo_dir, capture_output=True, text=True,
+        )
+        if bm_result.returncode == 0:
+            for line in bm_result.stdout.strip().split("\n"):
+                if "\t" not in line:
+                    continue
+                bm_name, rev = line.split("\t", 1)
+                if bm_name.strip():
+                    subprocess.run(
+                        ["jj", "bookmark", "set", bm_name.strip(),
+                         "-r", rev.strip()],
+                        cwd=repo_dir, capture_output=True, text=True,
+                    )
+
+    if merge_count > 0:
+        return f"rebased, cleaned {merge_count} merge commit{'s' if merge_count != 1 else ''}"
+    return "rebased" if rebased else "already up to date"
+
+
+def refresh_workspaces(project_root: Path, name: str | None,
+                       all_workspaces: bool = False) -> None:
     """Fetch from remotes and rebase workspace(s) onto trunk.
 
     Fetches once per repo, then rebases each workspace's commit stack
-    onto the updated trunk.
+    onto the updated trunk, cleaning up empty merge commits.
+
+    With --all, also refreshes the root (default) workspace.
     """
     grove_dir = project_root / GROVE_DIR
     repos = find_repos(project_root)
@@ -638,16 +716,36 @@ def refresh_workspace(project_root: Path, name: str | None,
 
     is_single_repo = len(repos) == 1 and repos[0] == project_root
 
+    # Build list of (display_name, {repo_dir: jj_workspace_name}) pairs
+    targets: list[tuple[str, dict[Path, str]]] = []
+
     if all_workspaces:
+        # Include the root (default) workspace
+        if is_single_repo:
+            targets.append(("(root)", {project_root: "default"}))
+        else:
+            targets.append(("(root)", {r: "default" for r in repos}))
+
+        # Include all grove workspaces
         workspaces = find_workspaces(grove_dir)
-        if not workspaces:
-            die("no workspaces found")
-        ws_names = [ws.name for ws in workspaces]
+        for ws in workspaces:
+            if is_single_repo:
+                targets.append((ws.name, {project_root: ws.name}))
+            else:
+                targets.append((ws.name, {
+                    r: f"{ws.name}-{r.name}" for r in repos
+                }))
+
     else:
         ws_dir = resolve_workspace(project_root, name)
         if not ws_dir.exists():
             die(f"workspace not found: {ws_dir.name}")
-        ws_names = [ws_dir.name]
+        if is_single_repo:
+            targets.append((ws_dir.name, {project_root: ws_dir.name}))
+        else:
+            targets.append((ws_dir.name, {
+                r: f"{ws_dir.name}-{r.name}" for r in repos
+            }))
 
     # Fetch once per repo
     print("Fetching...\n")
@@ -665,49 +763,29 @@ def refresh_workspace(project_root: Path, name: str | None,
     # Rebase each workspace
     print()
     errors = 0
-    for ws_name in ws_names:
-        print(f"  {ws_name}:")
-        for repo_dir in repos:
-            if is_single_repo:
-                repo_label = project_root.name
-                jj_ws_name = ws_name
-            else:
-                repo_label = repo_dir.name
-                jj_ws_name = f"{ws_name}-{repo_dir.name}"
-
-            # Update stale workspace state before rebasing
-            subprocess.run(
-                ["jj", "workspace", "update-stale"],
-                cwd=repo_dir, capture_output=True, text=True,
-            )
-
-            result = subprocess.run(
-                ["jj", "rebase", "-b", f"{jj_ws_name}@", "-d", "trunk()"],
-                cwd=repo_dir, capture_output=True, text=True,
-            )
-            if result.returncode != 0:
-                stderr = result.stderr.strip()
-                tag = f"rebase failed: {stderr}"
+    ws_names = []
+    for display_name, repo_map in targets:
+        print(f"  {display_name}:")
+        if display_name != "(root)":
+            ws_names.append(display_name)
+        for repo_dir, jj_ws_name in repo_map.items():
+            tag = _reheat_workspace(repo_dir, jj_ws_name)
+            if "failed" in tag:
                 errors += 1
-            else:
-                stdout = result.stdout.strip()
-                if "nothing changed" in stdout.lower():
-                    tag = "already up to date"
-                else:
-                    tag = "rebased"
-
             if is_single_repo:
                 print(f"    {tag}")
             else:
+                repo_label = repo_dir.name
                 print(f"    {repo_label}: {tag}")
 
-    # Re-sync symlinks for the refreshed workspaces
-    link_workspaces(project_root, workspace_names=ws_names, quiet=True)
+    # Re-sync symlinks for the refreshed workspaces (not root)
+    if ws_names:
+        link_workspaces(project_root, workspace_names=ws_names, quiet=True)
 
     if errors:
         print(f"Done with {errors} error{'s' if errors != 1 else ''}.")
     else:
-        count = len(ws_names)
+        count = len(targets)
         print(f"Refreshed {count} workspace{'s' if count != 1 else ''}.")
 
 
@@ -1070,8 +1148,8 @@ def main() -> None:
 
     elif args.command == "refresh":
         project_root = find_project_root()
-        refresh_workspace(project_root, args.name,
-                          all_workspaces=args.all)
+        refresh_workspaces(project_root, args.name,
+                           all_workspaces=args.all)
 
     elif args.command in ("delete", "rm"):
         project_root = find_project_root()
