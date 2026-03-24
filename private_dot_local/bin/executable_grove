@@ -708,6 +708,7 @@ def refresh_workspaces(project_root: Path, name: str | None,
     onto the updated trunk, cleaning up empty merge commits.
 
     With --all, also refreshes the root (default) workspace.
+    When run from the project root without a name, implies --all.
     """
     grove_dir = project_root / GROVE_DIR
     repos = find_repos(project_root)
@@ -715,6 +716,12 @@ def refresh_workspaces(project_root: Path, name: str | None,
         die(f"no jj repos found in {project_root}")
 
     is_single_repo = len(repos) == 1 and repos[0] == project_root
+
+    # If no name given and we're at the project root (not inside a
+    # workspace), treat as --all.
+    if not all_workspaces and not name:
+        if current_workspace_name(project_root) is None:
+            all_workspaces = True
 
     # Build list of (display_name, {repo_dir: jj_workspace_name}) pairs
     targets: list[tuple[str, dict[Path, str]]] = []
