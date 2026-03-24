@@ -13,7 +13,9 @@ Configuration lives in .grove/grove.toml (optional):
 
 Usage:
     grove new [name]                Create a new workspace (random tree name if omitted)
-    grove sync                      Re-sync symlinks for all workspaces
+    grove refresh [name]            Fetch and rebase workspace onto trunk
+    grove refresh --all             Fetch and rebase all workspaces
+    grove link                      Re-sync symlinks for all workspaces
     grove delete [name]             Delete a workspace
     grove list (ls)                 List workspaces with status
     grove status                    Show project and repo overview
@@ -169,7 +171,7 @@ def write_default_config(grove_dir: Path) -> None:
         "\n"
         "# Files and directories to symlink into workspaces.\n"
         "# Paths are relative to the project root.\n"
-        "# Run 'grove sync' after changing this list.\n"
+        "# Run 'grove link' after changing this list.\n"
         '#\n'
         '# sync = [".pi", ".envrc", "AGENTS.md", ".zed"]\n'
         "\n"
@@ -582,27 +584,131 @@ def create_workspace(project_root: Path, name: str,
     print(f"\nWorkspace ready: {GROVE_DIR}/{name}")
 
 
-def sync_all_workspaces(project_root: Path) -> None:
-    """Re-sync symlinks for all workspaces."""
+def link_workspaces(project_root: Path,
+                    workspace_names: list[str] | None = None,
+                    quiet: bool = False) -> None:
+    """Re-sync symlinks for workspaces.
+
+    If workspace_names is given, only those workspaces are linked.
+    Otherwise all workspaces are linked. When quiet is True, skips
+    the hint message if no sync items are configured.
+    """
     grove_dir = project_root / GROVE_DIR
     config = merged_config(grove_dir)
     sync_list = get_sync_list(config)
 
     if not sync_list:
-        print("No sync items configured in grove.toml")
-        print(f"  Hint: add sync = [\".pi\", \".envrc\"] to {GROVE_DIR}/{GROVE_CONFIG}")
+        if not quiet:
+            print("No sync items configured in grove.toml")
+            print(f"  Hint: add sync = [\".pi\", \".envrc\"] to {GROVE_DIR}/{GROVE_CONFIG}")
         return
 
-    workspaces = find_workspaces(grove_dir)
-    if not workspaces:
-        print("No workspaces to sync.")
+    all_workspaces = find_workspaces(grove_dir)
+    if not all_workspaces:
+        if not quiet:
+            print("No workspaces to link.")
         return
 
-    print(f"Syncing {len(workspaces)} workspace{'s' if len(workspaces) != 1 else ''}...\n")
-    for ws_dir in workspaces:
+    if workspace_names is not None:
+        targets = [ws for ws in all_workspaces if ws.name in workspace_names]
+    else:
+        targets = all_workspaces
+
+    if not targets:
+        return
+
+    print(f"Linking {len(targets)} workspace{'s' if len(targets) != 1 else ''}...\n")
+    for ws_dir in targets:
         print(f"  {ws_dir.name}:")
         sync_symlinks(project_root, ws_dir, sync_list)
     print(f"\nDone.")
+
+
+def refresh_workspace(project_root: Path, name: str | None,
+                      all_workspaces: bool = False) -> None:
+    """Fetch from remotes and rebase workspace(s) onto trunk.
+
+    Fetches once per repo, then rebases each workspace's commit stack
+    onto the updated trunk.
+    """
+    grove_dir = project_root / GROVE_DIR
+    repos = find_repos(project_root)
+    if not repos:
+        die(f"no jj repos found in {project_root}")
+
+    is_single_repo = len(repos) == 1 and repos[0] == project_root
+
+    if all_workspaces:
+        workspaces = find_workspaces(grove_dir)
+        if not workspaces:
+            die("no workspaces found")
+        ws_names = [ws.name for ws in workspaces]
+    else:
+        ws_dir = resolve_workspace(project_root, name)
+        if not ws_dir.exists():
+            die(f"workspace not found: {ws_dir.name}")
+        ws_names = [ws_dir.name]
+
+    # Fetch once per repo
+    print("Fetching...\n")
+    for repo_dir in repos:
+        repo_label = repo_dir.name if repo_dir != project_root else project_root.name
+        result = subprocess.run(
+            ["jj", "git", "fetch"],
+            cwd=repo_dir, capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print(f"  {repo_label}: fetch failed: {result.stderr.strip()}")
+        else:
+            print(f"  {repo_label}: fetched")
+
+    # Rebase each workspace
+    print()
+    errors = 0
+    for ws_name in ws_names:
+        print(f"  {ws_name}:")
+        for repo_dir in repos:
+            if is_single_repo:
+                repo_label = project_root.name
+                jj_ws_name = ws_name
+            else:
+                repo_label = repo_dir.name
+                jj_ws_name = f"{ws_name}-{repo_dir.name}"
+
+            # Update stale workspace state before rebasing
+            subprocess.run(
+                ["jj", "workspace", "update-stale"],
+                cwd=repo_dir, capture_output=True, text=True,
+            )
+
+            result = subprocess.run(
+                ["jj", "rebase", "-b", f"{jj_ws_name}@", "-d", "trunk()"],
+                cwd=repo_dir, capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                stderr = result.stderr.strip()
+                tag = f"rebase failed: {stderr}"
+                errors += 1
+            else:
+                stdout = result.stdout.strip()
+                if "nothing changed" in stdout.lower():
+                    tag = "already up to date"
+                else:
+                    tag = "rebased"
+
+            if is_single_repo:
+                print(f"    {tag}")
+            else:
+                print(f"    {repo_label}: {tag}")
+
+    # Re-sync symlinks for the refreshed workspaces
+    link_workspaces(project_root, workspace_names=ws_names, quiet=True)
+
+    if errors:
+        print(f"Done with {errors} error{'s' if errors != 1 else ''}.")
+    else:
+        count = len(ws_names)
+        print(f"Refreshed {count} workspace{'s' if count != 1 else ''}.")
 
 
 def delete_workspace(project_root: Path, name: str | None,
@@ -892,7 +998,13 @@ def parse_args() -> argparse.Namespace:
     new_p.add_argument("-y", "--yes", action="store_true",
                        help="Skip confirmation when initializing .grove/")
 
-    sub.add_parser("sync", help="Re-sync symlinks for all workspaces")
+    sub.add_parser("link", help="Re-sync symlinks for all workspaces")
+
+    refresh_p = sub.add_parser("refresh", help="Fetch and rebase workspace(s) onto trunk")
+    refresh_p.add_argument("name", nargs="?",
+                           help="Workspace name (or auto-detect from cwd)")
+    refresh_p.add_argument("-a", "--all", action="store_true",
+                           help="Refresh all workspaces")
 
     del_p = sub.add_parser("delete", aliases=["rm"],
                            help="Delete a workspace")
@@ -952,9 +1064,14 @@ def main() -> None:
         create_workspace(project_root, name, open_editor=open_editor,
                          resume=resume, run_setup=not args.no_setup)
 
-    elif args.command == "sync":
+    elif args.command == "link":
         project_root = find_project_root()
-        sync_all_workspaces(project_root)
+        link_workspaces(project_root)
+
+    elif args.command == "refresh":
+        project_root = find_project_root()
+        refresh_workspace(project_root, args.name,
+                          all_workspaces=args.all)
 
     elif args.command in ("delete", "rm"):
         project_root = find_project_root()
