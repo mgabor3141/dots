@@ -37,7 +37,7 @@
   },
   {
     "label": "update",
-    "command": "chezmoi update",
+    "command": "jj gf && reheat && chezmoi apply",
     "show_command": false,
   },
   {
