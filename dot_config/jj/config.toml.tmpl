@@ -82,7 +82,7 @@ track-default-bookmark-on-clone = true
 private-commits = "description(glob:'private:*') | trunk()..bookmarks(glob:'private/*')"
 
 [remotes.origin]
-auto-track-bookmarks = "glob:*/*"
+auto-track-bookmarks = "main | master | trunk"
 
 [templates]
 git_push_bookmark = '''"mgabor/" ++ description.first_line().lower().trim().replace(regex:'\W+', "-").remove_prefix('-').remove_suffix('-').replace(regex:'((?:[^-]+-){5}).*', "$1").remove_suffix('-')'''

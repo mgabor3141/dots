@@ -22,6 +22,10 @@ input {
     focus-follows-mouse max-scroll-amount="0%" // Automatically focus windows under the mouse pointer
 }
 
+cursor {
+    hide-when-typing
+}
+
 gestures {
     dnd-edge-view-scroll {
         trigger-width 150
