@@ -8,7 +8,7 @@ When working on a service or system, don't stop at "it's running". Spot-check th
 
 ## Writing Style
 
-Avoid overusing emdashes in files. They are an indicator of "AI slop" and undermine credibility. Prefer commas, semicolons, colons, or separate sentences.
+Avoid using emdashes. They are an indicator of "AI slop" and undermine credibility. Prefer commas, semicolons, colons, or separate sentences.
 
 ## Maintaining AGENTS.md Files
 
