@@ -1,393 +1,46 @@
-#!/usr/bin/env bash
-#
-# pr-status — Show status of your recent PRs across multiple GitHub repos.
-#
-# Auto-discovers repos from subdirectories (or CWD). Groups PRs by ticket ID,
-# shows review state, CI status, and deployment status (preprod/prod) when
-# detectable from CI commit statuses or branch models.
-#
-# Usage:
-#   pr-status [options]
-#
-# Options:
-#   --days N       Look back N days (default: 30)
-#   --author USER  GitHub username (default: @me)
-#   --no-deploy    Skip deployment checks (faster)
-#   --slack        Output Slack-formatted markdown
-#   --help         Show this help
-#
-set -euo pipefail
+#!/usr/bin/env python3
+"""
+pr-status — Show status of your recent PRs across multiple GitHub repos.
 
-DAYS=30
-AUTHOR="@me"
-CHECK_DEPLOY=true
-SLACK=false
+Auto-discovers repos from subdirectories (or CWD). Groups PRs by ticket ID,
+shows review state, CI status, and deployment status (preprod/prod) when
+detectable from CI commit statuses or branch models.
 
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --days)      DAYS="$2"; shift 2 ;;
-        --author)    AUTHOR="$2"; shift 2 ;;
-        --no-deploy) CHECK_DEPLOY=false; shift ;;
-        --slack)     SLACK=true; shift ;;
-        --help|-h)   sed -n '3,18p' "$0" | sed -E 's/^# ?//'; exit 0 ;;
-        *)           echo "Unknown option: $1" >&2; exit 1 ;;
-    esac
-done
+Usage:
+    pr-status [options]
 
-SINCE=$(date -u -v-"${DAYS}d" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -d "-${DAYS} days" +"%Y-%m-%dT%H:%M:%SZ")
+Options:
+    --days N         Look back N days (default: 30)
+    --author USER    GitHub username (default: @me)
+    --no-deploy      Skip deployment checks (faster)
+    --slack          Output Slack-formatted markdown
+    --watch [SECS]   Re-run every SECS seconds (default: 60), notify on changes
+    --help           Show this help
 
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
+Dependencies: python3 (3.8+), gh (GitHub CLI), git
+"""
 
-# ============================================================
-# Repo discovery: find git repos in CWD or subdirectories
-# ============================================================
+from __future__ import annotations
 
-discover_repos() {
-    # Each line: repo_name\tgit_dir\towner/repo
-    # Check CWD first (regular git repo or jj workspace)
-    if [[ -d ".git" ]] || [[ -d ".jj" ]] || git rev-parse --git-dir &>/dev/null; then
-        emit_repo "."
-        return
-    fi
-    # Check subdirectories
-    for dir in */; do
-        [[ -d "$dir" ]] || continue
-        dir="${dir%/}"
-        emit_repo "$dir" || true
-    done
-}
-
-emit_repo() {
-    local dir="$1"
-    local git_dir=""
-
-    # Direct .git directory
-    if [[ -d "${dir}/.git" ]]; then
-        git_dir="${dir}/.git"
-    # Colocated jj+git: .git is a file pointing elsewhere
-    elif [[ -f "${dir}/.git" ]]; then
-        git_dir=$(GIT_DIR= git -C "$dir" rev-parse --git-dir 2>/dev/null) || return
-    # jj workspace: follow .jj/repo -> main repo -> store/git_target
-    elif [[ -d "${dir}/.jj" ]]; then
-        local repo_path="${dir}/.jj/repo"
-        # .jj/repo can be a symlink, directory, or a file containing a path
-        if [[ -f "$repo_path" && ! -d "$repo_path" ]]; then
-            repo_path=$(cat "$repo_path")
-        fi
-        local git_target_file="${repo_path}/store/git_target"
-        if [[ -f "$git_target_file" ]]; then
-            local rel_target
-            rel_target=$(cat "$git_target_file")
-            local store_dir
-            store_dir=$(cd "$(dirname "$git_target_file")" && pwd)
-            # Resolve the relative path (which points to a .git dir, not something you cd into)
-            git_dir=$(cd "$store_dir" && realpath "$rel_target" 2>/dev/null) || return
-            [[ -d "$git_dir" ]] || return
-        elif [[ -d "${repo_path}/store" ]]; then
-            # Main jj repo (not a workspace), check for colocated .git
-            local jj_root
-            jj_root=$(dirname "$(dirname "$repo_path")")
-            if [[ -d "${jj_root}/.git" ]]; then
-                git_dir="${jj_root}/.git"
-            else
-                return
-            fi
-        else
-            return
-        fi
-    else
-        return
-    fi
-
-    # Extract owner/repo from remote URL
-    local remote_url
-    remote_url=$(GIT_DIR="$git_dir" git remote get-url origin 2>/dev/null) || return
-    local owner_repo
-    owner_repo=$(echo "$remote_url" | sed -E 's|.*github\.com[:/]||; s|\.git$||')
-
-    local repo_name
-    repo_name=$(echo "$owner_repo" | sed 's|.*/||')
-
-    echo "${repo_name}	${git_dir}	${owner_repo}"
-}
-
-# Discover repos
-mapfile -t REPO_LINES < <(discover_repos)
-
-if [[ ${#REPO_LINES[@]} -eq 0 ]]; then
-    echo "No git repos found in current directory or subdirectories." >&2
-    exit 1
-fi
-
-# Parse into arrays
-REPO_NAMES=()
-REPO_GIT_DIRS=()
-REPO_OWNER_REPOS=()
-for line in "${REPO_LINES[@]}"; do
-    IFS=$'\t' read -r name git_dir owner_repo <<< "$line"
-    REPO_NAMES+=("$name")
-    REPO_GIT_DIRS+=("$git_dir")
-    REPO_OWNER_REPOS+=("$owner_repo")
-done
-
-# Write repo metadata as JSON for the Python renderer
-python3 -c "
-import json, sys
-names = sys.argv[1].split('\x1f')
-git_dirs = sys.argv[2].split('\x1f')
-owner_repos = sys.argv[3].split('\x1f')
-repos = []
-for n, g, o in zip(names, git_dirs, owner_repos):
-    repos.append({'name': n, 'git_dir': g, 'owner_repo': o})
-json.dump(repos, open('$TMPDIR/_repos.json', 'w'))
-" "$(IFS=$'\x1f'; echo "${REPO_NAMES[*]}")" "$(IFS=$'\x1f'; echo "${REPO_GIT_DIRS[*]}")" "$(IFS=$'\x1f'; echo "${REPO_OWNER_REPOS[*]}")"
-
-T_START=$SECONDS
-printf '\033[2mFetching PRs across %d repos...\033[0m\n' "${#REPO_NAMES[@]}" >&2
-
-# ============================================================
-# Phase 1: Fetch PRs from all repos in parallel
-# ============================================================
-
-for i in "${!REPO_NAMES[@]}"; do
-    repo="${REPO_NAMES[$i]}"
-    git_dir="${REPO_GIT_DIRS[$i]}"
-    (
-        GIT_DIR="$git_dir" gh pr list \
-            --author "$AUTHOR" --state all --limit 50 \
-            --json number,title,state,isDraft,createdAt,mergedAt,mergeCommit,headRefName,baseRefName,author,reviews,reviewRequests,statusCheckRollup,url \
-            2>/dev/null | python3 -c "
-import sys, json
-since = '$SINCE'
-prs = json.load(sys.stdin)
-filtered = []
-for pr in prs:
-    created = pr.get('createdAt', '')
-    merged = pr.get('mergedAt', '')
-    if created >= since or (merged and merged >= since):
-        pr['_repo'] = '$repo'
-        filtered.append(pr)
-json.dump(filtered, sys.stdout)
-" > "$TMPDIR/${repo}.json"
-    ) &
-done
-
-wait
-T_PHASE1=$((SECONDS - T_START))
-
-# ============================================================
-# Phase 2: Detect deployment status per repo
-# ============================================================
-#
-# Strategy per repo (auto-detected):
-# 1. CI status contexts: walk back from HEAD on the default branch, look for
-#    commit statuses containing "promote" or "deploy" paired with "prod"/"preprod"/"staging".
-#    If found, use ancestry checks.
-# 2. Branch model: if origin/release and origin/develop exist, use branch tips.
-# 3. Fallback: merged = deployed.
-
-T_PHASE2_START=$SECONDS
-if [[ "$CHECK_DEPLOY" == true ]]; then
-    printf '\033[2mChecking deployment status...\033[0m\n' >&2
-
-    for i in "${!REPO_NAMES[@]}"; do
-        repo="${REPO_NAMES[$i]}"
-        git_dir="${REPO_GIT_DIRS[$i]}"
-        owner_repo="${REPO_OWNER_REPOS[$i]}"
-        (
-            warnings_file="$TMPDIR/${repo}-warnings.txt"
-            out_file="$TMPDIR/${repo}-deploy.json"
-            prs_file="$TMPDIR/${repo}.json"
-
-            # Detect default branch
-            default_branch=$(GIT_DIR="$git_dir" git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||') || true
-            if [[ -z "$default_branch" ]]; then
-                for candidate in main master develop; do
-                    if GIT_DIR="$git_dir" git rev-parse "origin/${candidate}" &>/dev/null; then
-                        default_branch="$candidate"
-                        break
-                    fi
-                done
-            fi
-            [[ -z "$default_branch" ]] && { echo '{}' > "$out_file"; exit 0; }
-
-            # Check for develop/release branch model first (no API calls needed)
-            if GIT_DIR="$git_dir" git rev-parse origin/release &>/dev/null && \
-               GIT_DIR="$git_dir" git rev-parse origin/develop &>/dev/null; then
-                last_prod=$(GIT_DIR="$git_dir" git rev-parse origin/release 2>/dev/null) || true
-                last_preprod=$(GIT_DIR="$git_dir" git rev-parse origin/develop 2>/dev/null) || true
-            else
-                # Single GraphQL query: fetch commit statuses for recent commits
-                # on the default branch, then find deploy markers in the results.
-                owner="${owner_repo%%/*}"
-                repo_name="${owner_repo##*/}"
-
-                IFS='|' read -r last_preprod last_prod < <(GIT_DIR="$git_dir" gh api graphql -f query="
-                    query {
-                      repository(owner: \"${owner}\", name: \"${repo_name}\") {
-                        object(expression: \"${default_branch}\") {
-                          ... on Commit {
-                            history(first: 30) {
-                              nodes {
-                                oid
-                                status {
-                                  contexts {
-                                    context
-                                    state
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }" 2>/dev/null | python3 -c "
-import sys, json, re
-
-data = json.load(sys.stdin)
-nodes = data.get('data', {}).get('repository', {}).get('object', {}).get('history', {}).get('nodes', [])
-
-# Collect all unique context names across all commits
-all_contexts = set()
-for node in nodes:
-    status = node.get('status') or {}
-    for ctx in status.get('contexts', []):
-        all_contexts.add(ctx.get('context', ''))
-
-# Discover prod/preprod deploy context names
-prod_ctx = None
-preprod_ctx = None
-for ctx in sorted(all_contexts):
-    if re.search(r'promot|deploy', ctx, re.I):
-        if re.search(r'prod', ctx, re.I) and not re.search(r'pre-?prod|staging', ctx, re.I):
-            if not prod_ctx:
-                prod_ctx = ctx
-        if re.search(r'pre-?prod|staging', ctx, re.I):
-            if not preprod_ctx:
-                preprod_ctx = ctx
-
-if not prod_ctx and not preprod_ctx:
-    print('NONE|NONE')
-    sys.exit(0)
-
-# Walk commits to find most recent promoted to each env
-last_preprod = ''
-last_prod = ''
-for node in nodes:
-    oid = node['oid']
-    status = node.get('status') or {}
-    by_ctx = {c['context']: c['state'] for c in status.get('contexts', [])}
-    if prod_ctx and not last_prod and by_ctx.get(prod_ctx) == 'SUCCESS':
-        last_prod = oid
-    if preprod_ctx and not last_preprod and by_ctx.get(preprod_ctx) == 'SUCCESS':
-        last_preprod = oid
-    if (last_prod or not prod_ctx) and (last_preprod or not preprod_ctx):
-        break
-
-print(f'{last_preprod}|{last_prod}')
-" || echo "|") || true
-
-                # Handle "NONE|NONE" from no-pipeline case
-                if [[ "$last_preprod" == "NONE" ]]; then
-                    python3 -c "
+import argparse
 import json
-prs = json.load(open('$prs_file'))
-merged = [p for p in prs if p['state'] == 'MERGED' and p.get('mergeCommit')]
-deploy_info = {p['number']: {'status': 'prod'} for p in merged}
-json.dump(deploy_info, open('$out_file', 'w'))
-"
-                    exit 0
-                fi
-
-                if [[ -z "$last_preprod" ]]; then
-                    echo "could not find last preprod deploy in recent history" >> "$warnings_file"
-                fi
-                if [[ -z "$last_prod" ]]; then
-                    echo "could not find last prod deploy in recent history" >> "$warnings_file"
-                fi
-            fi
-
-            # Check each merged PR via git merge-base --is-ancestor
-            python3 -c "
-import json, subprocess, sys, os
-
-git_dir, prs_file, out_file, warnings_file = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-last_preprod, last_prod = sys.argv[5], sys.argv[6]
-env_vars = {**os.environ, 'GIT_DIR': git_dir}
-
-prs = json.load(open(prs_file))
-merged = [p for p in prs if p['state'] == 'MERGED' and p.get('mergeCommit')]
-if not merged:
-    json.dump({}, open(out_file, 'w'))
-    sys.exit(0)
-
-def is_ancestor(commit, of):
-    if not of:
-        return False
-    try:
-        subprocess.check_call(
-            ['git', 'merge-base', '--is-ancestor', commit, of],
-            env=env_vars, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=5
-        )
-        return True
-    except:
-        return False
-
-deploy_info = {}
-warnings = []
-for pr in merged:
-    sha = pr['mergeCommit']['oid']
-    num = pr['number']
-    if last_prod and is_ancestor(sha, last_prod):
-        deploy_info[num] = {'status': 'prod'}
-    elif last_preprod and is_ancestor(sha, last_preprod):
-        deploy_info[num] = {'status': 'preprod'}
-    elif not last_preprod and not last_prod:
-        deploy_info[num] = {'status': 'unknown'}
-    else:
-        deploy_info[num] = {'status': 'merged'}
-        base = pr.get('baseRefName', '')
-        if base not in ('develop', 'main', 'master', ''):
-            warnings.append(f'#{num}: merged into {base}')
-
-json.dump(deploy_info, open(out_file, 'w'))
-if warnings:
-    with open(warnings_file, 'a') as f:
-        f.write('\n'.join(warnings) + '\n')
-" "$git_dir" "$prs_file" "$out_file" "$warnings_file" "$last_preprod" "$last_prod"
-        ) &
-    done
-
-    wait
-
-    # Print any warnings
-    for repo in "${REPO_NAMES[@]}"; do
-        wf="$TMPDIR/${repo}-warnings.txt"
-        if [[ -f "$wf" ]]; then
-            while IFS= read -r line; do
-                printf '\033[0;33m  ⚠ %s: %s\033[0m\n' "$repo" "$line" >&2
-            done < "$wf"
-        fi
-    done
-fi
-T_PHASE2=$((SECONDS - T_PHASE2_START))
-
-printf '\033[2mDone (PRs: %ds, deploy: %ds)\033[0m\n' "$T_PHASE1" "$T_PHASE2" >&2
-
-# ============================================================
-# Phase 3: Merge everything and render output
-# ============================================================
-
-python3 -c '
-import json, os, re, sys
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
 
-tmpdir = sys.argv[1]
-check_deploy = sys.argv[2] == "true"
-slack_mode = sys.argv[3] == "true" if len(sys.argv) > 3 else False
+# ============================================================
+# Colors and formatting
+# ============================================================
 
-# Colors
 BOLD = "\033[1m"
 DIM = "\033[2m"
 NC = "\033[0m"
@@ -397,74 +50,397 @@ YELLOW = "\033[0;33m"
 BLUE = "\033[0;34m"
 MAGENTA = "\033[0;35m"
 CYAN = "\033[0;36m"
-
 PALETTE = [CYAN, GREEN, MAGENTA, BLUE, YELLOW, RED]
 
-# Load repo metadata
-repos_meta = json.load(open(os.path.join(tmpdir, "_repos.json")))
-repo_names = [r["name"] for r in repos_meta]
 
-# Auto-generate short names and colors
+def osc8(url: str, label: str) -> str:
+    return f"\033]8;;{url}\033\\{label}\033]8;;\033\\"
+
+
+# ============================================================
+# External command helpers
+# ============================================================
+
+
+def run(cmd: list[str], env: Optional[dict] = None, timeout: int = 30) -> Optional[str]:
+    """Run a command, return stdout or None on failure."""
+    try:
+        r = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout,
+            env={**os.environ, **(env or {})},
+        )
+        return r.stdout.strip() if r.returncode == 0 else None
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+
+
+def gh_graphql(query: str, git_dir: str) -> Optional[dict]:
+    """Run a GraphQL query via gh api."""
+    result = run(
+        ["gh", "api", "graphql", "-f", f"query={query}"],
+        env={"GIT_DIR": git_dir},
+        timeout=30,
+    )
+    if result:
+        try:
+            return json.loads(result)
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+# ============================================================
+# Repo discovery
+# ============================================================
+
+
+@dataclass
+class Repo:
+    name: str
+    git_dir: str
+    owner_repo: str  # "owner/name"
+    short_name: str = ""
+    color: str = ""
+
+
+def discover_repos() -> list[Repo]:
+    """Find git repos in CWD or its subdirectories."""
+    cwd = Path(".")
+
+    # Check CWD itself
+    if (cwd / ".git").exists() or (cwd / ".jj").exists():
+        repo = try_emit_repo(cwd)
+        return [repo] if repo else []
+
+    # Check subdirectories
+    repos = []
+    for d in sorted(cwd.iterdir()):
+        if d.is_dir() and not d.name.startswith("."):
+            repo = try_emit_repo(d)
+            if repo:
+                repos.append(repo)
+    return repos
+
+
+def try_emit_repo(d: Path) -> Optional[Repo]:
+    """Try to extract repo metadata from a directory."""
+    git_dir = find_git_dir(d)
+    if not git_dir:
+        return None
+
+    remote_url = run(["git", "remote", "get-url", "origin"], env={"GIT_DIR": git_dir})
+    if not remote_url:
+        return None
+
+    owner_repo = re.sub(r".*github\.com[:/]", "", remote_url)
+    owner_repo = re.sub(r"\.git$", "", owner_repo)
+    name = owner_repo.split("/")[-1]
+
+    return Repo(name=name, git_dir=git_dir, owner_repo=owner_repo)
+
+
+def find_git_dir(d: Path) -> Optional[str]:
+    """Resolve the .git directory for a path (supports git, jj colocated, jj workspaces)."""
+    git_path = d / ".git"
+    jj_path = d / ".jj"
+
+    # Standard git repo
+    if git_path.is_dir():
+        return str(git_path)
+
+    # Colocated jj+git (.git is a file)
+    if git_path.is_file():
+        result = run(["git", "-C", str(d), "rev-parse", "--git-dir"])
+        return result if result else None
+
+    # jj workspace: .jj/repo is a file pointing to the main repo
+    if jj_path.is_dir():
+        repo_pointer = jj_path / "repo"
+        if repo_pointer.is_file() and not repo_pointer.is_dir():
+            main_repo = repo_pointer.read_text().strip()
+            git_target_file = Path(main_repo) / "store" / "git_target"
+            if git_target_file.is_file():
+                rel_target = git_target_file.read_text().strip()
+                resolved = (git_target_file.parent / rel_target).resolve()
+                if resolved.is_dir():
+                    return str(resolved)
+        elif (repo_pointer / "store").is_dir():
+            # Main jj repo, check for colocated .git
+            jj_root = repo_pointer.parent.parent
+            if (jj_root / ".git").is_dir():
+                return str(jj_root / ".git")
+
+    return None
+
+
 MAX_REPO_NAME = 16
 
-def shorten_repo_name(name):
+
+def shorten_repo_name(name: str) -> str:
     """Shorten long repo names by abbreviating leading segments to initials.
     e.g. freetrade-firebase-functions -> f-f-functions"""
     if len(name) <= MAX_REPO_NAME:
         return name
     sep = "-" if "-" in name else "_" if "_" in name else None
     if not sep:
-        return name[:MAX_REPO_NAME - 1] + "…"
+        return name[: MAX_REPO_NAME - 1] + "…"
     parts = name.split(sep)
     if len(parts) < 2:
-        return name[:MAX_REPO_NAME - 1] + "…"
-    # Abbreviate segments from the left until it fits, keep last segment full
+        return name[: MAX_REPO_NAME - 1] + "…"
     for i in range(len(parts) - 1):
         parts[i] = parts[i][0] if parts[i] else parts[i]
-        candidate = sep.join(parts)
-        if len(candidate) <= MAX_REPO_NAME:
-            return candidate
+        if len(sep.join(parts)) <= MAX_REPO_NAME:
+            return sep.join(parts)
     return sep.join(parts)
 
-REPO_SHORT = {}
-REPO_COLORS = {}
-for i, r in enumerate(repos_meta):
-    name = r["name"]
-    REPO_SHORT[name] = shorten_repo_name(name)
-    REPO_COLORS[name] = PALETTE[i % len(PALETTE)]
 
-# Compute max short name length for alignment
-max_repo_len = max((len(v) for v in REPO_SHORT.values()), default=10) + 1
+def assign_display_attrs(repos: list[Repo]) -> None:
+    """Assign short names and colors to repos."""
+    for i, repo in enumerate(repos):
+        repo.short_name = shorten_repo_name(repo.name)
+        repo.color = PALETTE[i % len(PALETTE)]
 
-# Load all PRs
-all_prs = []
-for repo in repo_names:
-    path = os.path.join(tmpdir, f"{repo}.json")
-    if os.path.exists(path):
-        try:
-            prs = json.load(open(path))
-            all_prs.extend(prs)
-        except:
-            pass
 
-# Load deploy info
-deploy_info = {}
-for repo in repo_names:
-    path = os.path.join(tmpdir, f"{repo}-deploy.json")
-    if os.path.exists(path):
-        try:
-            info = json.load(open(path))
-            deploy_info[repo] = {int(k): v for k, v in info.items()}
-        except:
-            pass
+# ============================================================
+# Phase 1: Fetch PRs
+# ============================================================
 
-def get_review_info(pr):
+PR_FIELDS = (
+    "number,title,state,isDraft,createdAt,mergedAt,mergeCommit,"
+    "headRefName,baseRefName,author,reviews,reviewRequests,"
+    "statusCheckRollup,url"
+)
+
+
+def fetch_prs(repo: Repo, author: str, since: str) -> list[dict]:
+    """Fetch recent PRs for a repo."""
+    result = run(
+        [
+            "gh", "pr", "list",
+            "--author", author, "--state", "all", "--limit", "50",
+            "--json", PR_FIELDS,
+        ],
+        env={"GIT_DIR": repo.git_dir},
+        timeout=30,
+    )
+    if not result:
+        return []
+
+    try:
+        prs = json.loads(result)
+    except json.JSONDecodeError:
+        return []
+
+    filtered = []
+    for pr in prs:
+        created = pr.get("createdAt", "")
+        merged = pr.get("mergedAt", "")
+        if created >= since or (merged and merged >= since):
+            pr["_repo"] = repo.name
+            filtered.append(pr)
+    return filtered
+
+
+# ============================================================
+# Phase 2: Deploy detection
+# ============================================================
+
+
+def detect_deploy_status(repo: Repo, prs: list[dict]) -> tuple[dict[int, str], list[str]]:
+    """Determine deployment status for merged PRs.
+
+    Returns (deploy_info, warnings) where deploy_info maps PR number to status.
+    """
+    merged = [p for p in prs if p.get("state") == "MERGED" and p.get("mergeCommit")]
+    if not merged:
+        return {}, []
+
+    warnings = []
+
+    # Detect default branch
+    default_branch = detect_default_branch(repo.git_dir)
+    if not default_branch:
+        return {p["number"]: "unknown" for p in merged}, ["could not detect default branch"]
+
+    # Strategy 1: develop/release branch model (no API calls)
+    has_release = run(["git", "rev-parse", "origin/release"], env={"GIT_DIR": repo.git_dir})
+    has_develop = run(["git", "rev-parse", "origin/develop"], env={"GIT_DIR": repo.git_dir})
+
+    if has_release and has_develop:
+        last_prod = has_release
+        last_preprod = has_develop
+    else:
+        # Strategy 2: CI commit statuses via GraphQL
+        last_preprod, last_prod, ci_warnings = find_deploy_markers_graphql(
+            repo, default_branch
+        )
+        warnings.extend(ci_warnings)
+
+        if last_preprod is None and last_prod is None:
+            # Strategy 3: no deploy pipeline, merged = deployed
+            return {p["number"]: "prod" for p in merged}, warnings
+
+    # Check ancestry for each merged PR
+    deploy_info = {}
+    env = {"GIT_DIR": repo.git_dir}
+    for pr in merged:
+        sha = pr["mergeCommit"]["oid"]
+        num = pr["number"]
+        if last_prod and is_ancestor(sha, last_prod, env):
+            deploy_info[num] = "prod"
+        elif last_preprod and is_ancestor(sha, last_preprod, env):
+            deploy_info[num] = "preprod"
+        elif not last_preprod and not last_prod:
+            deploy_info[num] = "unknown"
+        else:
+            deploy_info[num] = "merged"
+            base = pr.get("baseRefName", "")
+            if base not in ("develop", "main", "master", ""):
+                warnings.append(f"#{num}: merged into {base}")
+
+    return deploy_info, warnings
+
+
+def detect_default_branch(git_dir: str) -> Optional[str]:
+    result = run(
+        ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+        env={"GIT_DIR": git_dir},
+    )
+    if result:
+        return result.replace("refs/remotes/origin/", "")
+
+    for candidate in ("main", "master", "develop"):
+        if run(["git", "rev-parse", f"origin/{candidate}"], env={"GIT_DIR": git_dir}):
+            return candidate
+    return None
+
+
+def find_deploy_markers_graphql(
+    repo: Repo, default_branch: str
+) -> tuple[Optional[str], Optional[str], list[str]]:
+    """Single GraphQL query to find last preprod/prod deployed commits."""
+    owner, name = repo.owner_repo.split("/", 1)
+
+    query = """
+    query {
+      repository(owner: "%s", name: "%s") {
+        object(expression: "%s") {
+          ... on Commit {
+            history(first: 30) {
+              nodes {
+                oid
+                status {
+                  contexts {
+                    context
+                    state
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    """ % (owner, name, default_branch)
+
+    data = gh_graphql(query, repo.git_dir)
+    if not data:
+        return None, None, ["GraphQL query failed"]
+
+    nodes = (
+        data.get("data", {})
+        .get("repository", {})
+        .get("object", {})
+        .get("history", {})
+        .get("nodes", [])
+    )
+    if not nodes:
+        return None, None, ["no commits found on default branch"]
+
+    # Collect all context names across commits
+    all_contexts: set[str] = set()
+    for node in nodes:
+        for ctx in (node.get("status") or {}).get("contexts", []):
+            all_contexts.add(ctx.get("context", ""))
+
+    # Discover deploy context names
+    prod_ctx = None
+    preprod_ctx = None
+    for ctx in sorted(all_contexts):
+        if re.search(r"promot|deploy", ctx, re.I):
+            if re.search(r"prod", ctx, re.I) and not re.search(r"pre-?prod|staging", ctx, re.I):
+                if not prod_ctx:
+                    prod_ctx = ctx
+            if re.search(r"pre-?prod|staging", ctx, re.I):
+                if not preprod_ctx:
+                    preprod_ctx = ctx
+
+    if not prod_ctx and not preprod_ctx:
+        return None, None, []  # no pipeline detected, will fall through to strategy 3
+
+    # Walk commits to find most recent promoted
+    last_preprod = None
+    last_prod = None
+    for node in nodes:
+        oid = node["oid"]
+        by_ctx = {
+            c["context"]: c["state"]
+            for c in (node.get("status") or {}).get("contexts", [])
+        }
+        if prod_ctx and not last_prod and by_ctx.get(prod_ctx) == "SUCCESS":
+            last_prod = oid
+        if preprod_ctx and not last_preprod and by_ctx.get(preprod_ctx) == "SUCCESS":
+            last_preprod = oid
+        if (last_prod or not prod_ctx) and (last_preprod or not preprod_ctx):
+            break
+
+    warnings = []
+    if preprod_ctx and not last_preprod:
+        warnings.append("could not find last preprod deploy in recent history")
+    if prod_ctx and not last_prod:
+        warnings.append("could not find last prod deploy in recent history")
+
+    return last_preprod, last_prod, warnings
+
+
+def is_ancestor(commit: str, of: str, env: dict) -> bool:
+    try:
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit, of],
+            env={**os.environ, **env},
+            capture_output=True, timeout=5, check=True,
+        )
+        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return False
+
+
+# ============================================================
+# Formatting
+# ============================================================
+
+TICKET_RE = re.compile(r"([A-Z]{2,}-\d+)", re.IGNORECASE)
+
+
+def extract_ticket(title: str) -> Optional[str]:
+    m = TICKET_RE.search(title)
+    return m.group(1).upper() if m else None
+
+
+def strip_ticket(title: str) -> str:
+    title = TICKET_RE.sub("", title)
+    title = re.sub(r"\(\)\s*", "", title)
+    title = re.sub(r"\[\]\s*", "", title)
+    return title.strip().lstrip(":").strip()
+
+
+def get_review_info(pr: dict) -> dict:
     """Build per-reviewer summary with combined icons. Excludes PR author."""
-    reviews = pr.get("reviews", []) or []
-    requests = pr.get("reviewRequests", []) or []
+    reviews = pr.get("reviews") or []
+    requests = pr.get("reviewRequests") or []
     pr_author = (pr.get("author") or {}).get("login", "")
 
-    reviewer_states = {}
+    reviewer_states: dict[str, set[str]] = {}
     for r in reviews:
         author = (r.get("author") or {}).get("login", "")
         state = r.get("state", "")
@@ -475,7 +451,7 @@ def get_review_info(pr):
         if state in ("APPROVED", "CHANGES_REQUESTED", "COMMENTED"):
             reviewer_states[author].add(state)
 
-    pending_set = set()
+    pending_set: set[str] = set()
     for rr in requests:
         login = rr.get("login", "") or rr.get("name", "")
         if login and login != pr_author:
@@ -483,7 +459,7 @@ def get_review_info(pr):
             if login not in reviewer_states:
                 reviewer_states[login] = set()
 
-    reviewer_entries = []
+    entries = []
     has_approval = False
     has_changes = False
     for login, states in reviewer_states.items():
@@ -499,19 +475,22 @@ def get_review_info(pr):
         if login in pending_set:
             icons.append(f"{DIM}⏳{NC}")
         if icons:
-            reviewer_entries.append(" ".join(icons) + " " + login)
+            entries.append(" ".join(icons) + " " + login)
 
     return {
-        "entries": reviewer_entries,
+        "entries": entries,
         "has_approval": has_approval,
         "has_changes": has_changes,
         "has_pending": len(pending_set) > 0,
-        "has_comments": any("COMMENTED" in s or "CHANGES_REQUESTED" in s for s in reviewer_states.values()),
+        "has_comments": any(
+            "COMMENTED" in s or "CHANGES_REQUESTED" in s
+            for s in reviewer_states.values()
+        ),
     }
 
-def get_ci_status(pr):
-    """Summarize CI check status."""
-    checks = pr.get("statusCheckRollup", []) or []
+
+def get_ci_status(pr: dict) -> tuple[Optional[str], list[str]]:
+    checks = pr.get("statusCheckRollup") or []
     checks = [c for c in checks if c.get("name")]
     if not checks:
         return None, []
@@ -523,200 +502,376 @@ def get_ci_status(pr):
         return "pending", pending
     return "pass", []
 
-def get_deploy_status(pr):
-    """Determine deployment status for a merged PR."""
-    repo = pr["_repo"]
-    num = pr["number"]
-    info = deploy_info.get(repo, {}).get(num, {})
-    status = info.get("status", "unknown")
-    if status == "prod":
-        return "prod", None
-    elif status == "preprod":
-        return "preprod", None
-    elif status == "unknown":
-        return "unknown", "deploy status unavailable"
-    else:
-        return "merged", None
 
-def format_status(pr):
-    """Build the status string for a PR."""
+@dataclass
+class StatusInfo:
+    emoji: str
+    label: str
+    color: str
+    review_entries: list[str] = field(default_factory=list)
+    ci_status: Optional[str] = None
+    ci_detail: list[str] = field(default_factory=list)
+
+
+def format_status(
+    pr: dict,
+    deploy_info: dict[str, dict[int, str]],
+    check_deploy: bool,
+) -> StatusInfo:
     state = pr.get("state", "")
     is_draft = pr.get("isDraft", False)
 
-    ri = None
-    detail = ""
-    color = ""
     if state == "CLOSED":
-        emoji, label, color = "🚫", "closed", DIM
-    elif state == "MERGED":
+        return StatusInfo("🚫", "closed", DIM)
+
+    if state == "MERGED":
         if not check_deploy:
-            emoji, label, color = "✅", "merged", GREEN
-        else:
-            deploy, detail = get_deploy_status(pr)
-            if deploy == "prod":
-                emoji, label, color = "✅", "prod", GREEN
-            elif deploy == "preprod":
-                emoji, label, color = "⬆️", "preprod", YELLOW
-            elif deploy == "unknown":
-                emoji, label, color = "❓", "merged", DIM
-            else:
-                emoji, label, color = "📦", "merged", BLUE
-    else:
-        ri = get_review_info(pr)
-        if is_draft:
-            emoji, label, color = "📝", "draft", DIM
-        elif ri["has_changes"]:
-            emoji, label, color = "🔴", "changes", RED
-        elif ri["has_approval"]:
-            emoji, label, color = "✅", "approved", GREEN
-        elif ri["has_pending"]:
-            emoji, label, color = "👀", "review", YELLOW
-        elif ri["has_comments"]:
-            emoji, label, color = "✏️", "revise", CYAN
-        else:
-            emoji, label, color = "👀", "review", YELLOW
+            return StatusInfo("✅", "merged", GREEN)
+        repo = pr["_repo"]
+        num = pr["number"]
+        status = deploy_info.get(repo, {}).get(num, "unknown")
+        emoji_map = {
+            "prod": ("✅", "prod", GREEN),
+            "preprod": ("⬆️", "preprod", YELLOW),
+            "merged": ("📦", "merged", BLUE),
+        }
+        e, l, c = emoji_map.get(status, ("❓", "merged", DIM))
+        return StatusInfo(e, l, c)
 
-    review_str = ""
-    review_str_plain = ""
-    if ri:
-        entries = ri["entries"]
-        if entries:
-            review_str = "  ".join(entries)
-        plain_entries = []
-        for e in entries:
-            plain_entries.append(re.sub(r"\033\[[^m]*m", "", e))
-        if plain_entries:
-            review_str_plain = "  ".join(plain_entries)
-
+    # Open PR
+    ri = get_review_info(pr)
     ci, ci_detail = get_ci_status(pr)
-    ci_str = ""
-    ci_str_plain = ""
-    if ci == "fail":
-        names = ", ".join(ci_detail[:2])
-        ci_str = f"{RED}CI:{NC} {names}"
-        ci_str_plain = f"CI: {names}"
-    elif ci == "pending":
-        ci_str = f"{YELLOW}CI pending{NC}"
-        ci_str_plain = "CI pending"
 
-    parts = [p for p in [review_str, ci_str] if p]
-    parts_plain = [p for p in [review_str_plain, ci_str_plain] if p]
-
-    padded = label.ljust(9)
-    if color:
-        term_status = f"{color}{emoji}  {padded}{NC}"
+    if is_draft:
+        emoji, label, color = "📝", "draft", DIM
+    elif ri["has_changes"]:
+        emoji, label, color = "🔴", "changes", RED
+    elif ri["has_approval"]:
+        emoji, label, color = "✅", "approved", GREEN
+    elif ri["has_pending"]:
+        emoji, label, color = "👀", "review", YELLOW
+    elif ri["has_comments"]:
+        emoji, label, color = "✏️", "revise", CYAN
     else:
-        term_status = f"{emoji}  {padded}"
+        emoji, label, color = "👀", "review", YELLOW
 
-    return {
-        "emoji": emoji,
-        "label": label,
-        "term_status": term_status,
-        "detail": "  ".join(parts),
-        "detail_plain": "  ".join(parts_plain),
-    }
+    return StatusInfo(
+        emoji=emoji, label=label, color=color,
+        review_entries=ri["entries"],
+        ci_status=ci, ci_detail=ci_detail,
+    )
 
-# Ticket extraction: first occurrence of JIRA-style ID in the title
-TICKET_RE = re.compile(r"([A-Z]{2,}-\d+)", re.IGNORECASE)
 
-def extract_ticket(title):
-    m = TICKET_RE.search(title)
-    if m:
-        return m.group(1).upper()
-    return None
+# ============================================================
+# Rendering
+# ============================================================
 
-def strip_ticket(title):
-    """Remove ticket IDs and clean up leftover punctuation."""
-    title = TICKET_RE.sub("", title)
-    title = re.sub(r"\(\)\s*", "", title)
-    title = re.sub(r"\[\]\s*", "", title)
-    return title.strip().lstrip(":").strip()
+ANSI_RE = re.compile(r"\033\[[^m]*m")
 
-# --- Group PRs by ticket ---
-groups = OrderedDict()
-ungrouped = []
-active_prs = [pr for pr in all_prs if pr.get("state") != "CLOSED"]
 
-for pr in active_prs:
-    ticket = extract_ticket(pr.get("title", ""))
-    if ticket:
-        if ticket not in groups:
-            groups[ticket] = []
-        groups[ticket].append(pr)
+def render(
+    all_prs: list[dict],
+    repos: list[Repo],
+    deploy_info: dict[str, dict[int, str]],
+    check_deploy: bool,
+    slack: bool,
+) -> list[str]:
+    """Render all PRs into output lines."""
+    lines: list[str] = []
+    repo_names = [r.name for r in repos]
+    repo_short = {r.name: r.short_name for r in repos}
+    repo_color = {r.name: r.color for r in repos}
+    max_repo_len = max((len(s) for s in repo_short.values()), default=10) + 1
+    repo_order = {name: i for i, name in enumerate(sorted(repo_names))}
+
+    # Group by ticket
+    groups: OrderedDict[str, list[dict]] = OrderedDict()
+    ungrouped: list[dict] = []
+    active = [pr for pr in all_prs if pr.get("state") != "CLOSED"]
+
+    for pr in active:
+        ticket = extract_ticket(pr.get("title", ""))
+        if ticket:
+            groups.setdefault(ticket, []).append(pr)
+        else:
+            ungrouped.append(pr)
+
+    # Sort: open first, then by recency
+    open_g = [(t, p) for t, p in groups.items() if any(pr["state"] == "OPEN" for pr in p)]
+    done_g = [(t, p) for t, p in groups.items() if not any(pr["state"] == "OPEN" for pr in p)]
+    open_g.sort(key=lambda kv: max(pr.get("createdAt", "") for pr in kv[1]), reverse=True)
+    done_g.sort(key=lambda kv: max(pr.get("mergedAt") or pr.get("createdAt", "") for pr in kv[1]), reverse=True)
+    sorted_groups = open_g + done_g
+    ungrouped.sort(key=lambda p: p.get("mergedAt") or p.get("createdAt", ""), reverse=True)
+
+    def render_pr(pr: dict) -> str:
+        repo = pr["_repo"]
+        short = repo_short.get(repo, repo)
+        color = repo_color.get(repo, "")
+        num = pr["number"]
+        url = pr.get("url", "")
+        title = strip_ticket(pr.get("title", ""))
+        if len(title) > 60:
+            title = title[:57] + "..."
+
+        s = format_status(pr, deploy_info, check_deploy)
+        padded_label = s.label.ljust(9)
+        repo_pad = short.ljust(max_repo_len)
+
+        # Build detail string
+        detail_parts = []
+        if s.review_entries:
+            if slack:
+                plain = [ANSI_RE.sub("", e) for e in s.review_entries]
+                detail_parts.append("  ".join(plain))
+            else:
+                detail_parts.append("  ".join(s.review_entries))
+        if s.ci_status == "fail":
+            names = ", ".join(s.ci_detail[:2])
+            if slack:
+                detail_parts.append(f"CI: {names}")
+            else:
+                detail_parts.append(f"{RED}CI:{NC} {names}")
+        elif s.ci_status == "pending":
+            if slack:
+                detail_parts.append("CI pending")
+            else:
+                detail_parts.append(f"{YELLOW}CI pending{NC}")
+        detail = "  ".join(detail_parts)
+
+        if slack:
+            line = f"{s.emoji} `{padded_label}| {repo_pad}|`  {title}  [#{num}]({url})"
+            if detail:
+                line += f"  {detail}"
+        else:
+            pr_link = osc8(url, f"#{num}")
+            term_status = f"{s.color}{s.emoji}  {padded_label}{NC}" if s.color else f"{s.emoji}  {padded_label}"
+            line = f"  {term_status}  {color}{repo_pad}{NC}  {DIM}{title}{NC}  {pr_link}"
+            if detail:
+                line += f"  {detail}"
+        return line
+
+    def render_header(ticket: str, title: str) -> str:
+        if slack:
+            return f"\n*{ticket}: {title}*"
+        return f"\n{BOLD}{ticket}: {title}{NC}"
+
+    for ticket, prs in sorted_groups:
+        prs.sort(key=lambda p: (repo_order.get(p["_repo"], 99), 0 if p["state"] == "OPEN" else 1))
+
+        # Header from oldest PR in top-priority repo
+        top_repo = prs[0]["_repo"]
+        top_prs = sorted(
+            [p for p in prs if p["_repo"] == top_repo],
+            key=lambda p: p.get("createdAt") or p.get("mergedAt", ""),
+        )
+        header_title = strip_ticket(top_prs[0]["title"])
+        if len(header_title) > 70:
+            header_title = header_title[:67] + "..."
+
+        lines.append(render_header(ticket, header_title))
+        for pr in prs:
+            lines.append(render_pr(pr))
+
+    if ungrouped:
+        if slack:
+            lines.append("\n*Other*")
+        else:
+            lines.append(f"\n{BOLD}Other{NC}")
+        for pr in ungrouped:
+            lines.append(render_pr(pr))
+
+    return lines
+
+
+# ============================================================
+# Notifications (for watch mode)
+# ============================================================
+
+
+def notify(title: str, message: str) -> None:
+    """Send a system notification. Tries terminal-notifier, falls back to osascript."""
+    if shutil.which("terminal-notifier"):
+        subprocess.run(
+            ["terminal-notifier", "-title", title, "-message", message,
+             "-sound", "default", "-group", "pr-status"],
+            capture_output=True,
+        )
+    elif shutil.which("osascript"):
+        script = f'display notification "{message}" with title "{title}"'
+        subprocess.run(["osascript", "-e", script], capture_output=True)
+    elif shutil.which("notify-send"):
+        subprocess.run(["notify-send", title, message], capture_output=True)
+
+
+def diff_and_notify(old_prs: list[dict], new_prs: list[dict]) -> None:
+    """Compare two PR snapshots and notify on meaningful changes."""
+    old_by_key = {(p["_repo"], p["number"]): p for p in old_prs}
+    new_by_key = {(p["_repo"], p["number"]): p for p in new_prs}
+
+    changes = []
+    for key, new_pr in new_by_key.items():
+        old_pr = old_by_key.get(key)
+        if not old_pr:
+            continue
+        old_state = old_pr.get("state")
+        new_state = new_pr.get("state")
+        title = strip_ticket(new_pr.get("title", ""))
+
+        # State changes
+        if old_state != new_state:
+            if new_state == "MERGED":
+                changes.append(f"✅ Merged: {title}")
+            elif new_state == "CLOSED":
+                changes.append(f"🚫 Closed: {title}")
+
+        # New reviews
+        if old_state == "OPEN" and new_state == "OPEN":
+            old_reviews = {
+                (r.get("author", {}).get("login"), r.get("state"))
+                for r in (old_pr.get("reviews") or [])
+            }
+            new_reviews = {
+                (r.get("author", {}).get("login"), r.get("state"))
+                for r in (new_pr.get("reviews") or [])
+            }
+            new_approvals = [
+                login for login, state in (new_reviews - old_reviews)
+                if state == "APPROVED" and login
+            ]
+            new_change_reqs = [
+                login for login, state in (new_reviews - old_reviews)
+                if state == "CHANGES_REQUESTED" and login
+            ]
+            if new_approvals:
+                changes.append(f"✅ {', '.join(new_approvals)} approved: {title}")
+            if new_change_reqs:
+                changes.append(f"🔴 {', '.join(new_change_reqs)} requested changes: {title}")
+
+    if changes:
+        notify("pr-status", "\n".join(changes[:5]))
+
+
+# ============================================================
+# Main
+# ============================================================
+
+
+def run_once(
+    args: argparse.Namespace,
+    repos: list[Repo],
+) -> list[dict]:
+    """Run one full cycle. Returns the list of PRs for diffing."""
+    since = (datetime.now(timezone.utc) - timedelta(days=args.days)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+
+    # Phase 1: Fetch PRs in parallel
+    t0 = time.monotonic()
+    print(f"{DIM}Fetching PRs across {len(repos)} repos...{NC}", file=sys.stderr)
+
+    all_prs: list[dict] = []
+    with ThreadPoolExecutor(max_workers=len(repos)) as pool:
+        futures = {
+            pool.submit(fetch_prs, repo, args.author, since): repo
+            for repo in repos
+        }
+        for future in as_completed(futures):
+            all_prs.extend(future.result())
+
+    t1 = time.monotonic()
+
+    # Phase 2: Deploy detection in parallel
+    deploy_info: dict[str, dict[int, str]] = {}
+    warnings: dict[str, list[str]] = {}
+
+    if args.deploy:
+        print(f"{DIM}Checking deployment status...{NC}", file=sys.stderr)
+
+        repo_prs = {}
+        for pr in all_prs:
+            repo_prs.setdefault(pr["_repo"], []).append(pr)
+
+        with ThreadPoolExecutor(max_workers=len(repos)) as pool:
+            futures = {}
+            for repo in repos:
+                prs = repo_prs.get(repo.name, [])
+                futures[pool.submit(detect_deploy_status, repo, prs)] = repo
+
+            for future in as_completed(futures):
+                repo = futures[future]
+                info, warns = future.result()
+                deploy_info[repo.name] = info
+                if warns:
+                    warnings[repo.name] = warns
+
+    t2 = time.monotonic()
+
+    # Print warnings
+    for repo_name, warns in warnings.items():
+        for w in warns:
+            print(f"{YELLOW}  ⚠ {repo_name}: {w}{NC}", file=sys.stderr)
+
+    print(
+        f"{DIM}Done (PRs: {t1 - t0:.0f}s, deploy: {t2 - t1:.0f}s){NC}",
+        file=sys.stderr,
+    )
+
+    # Phase 3: Render
+    lines = render(all_prs, repos, deploy_info, args.deploy, args.slack)
+    for line in lines:
+        print(line)
+
+    return all_prs
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="pr-status",
+        description="Show status of your recent PRs across multiple GitHub repos.",
+        add_help=False,
+    )
+    parser.add_argument("--days", type=int, default=30)
+    parser.add_argument("--author", default="@me")
+    parser.add_argument("--no-deploy", dest="deploy", action="store_false", default=True)
+    parser.add_argument("--slack", action="store_true")
+    parser.add_argument("--watch", nargs="?", const=60, type=int, metavar="SECS")
+    parser.add_argument("--help", "-h", action="store_true")
+
+    args = parser.parse_args()
+
+    if args.help:
+        print(__doc__.strip())
+        return
+
+    repos = discover_repos()
+    if not repos:
+        print("No git repos found in current directory or subdirectories.", file=sys.stderr)
+        sys.exit(1)
+
+    assign_display_attrs(repos)
+
+    if args.watch is None:
+        run_once(args, repos)
     else:
-        ungrouped.append(pr)
+        prev_prs: list[dict] = []
+        while True:
+            os.system("clear")
+            try:
+                current_prs = run_once(args, repos)
+                if prev_prs:
+                    diff_and_notify(prev_prs, current_prs)
+                prev_prs = current_prs
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                print(f"{RED}Error: {e}{NC}", file=sys.stderr)
 
-# Sort: open features first, then by recency
-open_groups = [(t, p) for t, p in groups.items() if any(pr["state"] == "OPEN" for pr in p)]
-done_groups = [(t, p) for t, p in groups.items() if not any(pr["state"] == "OPEN" for pr in p)]
-open_groups.sort(key=lambda kv: max(pr.get("createdAt", "") for pr in kv[1]), reverse=True)
-done_groups.sort(key=lambda kv: max(pr.get("mergedAt") or pr.get("createdAt", "") for pr in kv[1]), reverse=True)
-sorted_groups = open_groups + done_groups
+            try:
+                time.sleep(args.watch)
+            except KeyboardInterrupt:
+                break
 
-ungrouped.sort(key=lambda p: p.get("mergedAt") or p.get("createdAt", ""), reverse=True)
 
-# --- Render ---
-
-# Repo sort order: alphabetical by short name
-repo_order = {name: i for i, name in enumerate(sorted(repo_names))}
-
-def render_pr(pr):
-    repo = pr["_repo"]
-    repo_short = REPO_SHORT.get(repo, repo)
-    repo_color = REPO_COLORS.get(repo, "")
-    num = pr["number"]
-    title_short = pr["title"]
-    title_short = strip_ticket(title_short)
-    if len(title_short) > 60:
-        title_short = title_short[:57] + "..."
-
-    s = format_status(pr)
-    url = pr.get("url", "")
-    s_emoji = s["emoji"]
-    s_label = s["label"].ljust(9)
-    s_term = s["term_status"]
-    s_detail = s["detail"]
-    s_detail_plain = s["detail_plain"]
-    repo_pad = repo_short.ljust(max_repo_len)
-
-    if slack_mode:
-        line = f"{s_emoji} `{s_label}| {repo_pad}|`  {title_short}  [#{num}]({url})"
-        if s_detail_plain:
-            line += f"  {s_detail_plain}"
-    else:
-        pr_link = f"\033]8;;{url}\033\\#{num}\033]8;;\033\\"
-        line = f"  {s_term}  {repo_color}{repo_pad}{NC}  {DIM}{title_short}{NC}  {pr_link}"
-        if s_detail:
-            line += f"  {s_detail}"
-    print(line)
-
-def render_header(ticket, title):
-    if slack_mode:
-        print(f"\n*{ticket}: {title}*")
-    else:
-        print(f"\n{BOLD}{ticket}: {title}{NC}")
-
-for ticket, prs in sorted_groups:
-    prs.sort(key=lambda p: (repo_order.get(p["_repo"], 99), 0 if p["state"] == "OPEN" else 1))
-
-    top_repo = prs[0]["_repo"]
-    top_repo_prs = [p for p in prs if p["_repo"] == top_repo]
-    top_repo_prs.sort(key=lambda p: p.get("createdAt") or p.get("mergedAt", ""))
-    best = top_repo_prs[0]["title"]
-    best = strip_ticket(best)
-    if len(best) > 70:
-        best = best[:67] + "..."
-
-    render_header(ticket, best)
-    for pr in prs:
-        render_pr(pr)
-
-if ungrouped:
-    if slack_mode:
-        print(f"\n*Other*")
-    else:
-        print(f"\n{BOLD}Other{NC}")
-    for pr in ungrouped:
-        render_pr(pr)
-
-' "$TMPDIR" "$CHECK_DEPLOY" "$SLACK"
+if __name__ == "__main__":
+    main()
