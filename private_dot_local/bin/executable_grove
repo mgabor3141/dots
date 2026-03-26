@@ -624,12 +624,16 @@ def link_workspaces(project_root: Path,
     print(f"\nDone.")
 
 
-def _reheat_workspace(repo_dir: Path, jj_ws_name: str) -> str:
+def _reheat_workspace(repo_dir: Path, jj_ws_name: str,
+                      ws_dir: Path | None = None) -> str:
     """Rebase a workspace onto trunk and clean up merged commits.
 
     Rebases the roots of the workspace's stack onto trunk, abandons
     empty merge commits (from trunk-into-feature merges on remotes),
     and resolves any conflicted bookmarks.
+
+    If ws_dir is provided, runs ``jj workspace update-stale`` there
+    after the rebase so that the working copy files stay current.
 
     Returns a short status string.
     """
@@ -694,6 +698,13 @@ def _reheat_workspace(repo_dir: Path, jj_ws_name: str) -> str:
                          "-r", rev.strip()],
                         cwd=repo_dir, capture_output=True, text=True,
                     )
+
+    # Update the workspace working copy so files on disk reflect the rebase
+    if ws_dir and ws_dir.is_dir():
+        subprocess.run(
+            ["jj", "workspace", "update-stale"],
+            cwd=ws_dir, capture_output=True, text=True,
+        )
 
     if merge_count > 0:
         return f"rebased, cleaned {merge_count} merge commit{'s' if merge_count != 1 else ''}"
@@ -776,7 +787,14 @@ def refresh_workspaces(project_root: Path, name: str | None,
         if display_name != "(root)":
             ws_names.append(display_name)
         for repo_dir, jj_ws_name in repo_map.items():
-            tag = _reheat_workspace(repo_dir, jj_ws_name)
+            # Determine the workspace working-copy directory
+            if display_name == "(root)":
+                ws_dir = repo_dir
+            elif is_single_repo:
+                ws_dir = grove_dir / display_name
+            else:
+                ws_dir = grove_dir / display_name / repo_dir.name
+            tag = _reheat_workspace(repo_dir, jj_ws_name, ws_dir=ws_dir)
             if "failed" in tag:
                 errors += 1
             if is_single_repo:
