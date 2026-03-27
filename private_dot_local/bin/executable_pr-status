@@ -431,7 +431,7 @@ def strip_ticket(title: str) -> str:
     title = TICKET_RE.sub("", title)
     title = re.sub(r"\(\)\s*", "", title)
     title = re.sub(r"\[\]\s*", "", title)
-    return title.strip().lstrip(":").strip()
+    return title.strip().lstrip(":").lstrip("-").strip()
 
 
 def get_review_info(pr: dict) -> dict:
@@ -651,10 +651,10 @@ def render(
                 line += f"  {detail}"
         return line
 
-    def render_header(ticket: str, title: str) -> str:
+    def render_header(ticket: str, title: str) -> list[str]:
         if slack:
-            return f"\n*{ticket}: {title}*"
-        return f"\n{BOLD}{ticket}: {title}{NC}"
+            return ["", f"*{ticket}: {title}*"]
+        return ["", f"{BOLD}{ticket}: {title}{NC}"]
 
     for ticket, prs in sorted_groups:
         prs.sort(key=lambda p: (repo_order.get(p["_repo"], 99), 0 if p["state"] == "OPEN" else 1))
@@ -669,17 +669,63 @@ def render(
         if len(header_title) > 70:
             header_title = header_title[:67] + "..."
 
-        lines.append(render_header(ticket, header_title))
-        for pr in prs:
-            lines.append(render_pr(pr))
+        lines.extend(render_header(ticket, header_title))
+
+        # Collapse sections where every PR is deployed to prod
+        if check_deploy and all(
+            deploy_info.get(p["_repo"], {}).get(p["number"]) == "prod"
+            for p in prs
+        ):
+            pr_refs = []
+            for pr in prs:
+                short = repo_short.get(pr["_repo"], pr["_repo"])
+                num = pr["number"]
+                url = pr.get("url", "")
+                if slack:
+                    pr_refs.append(f"{short} [#{num}]({url})")
+                else:
+                    pr_refs.append(f"{repo_color.get(pr['_repo'], '')}{short}{NC} {osc8(url, f'#{num}')}")
+            ref_str = "  ".join(pr_refs)
+            if slack:
+                lines.append(f"✅ All in prod: {ref_str}")
+            else:
+                lines.append(f"  {GREEN}✅  All in prod{NC}  {ref_str}")
+        else:
+            for pr in prs:
+                lines.append(render_pr(pr))
 
     if ungrouped:
+        lines.append("")
         if slack:
-            lines.append("\n*Other*")
+            lines.append("*Other*")
         else:
-            lines.append(f"\n{BOLD}Other{NC}")
-        for pr in ungrouped:
-            lines.append(render_pr(pr))
+            lines.append(f"{BOLD}Other{NC}")
+
+        # Collapse "Other" too if all prod
+        if check_deploy and all(
+            deploy_info.get(p["_repo"], {}).get(p["number"]) == "prod"
+            for p in ungrouped
+        ):
+            pr_refs = []
+            for pr in ungrouped:
+                short = repo_short.get(pr["_repo"], pr["_repo"])
+                num = pr["number"]
+                url = pr.get("url", "")
+                if slack:
+                    pr_refs.append(f"{short} [#{num}]({url})")
+                else:
+                    pr_refs.append(f"{repo_color.get(pr['_repo'], '')}{short}{NC} {osc8(url, f'#{num}')}")
+            ref_str = "  ".join(pr_refs)
+            if slack:
+                lines.append(f"✅ All in prod: {ref_str}")
+            else:
+                lines.append(f"  {GREEN}✅  All in prod{NC}  {ref_str}")
+        else:
+            for pr in ungrouped:
+                lines.append(render_pr(pr))
+
+    if slack:
+        lines = [f"> {line}" if line.strip() else line for line in lines]
 
     return lines
 
@@ -704,49 +750,108 @@ def notify(title: str, message: str) -> None:
         subprocess.run(["notify-send", title, message], capture_output=True)
 
 
-def diff_and_notify(old_prs: list[dict], new_prs: list[dict]) -> None:
-    """Compare two PR snapshots and notify on meaningful changes."""
+def _ci_summary(pr: dict) -> tuple[Optional[str], list[str]]:
+    """Extract CI status from a PR snapshot: ('pass'|'fail'|'pending'|None, [failed names])."""
+    checks = pr.get("statusCheckRollup") or []
+    checks = [c for c in checks if c.get("name")]
+    if not checks:
+        return None, []
+    failed = [c["name"] for c in checks if c.get("conclusion") == "FAILURE"]
+    if failed:
+        return "fail", failed
+    pending = [c for c in checks if c.get("status") not in ("COMPLETED",)]
+    if pending:
+        return "pending", []
+    return "pass", []
+
+
+def _review_set(pr: dict) -> set[tuple[str, str]]:
+    """Extract (author, state) pairs from reviews, ignoring bots."""
+    return {
+        (r.get("author", {}).get("login", ""), r.get("state", ""))
+        for r in (pr.get("reviews") or [])
+        if r.get("author", {}).get("login")
+        and r.get("author", {}).get("login") != "copilot-pull-request-reviewer"
+    }
+
+
+def diff_and_notify(
+    old_prs: list[dict],
+    new_prs: list[dict],
+    old_deploy: dict[str, dict[int, str]],
+    new_deploy: dict[str, dict[int, str]],
+) -> None:
+    """Compare two snapshots and send system notifications on changes."""
     old_by_key = {(p["_repo"], p["number"]): p for p in old_prs}
     new_by_key = {(p["_repo"], p["number"]): p for p in new_prs}
 
-    changes = []
+    changes: list[str] = []
+
     for key, new_pr in new_by_key.items():
         old_pr = old_by_key.get(key)
         if not old_pr:
             continue
+
+        repo = new_pr["_repo"]
+        num = new_pr["number"]
         old_state = old_pr.get("state")
         new_state = new_pr.get("state")
         title = strip_ticket(new_pr.get("title", ""))
+        if len(title) > 50:
+            title = title[:47] + "..."
 
-        # State changes
+        # PR merged or closed
         if old_state != new_state:
             if new_state == "MERGED":
                 changes.append(f"✅ Merged: {title}")
             elif new_state == "CLOSED":
                 changes.append(f"🚫 Closed: {title}")
+            continue
+
+        # Only check open PRs for review/CI changes
+        if new_state != "OPEN":
+            continue
+
+        # CI status changes
+        old_ci, _ = _ci_summary(old_pr)
+        new_ci, new_failed = _ci_summary(new_pr)
+        if old_ci != new_ci:
+            if new_ci == "fail":
+                names = ", ".join(new_failed[:2])
+                changes.append(f"❌ CI failed ({names}): {title}")
+            elif new_ci == "pass" and old_ci == "fail":
+                changes.append(f"🟢 CI fixed: {title}")
 
         # New reviews
-        if old_state == "OPEN" and new_state == "OPEN":
-            old_reviews = {
-                (r.get("author", {}).get("login"), r.get("state"))
-                for r in (old_pr.get("reviews") or [])
-            }
-            new_reviews = {
-                (r.get("author", {}).get("login"), r.get("state"))
-                for r in (new_pr.get("reviews") or [])
-            }
-            new_approvals = [
-                login for login, state in (new_reviews - old_reviews)
-                if state == "APPROVED" and login
-            ]
-            new_change_reqs = [
-                login for login, state in (new_reviews - old_reviews)
-                if state == "CHANGES_REQUESTED" and login
-            ]
-            if new_approvals:
-                changes.append(f"✅ {', '.join(new_approvals)} approved: {title}")
-            if new_change_reqs:
-                changes.append(f"🔴 {', '.join(new_change_reqs)} requested changes: {title}")
+        old_reviews = _review_set(old_pr)
+        new_reviews = _review_set(new_pr)
+        added = new_reviews - old_reviews
+        new_approvals = [login for login, state in added if state == "APPROVED"]
+        new_change_reqs = [login for login, state in added if state == "CHANGES_REQUESTED"]
+        new_comments = [login for login, state in added if state == "COMMENTED"]
+        if new_approvals:
+            changes.append(f"✅ {', '.join(new_approvals)} approved: {title}")
+        if new_change_reqs:
+            changes.append(f"🔴 {', '.join(new_change_reqs)} requested changes: {title}")
+        if new_comments and not new_approvals and not new_change_reqs:
+            changes.append(f"💬 {', '.join(new_comments)} commented: {title}")
+
+    # Deploy status changes (merged PRs moving through environments)
+    for key, new_pr in new_by_key.items():
+        if new_pr.get("state") != "MERGED":
+            continue
+        repo = new_pr["_repo"]
+        num = new_pr["number"]
+        old_status = old_deploy.get(repo, {}).get(num, "")
+        new_status = new_deploy.get(repo, {}).get(num, "")
+        if old_status != new_status and new_status in ("prod", "preprod"):
+            title = strip_ticket(new_pr.get("title", ""))
+            if len(title) > 50:
+                title = title[:47] + "..."
+            if new_status == "prod":
+                changes.append(f"🚀 Deployed to prod: {title}")
+            elif new_status == "preprod" and old_status != "prod":
+                changes.append(f"⬆️ Deployed to preprod: {title}")
 
     if changes:
         notify("pr-status", "\n".join(changes[:5]))
@@ -757,11 +862,17 @@ def diff_and_notify(old_prs: list[dict], new_prs: list[dict]) -> None:
 # ============================================================
 
 
+@dataclass
+class Snapshot:
+    prs: list[dict]
+    deploy: dict[str, dict[int, str]]
+
+
 def run_once(
     args: argparse.Namespace,
     repos: list[Repo],
-) -> list[dict]:
-    """Run one full cycle. Returns the list of PRs for diffing."""
+) -> Snapshot:
+    """Run one full cycle. Returns a snapshot for diffing."""
     since = (datetime.now(timezone.utc) - timedelta(days=args.days)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
@@ -788,7 +899,7 @@ def run_once(
     if args.deploy:
         print(f"{DIM}Checking deployment status...{NC}", file=sys.stderr)
 
-        repo_prs = {}
+        repo_prs: dict[str, list[dict]] = {}
         for pr in all_prs:
             repo_prs.setdefault(pr["_repo"], []).append(pr)
 
@@ -819,10 +930,8 @@ def run_once(
 
     # Phase 3: Render
     lines = render(all_prs, repos, deploy_info, args.deploy, args.slack)
-    for line in lines:
-        print(line)
 
-    return all_prs
+    return Snapshot(prs=all_prs, deploy=deploy_info), lines
 
 
 def main() -> None:
@@ -852,20 +961,28 @@ def main() -> None:
     assign_display_attrs(repos)
 
     if args.watch is None:
-        run_once(args, repos)
+        snapshot, lines = run_once(args, repos)
+        for line in lines:
+            print(line)
     else:
-        prev_prs: list[dict] = []
+        prev: Optional[Snapshot] = None
         while True:
-            os.system("clear")
             try:
-                current_prs = run_once(args, repos)
-                if prev_prs:
-                    diff_and_notify(prev_prs, current_prs)
-                prev_prs = current_prs
+                current, lines = run_once(args, repos)
             except KeyboardInterrupt:
                 break
             except Exception as e:
                 print(f"{RED}Error: {e}{NC}", file=sys.stderr)
+                current, lines = None, []
+
+            os.system("clear")
+            for line in lines:
+                print(line)
+
+            if prev and current:
+                diff_and_notify(prev.prs, current.prs, prev.deploy, current.deploy)
+            if current:
+                prev = current
 
             try:
                 time.sleep(args.watch)
