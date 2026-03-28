@@ -20,11 +20,11 @@ input {
 
     disable-power-key-handling
     focus-follows-mouse max-scroll-amount="0%" // Automatically focus windows under the mouse pointer
-    warp-mouse-to-focus
+    // warp-mouse-to-focus
 }
 
 cursor {
-    hide-after-inactive-ms 1000
+    hide-when-typing
 }
 
 gestures {
