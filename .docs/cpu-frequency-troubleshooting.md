@@ -104,13 +104,15 @@ cat /sys/class/dmi/id/board_name
 
 3. **Power Management Conflicts** - TLP, laptop-mode-tools, or auto-cpufreq interfering. Check: `systemctl list-units | grep -iE "tlp|laptop|cpufreq|power"`
 
-## Example Case: Outdated BIOS
+## Example Case: Outdated BIOS (Gigabyte Z390 GAMING X)
 
-**Symptoms:** CPU locked at 40% of max frequency, cooling devices at max throttle (3/3) even when idle, absurdly low thermal trip points (e.g., 16.8°C).
+**Symptoms:** CPU locked at 40% of max frequency (1.96 GHz instead of 4.9 GHz), cooling devices at max throttle (3/3) even when idle, absurdly low thermal trip points (e.g., 16.8°C passive). Triggered by suspend/resume cycles.
 
 **Diagnosis:** Check thermal zones and trip points. If trip points are impossibly low, the BIOS has buggy ACPI tables.
 
-**Solution:** Update BIOS. In this case, updating from a 6-year-old BIOS fixed all issues immediately.
+**Solution:** Updated BIOS from F6 (Dec 2018) to F12a (Jun 2025) via Q-Flash. The buggy passive trip point at 16.8°C was removed in the new ACPI tables, and all CPU throttling issues resolved immediately.
+
+**Note:** A previous BIOS update attempt was rolled back for unknown reasons (possibly Gigabyte DualBIOS auto-recovery). The update was successfully completed on 2026-03-28.
 
 ## Fixing BIOS Issues on Linux
 
