@@ -1,0 +1,2 @@
+[/Script/Engine.RendererOverrideSettings]
+r.DefaultFeature.AntiAliasing=1
