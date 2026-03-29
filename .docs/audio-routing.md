@@ -60,6 +60,8 @@ Full ALSA mixer state saved in `.docs/scarlett-mixer.state` (load via `alsa-scar
 
 `~/.config/wireplumber/wireplumber.conf.d/51-audio-routing.conf`:
 - Sets `system-audio` as the default configured sink
+- Sets Scarlett multichannel input as the default configured source (mic mute hotkey depends on this)
+- Disables the Behringer UCA device entirely (only used as MacBook mic return via KVM, not needed on Linux)
 - Deprioritizes Sunshine sinks (`priority.session = 0`)
 - Prevents Scarlett mic from auto-connecting
 
