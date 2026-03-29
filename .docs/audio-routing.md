@@ -26,16 +26,19 @@ PipeWire/WirePlumber setup with Focusrite Scarlett 8i6 USB Gen 3, supporting sep
 
 **Key design:** The Scarlett is direct-connected to the Linux PC (not on the KVM). This eliminates USB bounce issues and xHCI deadlock risk. MacBook audio reaches the Scarlett via the monitor's headphone jack → analogue inputs.
 
-## PipeWire virtual sinks
+## PipeWire virtual sinks and sources
 
-Defined declaratively in `~/.config/pipewire/pipewire.conf.d/10-virtual-sinks.conf` using `libpipewire-module-loopback`. Each module creates a sink (capture side) and auto-links to the Scarlett (playback side via `target.object`).
+Defined declaratively in `~/.config/pipewire/pipewire.conf.d/10-virtual-sinks.conf` using `libpipewire-module-loopback`. Each module creates two internally-linked nodes. WirePlumber handles linking to/from hardware via `target.object`.
 
-| Sink | Purpose | Volume control |
-|------|---------|----------------|
-| `system-audio` | All apps (default sink) | `wpctl set-volume system-audio <level>` |
-| `comms` | Discord/comms (via stream-restore) | `wpctl set-volume comms <level>` |
+| Node | Type | Purpose |
+|------|------|---------|
+| `system-audio` | Sink | All apps (default sink) |
+| `comms` | Sink | Discord/comms (via stream-restore) |
+| `mic` | Source | All apps (default source); mute hotkey mutes this |
 
-No scripts, no systemd services — PipeWire creates everything at startup.
+The `mic` virtual source wraps the Scarlett hardware mic. Muting it silences the mic for Discord and other apps, while handy (dictation) bypasses it by connecting directly to the Scarlett via a WirePlumber stream rule.
+
+No scripts, no systemd services; PipeWire creates everything at startup.
 
 ## Scarlett hardware mixer
 
@@ -60,8 +63,9 @@ Full ALSA mixer state saved in `.docs/scarlett-mixer.state` (load via `alsa-scar
 
 `~/.config/wireplumber/wireplumber.conf.d/51-audio-routing.conf`:
 - Sets `system-audio` as the default configured sink
-- Sets Scarlett multichannel input as the default configured source (mic mute hotkey depends on this)
-- Disables the Behringer UCA device entirely (only used as MacBook mic return via KVM, not needed on Linux)
+- Sets `mic` (virtual source) as the default configured source
+- Routes handy directly to the Scarlett mic (bypasses virtual mic, unaffected by mute)
+- Disables unused devices: Behringer UCA, NVIDIA HDMI/DP
 - Deprioritizes Sunshine sinks (`priority.session = 0`)
 - Prevents Scarlett mic from auto-connecting
 
