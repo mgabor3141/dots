@@ -22,7 +22,7 @@
  * immediately without restarting pi.
  */
 
-import type { AuthStorageData, ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { AuthStorageData, ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { existsSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 
@@ -59,7 +59,7 @@ export default function (pi: ExtensionAPI) {
 		}
 	}
 
-	function getAllCredentials(ctx: ExtensionCommandContext): AuthStorageData {
+	function getAllCredentials(ctx: ExtensionContext): AuthStorageData {
 		return ctx.modelRegistry.authStorage.getAll();
 	}
 
@@ -67,7 +67,7 @@ export default function (pi: ExtensionAPI) {
 	 * Save current credentials back to the active profile.
 	 * Preserves refreshed tokens that pi wrote since the last switch.
 	 */
-	function autosaveActive(ctx: ExtensionCommandContext) {
+	function autosaveActive(ctx: ExtensionContext) {
 		const active = getActiveLabel();
 		if (!active) return;
 		const profiles = loadProfiles();
@@ -82,7 +82,7 @@ export default function (pi: ExtensionAPI) {
 	 * Apply a credential set: add/update providers in the profile,
 	 * remove providers that exist in auth but not in the profile.
 	 */
-	function applyCredentials(ctx: ExtensionCommandContext, creds: AuthStorageData) {
+	function applyCredentials(ctx: ExtensionContext, creds: AuthStorageData) {
 		const auth = ctx.modelRegistry.authStorage;
 		const currentProviders = new Set(auth.list());
 		const newProviders = new Set(Object.keys(creds));
@@ -241,4 +241,13 @@ export default function (pi: ExtensionAPI) {
 		ctx.ui.notify(`Removed profile '${label}'.`, "success");
 	}
 
+	// --- Session start: reload active profile from disk ---
+
+	pi.on("session_start", async (_event, ctx) => {
+		const label = getActiveLabel();
+		if (!label) return;
+		const profiles = loadProfiles();
+		if (!(label in profiles)) return;
+		applyCredentials(ctx, profiles[label]);
+	});
 }
