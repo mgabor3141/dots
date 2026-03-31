@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-pr-status — Show status of your recent PRs across multiple GitHub repos.
+pr-status — Show status of your recent PRs across GitHub.
 
-Auto-discovers repos from subdirectories (or CWD). Groups PRs by ticket ID,
-shows review state, CI status, and deployment status (preprod/prod) when
-detectable from CI commit statuses or branch models.
+Discovers PRs globally using GitHub search, then enriches only the matching PRs
+with per-repo detail. Groups PRs by ticket ID, shows review state, CI status,
+and deployment status (preprod/prod) when detectable from branch models or CI
+commit statuses.
 
 Usage:
     pr-status [options]
@@ -17,7 +18,7 @@ Options:
     --watch [SECS]   Re-run every SECS seconds (default: 60), notify on changes
     --help           Show this help
 
-Dependencies: python3 (3.8+), gh (GitHub CLI), git
+Dependencies: python3 (3.8+), gh (GitHub CLI)
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -34,7 +36,6 @@ from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Optional
 
 # ============================================================
@@ -74,11 +75,10 @@ def run(cmd: list[str], env: Optional[dict] = None, timeout: int = 30) -> Option
         return None
 
 
-def gh_graphql(query: str, git_dir: str) -> Optional[dict]:
+def gh_graphql(query: str) -> Optional[dict]:
     """Run a GraphQL query via gh api."""
     result = run(
         ["gh", "api", "graphql", "-f", f"query={query}"],
-        env={"GIT_DIR": git_dir},
         timeout=30,
     )
     if result:
@@ -90,90 +90,27 @@ def gh_graphql(query: str, git_dir: str) -> Optional[dict]:
 
 
 # ============================================================
-# Repo discovery
+# Global discovery and deploy inference
 # ============================================================
 
 
 @dataclass
 class Repo:
-    name: str
-    git_dir: str
-    owner_repo: str  # "owner/name"
+    name: str  # unique key, owner/name
+    owner_repo: str
     short_name: str = ""
     color: str = ""
 
 
-def discover_repos() -> list[Repo]:
-    """Find git repos in CWD or its subdirectories."""
-    cwd = Path(".")
-
-    # Check CWD itself
-    if (cwd / ".git").exists() or (cwd / ".jj").exists():
-        repo = try_emit_repo(cwd)
-        return [repo] if repo else []
-
-    # Check subdirectories
-    repos = []
-    for d in sorted(cwd.iterdir()):
-        if d.is_dir() and not d.name.startswith("."):
-            repo = try_emit_repo(d)
-            if repo:
-                repos.append(repo)
-    return repos
-
-
-def try_emit_repo(d: Path) -> Optional[Repo]:
-    """Try to extract repo metadata from a directory."""
-    git_dir = find_git_dir(d)
-    if not git_dir:
-        return None
-
-    remote_url = run(["git", "remote", "get-url", "origin"], env={"GIT_DIR": git_dir})
-    if not remote_url:
-        return None
-
-    owner_repo = re.sub(r".*github\.com[:/]", "", remote_url)
-    owner_repo = re.sub(r"\.git$", "", owner_repo)
-    name = owner_repo.split("/")[-1]
-
-    return Repo(name=name, git_dir=git_dir, owner_repo=owner_repo)
-
-
-def find_git_dir(d: Path) -> Optional[str]:
-    """Resolve the .git directory for a path (supports git, jj colocated, jj workspaces)."""
-    git_path = d / ".git"
-    jj_path = d / ".jj"
-
-    # Standard git repo
-    if git_path.is_dir():
-        return str(git_path)
-
-    # Colocated jj+git (.git is a file)
-    if git_path.is_file():
-        result = run(["git", "-C", str(d), "rev-parse", "--git-dir"])
-        return result if result else None
-
-    # jj workspace: .jj/repo is a file pointing to the main repo
-    if jj_path.is_dir():
-        repo_pointer = jj_path / "repo"
-        if repo_pointer.is_file() and not repo_pointer.is_dir():
-            main_repo = repo_pointer.read_text().strip()
-            git_target_file = Path(main_repo) / "store" / "git_target"
-            if git_target_file.is_file():
-                rel_target = git_target_file.read_text().strip()
-                resolved = (git_target_file.parent / rel_target).resolve()
-                if resolved.is_dir():
-                    return str(resolved)
-        elif (repo_pointer / "store").is_dir():
-            # Main jj repo, check for colocated .git
-            jj_root = repo_pointer.parent.parent
-            if (jj_root / ".git").is_dir():
-                return str(jj_root / ".git")
-
-    return None
-
-
 MAX_REPO_NAME = 16
+SEARCH_FIELDS = (
+    "number,title,state,isDraft,createdAt,updatedAt,closedAt,url,repository,author"
+)
+PR_FIELDS = (
+    "number,title,state,isDraft,createdAt,updatedAt,mergedAt,mergeCommit,"
+    "headRefName,baseRefName,author,reviews,reviewRequests,"
+    "statusCheckRollup,url"
+)
 
 
 def shorten_repo_name(name: str) -> str:
@@ -196,174 +133,170 @@ def shorten_repo_name(name: str) -> str:
 
 def assign_display_attrs(repos: list[Repo]) -> None:
     """Assign short names and colors to repos."""
-    for i, repo in enumerate(repos):
-        repo.short_name = shorten_repo_name(repo.name)
+    for i, repo in enumerate(sorted(repos, key=lambda r: r.owner_repo.lower())):
+        base_name = repo.owner_repo.split("/", 1)[-1]
+        repo.short_name = shorten_repo_name(base_name)
         repo.color = PALETTE[i % len(PALETTE)]
 
 
-# ============================================================
-# Phase 1: Fetch PRs
-# ============================================================
+def build_repo_index(prs: list[dict]) -> list[Repo]:
+    seen: dict[str, Repo] = {}
+    for pr in prs:
+        owner_repo = pr["_repo"]
+        seen.setdefault(owner_repo, Repo(name=owner_repo, owner_repo=owner_repo))
+    repos = list(seen.values())
+    assign_display_attrs(repos)
+    return repos
 
-PR_FIELDS = (
-    "number,title,state,isDraft,createdAt,mergedAt,mergeCommit,"
-    "headRefName,baseRefName,author,reviews,reviewRequests,"
-    "statusCheckRollup,url"
-)
 
-
-def fetch_prs(repo: Repo, author: str, since: str) -> list[dict]:
-    """Fetch recent PRs for a repo."""
-    result = run(
-        [
-            "gh", "pr", "list",
-            "--author", author, "--state", "all", "--limit", "50",
-            "--json", PR_FIELDS,
-        ],
-        env={"GIT_DIR": repo.git_dir},
-        timeout=30,
-    )
-    if not result:
+def parse_search_results(raw: Optional[str], source: str) -> list[dict]:
+    if not raw:
         return []
 
     try:
-        prs = json.loads(result)
+        prs = json.loads(raw)
     except json.JSONDecodeError:
         return []
 
-    filtered = []
+    items = []
     for pr in prs:
-        created = pr.get("createdAt", "")
-        merged = pr.get("mergedAt", "")
-        if created >= since or (merged and merged >= since):
-            pr["_repo"] = repo.name
-            filtered.append(pr)
-    return filtered
+        repo = (pr.get("repository") or {}).get("nameWithOwner", "")
+        if not repo:
+            continue
+        pr["_repo"] = repo
+        pr["_sources"] = [source]
+        items.append(pr)
+    return items
 
 
-# ============================================================
-# Phase 2: Deploy detection
-# ============================================================
-
-
-def detect_deploy_status(repo: Repo, prs: list[dict]) -> tuple[dict[int, str], list[str]]:
-    """Determine deployment status for merged PRs.
-
-    Returns (deploy_info, warnings) where deploy_info maps PR number to status.
-    """
-    merged = [p for p in prs if p.get("state") == "MERGED" and p.get("mergeCommit")]
-    if not merged:
-        return {}, []
-
-    warnings = []
-
-    # Detect default branch
-    default_branch = detect_default_branch(repo.git_dir)
-    if not default_branch:
-        return {p["number"]: "unknown" for p in merged}, ["could not detect default branch"]
-
-    # Strategy 1: develop/release branch model (no API calls)
-    has_release = run(["git", "rev-parse", "origin/release"], env={"GIT_DIR": repo.git_dir})
-    has_develop = run(["git", "rev-parse", "origin/develop"], env={"GIT_DIR": repo.git_dir})
-
-    if has_release and has_develop:
-        last_prod = has_release
-        last_preprod = has_develop
-    else:
-        # Strategy 2: CI commit statuses via GraphQL
-        last_preprod, last_prod, ci_warnings = find_deploy_markers_graphql(
-            repo, default_branch
-        )
-        warnings.extend(ci_warnings)
-
-        if last_preprod is None and last_prod is None:
-            # Strategy 3: no deploy pipeline, merged = deployed
-            return {p["number"]: "prod" for p in merged}, warnings
-
-    # Check ancestry for each merged PR
-    deploy_info = {}
-    env = {"GIT_DIR": repo.git_dir}
-    for pr in merged:
-        sha = pr["mergeCommit"]["oid"]
-        num = pr["number"]
-        if last_prod and is_ancestor(sha, last_prod, env):
-            deploy_info[num] = "prod"
-        elif last_preprod and is_ancestor(sha, last_preprod, env):
-            deploy_info[num] = "preprod"
-        elif not last_preprod and not last_prod:
-            deploy_info[num] = "unknown"
-        else:
-            deploy_info[num] = "merged"
-            base = pr.get("baseRefName", "")
-            if base not in ("develop", "main", "master", ""):
-                warnings.append(f"#{num}: merged into {base}")
-
-    return deploy_info, warnings
-
-
-def detect_default_branch(git_dir: str) -> Optional[str]:
+def search_prs(args: list[str], source: str) -> list[dict]:
     result = run(
-        ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
-        env={"GIT_DIR": git_dir},
+        ["gh", "search", "prs", "--limit", "100", "--json", SEARCH_FIELDS, *args],
+        timeout=30,
     )
-    if result:
-        return result.replace("refs/remotes/origin/", "")
-
-    for candidate in ("main", "master", "develop"):
-        if run(["git", "rev-parse", f"origin/{candidate}"], env={"GIT_DIR": git_dir}):
-            return candidate
-    return None
+    return parse_search_results(result, source)
 
 
-def find_deploy_markers_graphql(
-    repo: Repo, default_branch: str
-) -> tuple[Optional[str], Optional[str], list[str]]:
-    """Single GraphQL query to find last preprod/prod deployed commits."""
+def discover_prs(author: str, since: str) -> list[dict]:
+    """Discover relevant PRs globally, without local repo context."""
+    since_day = since[:10]
+    buckets = [
+        search_prs(["--author", author, "--state", "open"], "authored_open"),
+        search_prs(["--review-requested", author, "--state", "open"], "review_requested"),
+        search_prs([f"author:{author} is:merged merged:>={since_day}"], "authored_merged"),
+    ]
+
+    merged: dict[tuple[str, int], dict] = {}
+    for bucket in buckets:
+        for pr in bucket:
+            key = (pr["_repo"], pr["number"])
+            existing = merged.get(key)
+            if existing:
+                sources = set(existing.get("_sources") or [])
+                sources.update(pr.get("_sources") or [])
+                existing["_sources"] = sorted(sources)
+                if pr.get("updatedAt", "") > existing.get("updatedAt", ""):
+                    existing.update({k: v for k, v in pr.items() if not k.startswith("_")})
+            else:
+                merged[key] = pr
+
+    return sorted(
+        merged.values(),
+        key=lambda pr: pr.get("updatedAt") or pr.get("createdAt", ""),
+        reverse=True,
+    )
+
+
+def enrich_pr(pr_stub: dict) -> Optional[dict]:
+    """Fetch the rich PR details needed for rendering and notifications."""
+    result = run(
+        [
+            "gh", "pr", "view", str(pr_stub["number"]),
+            "--repo", pr_stub["_repo"],
+            "--json", PR_FIELDS,
+        ],
+        timeout=30,
+    )
+    if not result:
+        return None
+
+    try:
+        pr = json.loads(result)
+    except json.JSONDecodeError:
+        return None
+
+    pr["_repo"] = pr_stub["_repo"]
+    pr["_sources"] = list(pr_stub.get("_sources") or [])
+    return pr
+
+
+def fetch_repo_deploy_data(repo: Repo) -> tuple[Optional[dict], list[str]]:
     owner, name = repo.owner_repo.split("/", 1)
-
     query = """
     query {
       repository(owner: "%s", name: "%s") {
-        object(expression: "%s") {
-          ... on Commit {
-            history(first: 30) {
-              nodes {
-                oid
-                status {
-                  contexts {
-                    context
-                    state
+        defaultBranchRef {
+          name
+          target {
+            ... on Commit {
+              history(first: 30) {
+                nodes {
+                  oid
+                  status {
+                    contexts {
+                      context
+                      state
+                    }
                   }
                 }
               }
             }
           }
         }
+        release: ref(qualifiedName: "refs/heads/release") {
+          target {
+            ... on Commit {
+              oid
+            }
+          }
+        }
+        develop: ref(qualifiedName: "refs/heads/develop") {
+          target {
+            ... on Commit {
+              oid
+            }
+          }
+        }
       }
     }
-    """ % (owner, name, default_branch)
+    """ % (owner, name)
 
-    data = gh_graphql(query, repo.git_dir)
+    data = gh_graphql(query)
     if not data:
-        return None, None, ["GraphQL query failed"]
+        return None, ["GraphQL query failed"]
 
+    repo_data = data.get("data", {}).get("repository")
+    if not repo_data:
+        return None, ["repository lookup failed"]
+
+    return repo_data, []
+
+
+def find_deploy_markers_graphql(repo_data: dict) -> tuple[Optional[str], Optional[str], list[str]]:
+    """Find last preprod/prod deployed commits from default-branch status contexts."""
     nodes = (
-        data.get("data", {})
-        .get("repository", {})
-        .get("object", {})
+        ((repo_data.get("defaultBranchRef") or {}).get("target") or {})
         .get("history", {})
         .get("nodes", [])
     )
     if not nodes:
         return None, None, ["no commits found on default branch"]
 
-    # Collect all context names across commits
     all_contexts: set[str] = set()
     for node in nodes:
         for ctx in (node.get("status") or {}).get("contexts", []):
             all_contexts.add(ctx.get("context", ""))
 
-    # Discover deploy context names
     prod_ctx = None
     preprod_ctx = None
     for ctx in sorted(all_contexts):
@@ -376,9 +309,8 @@ def find_deploy_markers_graphql(
                     preprod_ctx = ctx
 
     if not prod_ctx and not preprod_ctx:
-        return None, None, []  # no pipeline detected, will fall through to strategy 3
+        return None, None, []
 
-    # Walk commits to find most recent promoted
     last_preprod = None
     last_prod = None
     for node in nodes:
@@ -403,16 +335,59 @@ def find_deploy_markers_graphql(
     return last_preprod, last_prod, warnings
 
 
-def is_ancestor(commit: str, of: str, env: dict) -> bool:
-    try:
-        subprocess.run(
-            ["git", "merge-base", "--is-ancestor", commit, of],
-            env={**os.environ, **env},
-            capture_output=True, timeout=5, check=True,
-        )
-        return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return False
+def compare_contains(repo: Repo, base: str, head: str) -> bool:
+    """Return True when base is an ancestor of head in the remote repository."""
+    result = run(
+        ["gh", "api", f"repos/{repo.owner_repo}/compare/{base}...{head}", "--jq", ".status"],
+        timeout=30,
+    )
+    return result in ("ahead", "identical")
+
+
+def detect_deploy_status(repo: Repo, prs: list[dict]) -> tuple[dict[int, str], list[str]]:
+    """Determine deployment status for merged PRs.
+
+    Returns (deploy_info, warnings) where deploy_info maps PR number to status.
+    """
+    merged = [p for p in prs if p.get("state") == "MERGED" and p.get("mergeCommit")]
+    if not merged:
+        return {}, []
+
+    repo_data, warnings = fetch_repo_deploy_data(repo)
+    if not repo_data:
+        return {p["number"]: "unknown" for p in merged}, warnings
+
+    release_oid = (((repo_data.get("release") or {}).get("target") or {}).get("oid"))
+    develop_oid = (((repo_data.get("develop") or {}).get("target") or {}).get("oid"))
+
+    if release_oid and develop_oid:
+        last_prod = release_oid
+        last_preprod = develop_oid
+    else:
+        last_preprod, last_prod, ci_warnings = find_deploy_markers_graphql(repo_data)
+        warnings.extend(ci_warnings)
+        if last_preprod is None and last_prod is None:
+            return {p["number"]: "prod" for p in merged}, warnings
+
+    deploy_info = {}
+    for pr in merged:
+        sha = (pr.get("mergeCommit") or {}).get("oid")
+        num = pr["number"]
+        if not sha:
+            continue
+        if last_prod and compare_contains(repo, sha, last_prod):
+            deploy_info[num] = "prod"
+        elif last_preprod and compare_contains(repo, sha, last_preprod):
+            deploy_info[num] = "preprod"
+        elif not last_preprod and not last_prod:
+            deploy_info[num] = "unknown"
+        else:
+            deploy_info[num] = "merged"
+            base = pr.get("baseRefName", "")
+            if base not in ("develop", "main", "master", ""):
+                warnings.append(f"#{num}: merged into {base}")
+
+    return deploy_info, warnings
 
 
 # ============================================================
@@ -567,6 +542,32 @@ def format_status(
 # ============================================================
 
 ANSI_RE = re.compile(r"\033\[[^m]*m")
+OSC8_RE = re.compile(r"\033\]8;;.*?\033\\")
+
+
+def strip_formatting(text: str) -> str:
+    """Remove terminal formatting sequences when measuring visible width."""
+    return ANSI_RE.sub("", OSC8_RE.sub("", text))
+
+
+def visible_len(text: str) -> int:
+    return len(strip_formatting(text))
+
+
+def truncate_text(text: str, max_len: int) -> str:
+    if max_len <= 0:
+        return ""
+    if len(text) <= max_len:
+        return text
+    if max_len <= 3:
+        return "." * max_len
+    return text[: max_len - 3] + "..."
+
+
+def current_terminal_width(slack: bool) -> int:
+    if slack or not sys.stdout.isatty():
+        return 120
+    return max(30, shutil.get_terminal_size(fallback=(120, 24)).columns)
 
 
 def render(
@@ -575,14 +576,68 @@ def render(
     deploy_info: dict[str, dict[int, str]],
     check_deploy: bool,
     slack: bool,
+    width: Optional[int] = None,
 ) -> list[str]:
     """Render all PRs into output lines."""
     lines: list[str] = []
+    width = width or current_terminal_width(slack)
     repo_names = [r.name for r in repos]
     repo_short = {r.name: r.short_name for r in repos}
     repo_color = {r.name: r.color for r in repos}
     max_repo_len = max((len(s) for s in repo_short.values()), default=10) + 1
     repo_order = {name: i for i, name in enumerate(sorted(repo_names))}
+
+    status_alias = {
+        "review": "review",
+        "approved": "approve",
+        "changes": "changes",
+        "draft": "draft",
+        "revise": "revise",
+        "merged": "merged",
+        "preprod": "preprod",
+        "prod": "prod",
+        "closed": "closed",
+    }
+    status_short = {
+        "review": "rev",
+        "approved": "ok",
+        "changes": "chg",
+        "draft": "drf",
+        "revise": "edit",
+        "merged": "mrg",
+        "preprod": "pre",
+        "prod": "prod",
+        "closed": "cls",
+    }
+    status_tiny = {
+        "review": "r",
+        "approved": "a",
+        "changes": "c",
+        "draft": "d",
+        "revise": "e",
+        "merged": "m",
+        "preprod": "p+",
+        "prod": "p",
+        "closed": "x",
+    }
+
+    def status_text(label: str) -> str:
+        if width < 52:
+            return status_tiny.get(label, label[:1])
+        if width < 84:
+            return status_short.get(label, label[:3])
+        if width < 104:
+            return status_alias.get(label, label)
+        return label
+
+    def repo_text(name: str) -> str:
+        if width < 52:
+            return truncate_text(name, 8)
+        if width < 72:
+            return truncate_text(name, 10)
+        if width < 90:
+            return truncate_text(name, 12)
+        return name
 
     # Group by ticket
     groups: OrderedDict[str, list[dict]] = OrderedDict()
@@ -604,25 +659,25 @@ def render(
     sorted_groups = open_g + done_g
     ungrouped.sort(key=lambda p: p.get("mergedAt") or p.get("createdAt", ""), reverse=True)
 
-    def render_pr(pr: dict) -> str:
+    def render_pr(pr: dict) -> list[str]:
         repo = pr["_repo"]
-        short = repo_short.get(repo, repo)
+        short = repo_text(repo_short.get(repo, repo))
         color = repo_color.get(repo, "")
         num = pr["number"]
         url = pr.get("url", "")
         title = strip_ticket(pr.get("title", ""))
-        if len(title) > 60:
-            title = title[:57] + "..."
 
         s = format_status(pr, deploy_info, check_deploy)
-        padded_label = s.label.ljust(9)
-        repo_pad = short.ljust(max_repo_len)
+        label = status_text(s.label)
+        label_width = max(1, min(7, max(len(status_text(v)) for v in status_alias)))
+        padded_label = label.ljust(label_width)
+        repo_width = max(4, min(max_repo_len, max(len(repo_text(v)) for v in repo_short.values()) + 1))
+        repo_pad = short.ljust(repo_width)
 
-        # Build detail string
         detail_parts = []
         if s.review_entries:
             if slack:
-                plain = [ANSI_RE.sub("", e) for e in s.review_entries]
+                plain = [strip_formatting(e) for e in s.review_entries]
                 detail_parts.append("  ".join(plain))
             else:
                 detail_parts.append("  ".join(s.review_entries))
@@ -643,13 +698,52 @@ def render(
             line = f"{s.emoji} `{padded_label}| {repo_pad}|`  {title}  [#{num}]({url})"
             if detail:
                 line += f"  {detail}"
-        else:
-            pr_link = osc8(url, f"#{num}")
-            term_status = f"{s.color}{s.emoji}  {padded_label}{NC}" if s.color else f"{s.emoji}  {padded_label}"
-            line = f"  {term_status}  {color}{repo_pad}{NC}  {DIM}{title}{NC}  {pr_link}"
-            if detail:
-                line += f"  {detail}"
-        return line
+            return [line]
+
+        pr_link = osc8(url, f"#{num}")
+        term_status = f"{s.color}{s.emoji} {padded_label}{NC}" if s.color else f"{s.emoji} {padded_label}"
+        meta = f"  {term_status}  {color}{repo_pad}{NC}  {pr_link}"
+        detail_plain = strip_formatting(detail)
+
+        if width < 72:
+            title_indent = "      " if width >= 52 else "    "
+            title_budget = max(12, width - len(title_indent))
+            lines = [meta, f"{title_indent}{DIM}{truncate_text(title, title_budget)}{NC}"]
+            if detail_plain:
+                detail_indent = title_indent
+                detail_budget = max(10, width - len(detail_indent))
+                lines.append(f"{detail_indent}{truncate_text(detail_plain, detail_budget)}")
+            return lines
+
+        base_prefix = f"  {term_status}  {color}{repo_pad}{NC}  "
+        base_suffix = f"  {pr_link}"
+        available = width - visible_len(base_prefix) - visible_len(base_suffix)
+
+        if width < 96:
+            title_budget = max(16, available)
+            shown_title = truncate_text(title, title_budget)
+            lines = [f"{base_prefix}{DIM}{shown_title}{NC}{base_suffix}"]
+            if detail_plain:
+                detail_indent = "      "
+                detail_budget = max(12, width - len(detail_indent))
+                lines.append(f"{detail_indent}{truncate_text(detail_plain, detail_budget)}")
+            return lines
+
+        title_budget = max(18, available)
+        detail_budget = 0
+        if detail_plain and available > 30:
+            title_budget = max(18, int(available * 0.58))
+            detail_budget = max(0, available - title_budget - 2)
+
+        shown_title = truncate_text(title, title_budget)
+        shown_detail = ""
+        if detail_plain and detail_budget > 0:
+            shown_detail = truncate_text(detail_plain, detail_budget)
+
+        line = f"{base_prefix}{DIM}{shown_title}{NC}{base_suffix}"
+        if shown_detail:
+            line += f"  {shown_detail}"
+        return [line]
 
     def render_header(ticket: str, title: str) -> list[str]:
         if slack:
@@ -666,7 +760,10 @@ def render(
             key=lambda p: p.get("createdAt") or p.get("mergedAt", ""),
         )
         header_title = strip_ticket(top_prs[0]["title"])
-        if len(header_title) > 70:
+        if not slack:
+            header_budget = max(20, width - len(ticket) - 4)
+            header_title = truncate_text(header_title, header_budget)
+        elif len(header_title) > 70:
             header_title = header_title[:67] + "..."
 
         lines.extend(render_header(ticket, header_title))
@@ -689,10 +786,16 @@ def render(
             if slack:
                 lines.append(f"✅ All in prod: {ref_str}")
             else:
-                lines.append(f"  {GREEN}✅  All in prod{NC}  {ref_str}")
+                summary = f"  {GREEN}✅  All in prod{NC}  {ref_str}"
+                if visible_len(summary) > width:
+                    summary = (
+                        f"  {GREEN}✅  All in prod{NC}  "
+                        f"{truncate_text(strip_formatting(ref_str), max(10, width - 18))}"
+                    )
+                lines.append(summary)
         else:
             for pr in prs:
-                lines.append(render_pr(pr))
+                lines.extend(render_pr(pr))
 
     if ungrouped:
         lines.append("")
@@ -719,10 +822,16 @@ def render(
             if slack:
                 lines.append(f"✅ All in prod: {ref_str}")
             else:
-                lines.append(f"  {GREEN}✅  All in prod{NC}  {ref_str}")
+                summary = f"  {GREEN}✅  All in prod{NC}  {ref_str}"
+                if visible_len(summary) > width:
+                    summary = (
+                        f"  {GREEN}✅  All in prod{NC}  "
+                        f"{truncate_text(strip_formatting(ref_str), max(10, width - 18))}"
+                    )
+                lines.append(summary)
         else:
             for pr in ungrouped:
-                lines.append(render_pr(pr))
+                lines.extend(render_pr(pr))
 
     if slack:
         lines = [f"> {line}" if line.strip() else line for line in lines]
@@ -789,16 +898,22 @@ def diff_and_notify(
 
     for key, new_pr in new_by_key.items():
         old_pr = old_by_key.get(key)
-        if not old_pr:
-            continue
-
-        repo = new_pr["_repo"]
-        num = new_pr["number"]
-        old_state = old_pr.get("state")
-        new_state = new_pr.get("state")
         title = strip_ticket(new_pr.get("title", ""))
         if len(title) > 50:
             title = title[:47] + "..."
+
+        if not old_pr:
+            if "review_requested" in set(new_pr.get("_sources") or []):
+                changes.append(f"👀 Review requested: {title}")
+            continue
+
+        old_sources = set(old_pr.get("_sources") or [])
+        new_sources = set(new_pr.get("_sources") or [])
+        if "review_requested" in new_sources and "review_requested" not in old_sources:
+            changes.append(f"👀 Review requested: {title}")
+
+        old_state = old_pr.get("state")
+        new_state = new_pr.get("state")
 
         # PR merged or closed
         if old_state != new_state:
@@ -868,70 +983,97 @@ class Snapshot:
     deploy: dict[str, dict[int, str]]
 
 
+def render_snapshot(snapshot: Snapshot, args: argparse.Namespace) -> list[str]:
+    repos = build_repo_index(snapshot.prs)
+    return render(snapshot.prs, repos, snapshot.deploy, args.deploy, args.slack)
+
+
 def run_once(
     args: argparse.Namespace,
-    repos: list[Repo],
-) -> Snapshot:
+    enrich_cache: dict[tuple[str, int], tuple[str, dict]],
+) -> tuple[Snapshot, list[str]]:
     """Run one full cycle. Returns a snapshot for diffing."""
     since = (datetime.now(timezone.utc) - timedelta(days=args.days)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
 
-    # Phase 1: Fetch PRs in parallel
+    # Phase 1: Discover and enrich PRs
     t0 = time.monotonic()
-    print(f"{DIM}Fetching PRs across {len(repos)} repos...{NC}", file=sys.stderr)
+    print(f"{DIM}Searching GitHub for relevant PRs...{NC}", file=sys.stderr)
+    pr_stubs = discover_prs(args.author, since)
 
     all_prs: list[dict] = []
-    with ThreadPoolExecutor(max_workers=len(repos)) as pool:
-        futures = {
-            pool.submit(fetch_prs, repo, args.author, since): repo
-            for repo in repos
-        }
-        for future in as_completed(futures):
-            all_prs.extend(future.result())
+    pending: list[dict] = []
+    for pr_stub in pr_stubs:
+        key = (pr_stub["_repo"], pr_stub["number"])
+        cached = enrich_cache.get(key)
+        if cached and cached[0] == pr_stub.get("updatedAt", ""):
+            pr = dict(cached[1])
+            pr["_sources"] = list(pr_stub.get("_sources") or [])
+            all_prs.append(pr)
+        else:
+            pending.append(pr_stub)
+
+    if pending:
+        print(f"{DIM}Fetching PR details for {len(pending)} PRs...{NC}", file=sys.stderr)
+        with ThreadPoolExecutor(max_workers=min(8, len(pending))) as pool:
+            futures = {pool.submit(enrich_pr, pr_stub): pr_stub for pr_stub in pending}
+            for future in as_completed(futures):
+                pr_stub = futures[future]
+                pr = future.result()
+                if not pr:
+                    continue
+                all_prs.append(pr)
+                enrich_cache[(pr_stub["_repo"], pr_stub["number"])] = (
+                    pr_stub.get("updatedAt", ""),
+                    dict(pr),
+                )
 
     t1 = time.monotonic()
+
+    repos = build_repo_index(all_prs)
 
     # Phase 2: Deploy detection in parallel
     deploy_info: dict[str, dict[int, str]] = {}
     warnings: dict[str, list[str]] = {}
 
-    if args.deploy:
+    if args.deploy and repos:
         print(f"{DIM}Checking deployment status...{NC}", file=sys.stderr)
 
         repo_prs: dict[str, list[dict]] = {}
         for pr in all_prs:
-            repo_prs.setdefault(pr["_repo"], []).append(pr)
+            if "authored_merged" in set(pr.get("_sources") or []):
+                repo_prs.setdefault(pr["_repo"], []).append(pr)
 
-        with ThreadPoolExecutor(max_workers=len(repos)) as pool:
-            futures = {}
-            for repo in repos:
-                prs = repo_prs.get(repo.name, [])
-                futures[pool.submit(detect_deploy_status, repo, prs)] = repo
-
-            for future in as_completed(futures):
-                repo = futures[future]
-                info, warns = future.result()
-                deploy_info[repo.name] = info
-                if warns:
-                    warnings[repo.name] = warns
+        deploy_repos = [repo for repo in repos if repo_prs.get(repo.owner_repo)]
+        if deploy_repos:
+            with ThreadPoolExecutor(max_workers=min(8, len(deploy_repos))) as pool:
+                futures = {
+                    pool.submit(detect_deploy_status, repo, repo_prs[repo.owner_repo]): repo
+                    for repo in deploy_repos
+                }
+                for future in as_completed(futures):
+                    repo = futures[future]
+                    info, warns = future.result()
+                    deploy_info[repo.owner_repo] = info
+                    if warns:
+                        warnings[repo.owner_repo] = warns
 
     t2 = time.monotonic()
 
-    # Print warnings
     for repo_name, warns in warnings.items():
         for w in warns:
             print(f"{YELLOW}  ⚠ {repo_name}: {w}{NC}", file=sys.stderr)
 
     print(
-        f"{DIM}Done (PRs: {t1 - t0:.0f}s, deploy: {t2 - t1:.0f}s){NC}",
+        f"{DIM}Done (discover: {t1 - t0:.0f}s, deploy: {t2 - t1:.0f}s){NC}",
         file=sys.stderr,
     )
 
-    # Phase 3: Render
-    lines = render(all_prs, repos, deploy_info, args.deploy, args.slack)
+    snapshot = Snapshot(prs=all_prs, deploy=deploy_info)
+    lines = render_snapshot(snapshot, args)
 
-    return Snapshot(prs=all_prs, deploy=deploy_info), lines
+    return snapshot, lines
 
 
 def main() -> None:
@@ -953,39 +1095,58 @@ def main() -> None:
         print(__doc__.strip())
         return
 
-    repos = discover_repos()
-    if not repos:
-        print("No git repos found in current directory or subdirectories.", file=sys.stderr)
-        sys.exit(1)
+    enrich_cache: dict[tuple[str, int], tuple[str, dict]] = {}
 
-    assign_display_attrs(repos)
-
-    if args.watch is None:
-        snapshot, lines = run_once(args, repos)
+    def draw(lines: list[str]) -> None:
+        if args.watch is not None:
+            os.system("clear")
         for line in lines:
             print(line)
+
+    resized = False
+
+    def on_resize(signum, frame) -> None:
+        nonlocal resized
+        resized = True
+
+    if hasattr(signal, "SIGWINCH"):
+        signal.signal(signal.SIGWINCH, on_resize)
+
+    if args.watch is None:
+        snapshot, lines = run_once(args, enrich_cache)
+        draw(lines)
     else:
         prev: Optional[Snapshot] = None
+        current_snapshot: Optional[Snapshot] = None
+        current_lines: list[str] = []
         while True:
             try:
-                current, lines = run_once(args, repos)
+                current_snapshot, current_lines = run_once(args, enrich_cache)
             except KeyboardInterrupt:
                 break
             except Exception as e:
                 print(f"{RED}Error: {e}{NC}", file=sys.stderr)
-                current, lines = None, []
+                current_snapshot, current_lines = None, []
 
-            os.system("clear")
-            for line in lines:
-                print(line)
+            draw(current_lines)
+            resized = False
 
-            if prev and current:
-                diff_and_notify(prev.prs, current.prs, prev.deploy, current.deploy)
-            if current:
-                prev = current
+            if prev and current_snapshot:
+                diff_and_notify(prev.prs, current_snapshot.prs, prev.deploy, current_snapshot.deploy)
+            if current_snapshot:
+                prev = current_snapshot
 
+            deadline = time.monotonic() + args.watch
             try:
-                time.sleep(args.watch)
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    if resized and current_snapshot:
+                        current_lines = render_snapshot(current_snapshot, args)
+                        draw(current_lines)
+                        resized = False
+                    time.sleep(min(0.2, remaining))
             except KeyboardInterrupt:
                 break
 
