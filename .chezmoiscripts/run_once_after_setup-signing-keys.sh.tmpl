@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+missing=()
+
+if [ ! -f {{ .chezmoi.homeDir | quote }}/.ssh/git-signing-personal ]; then
+    missing+=("personal")
+fi
+
+{{ if hasKey . "git_work" -}}
+if [ ! -f {{ .chezmoi.homeDir | quote }}/.ssh/git-signing-work ]; then
+    missing+=("work")
+fi
+{{- end }}
+
+if [ ${#missing[@]} -eq 0 ]; then
+    exit 0
+fi
+
+step=1
+echo ""
+echo "══════════════════════════════════════════════════════════════"
+echo "  SSH commit signing keys need to be set up"
+echo "══════════════════════════════════════════════════════════════"
+echo ""
+
+for kind in "${missing[@]}"; do
+    if [ "$kind" = "personal" ]; then
+        keyfile={{ .chezmoi.homeDir | quote }}/.ssh/git-signing-personal
+        echo "  $step. Generate the personal signing key:"
+        echo ""
+        echo "     ssh-keygen -t ed25519 -f $keyfile -N '' -C 'git signing key (personal)'"
+        echo ""
+        step=$((step + 1))
+        echo "  $step. Upload the public key to GitHub as a Signing Key:"
+        echo "     https://github.com/settings/ssh/new"
+        echo ""
+        echo "     cat ${keyfile}.pub"
+        echo ""
+        step=$((step + 1))
+    fi
+{{ if hasKey . "git_work" -}}
+    if [ "$kind" = "work" ]; then
+        keyfile={{ .chezmoi.homeDir | quote }}/.ssh/git-signing-work
+        echo "  $step. Generate the work signing key:"
+        echo ""
+        echo "     ssh-keygen -t ed25519 -f $keyfile -N '' -C 'git signing key (work)'"
+        echo ""
+        step=$((step + 1))
+        echo "  $step. Upload the public key to your work GitHub account as a Signing Key"
+        echo ""
+        echo "     cat ${keyfile}.pub"
+        echo ""
+        step=$((step + 1))
+    fi
+{{- end }}
+done
+
+echo "══════════════════════════════════════════════════════════════"
+echo ""

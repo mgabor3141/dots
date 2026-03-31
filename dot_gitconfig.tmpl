@@ -3,6 +3,7 @@
 [user]
 	name = {{ .git.name }}
 	email = {{ .git.email }}
+	signingkey = {{ .chezmoi.homeDir }}/.ssh/git-signing-personal.pub
 {{- if eq .chezmoi.os "linux" }}
 [credential "https://github.com"]
 	helper =
@@ -26,5 +27,15 @@
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 	required = true
+[gpg]
+	format = ssh
+[gpg "ssh"]
+	allowedSignersFile = {{ .chezmoi.homeDir }}/.ssh/allowed_signers
+[commit]
+	gpgsign = true
 [init]
 	defaultBranch = main
+{{- if hasKey . "git_work" }}
+[includeIf "gitdir:{{ .git_work.repo_dir }}/"]
+	path = {{ .git_work.repo_dir }}/.gitconfig
+{{- end }}

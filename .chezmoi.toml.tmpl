@@ -10,6 +10,13 @@ exclude = ["scripts"]
 name = "{{ promptStringOnce . "git.name" "git name" }}"
 email = "{{ promptStringOnce . "git.email" "git email" }}"
 
+{{ if promptBoolOnce . "git_work_enabled" "configure a separate work git identity" -}}
+[data.git_work]
+name = "{{ promptStringOnce . "git_work.name" "work git name" }}"
+email = "{{ promptStringOnce . "git_work.email" "work git email" }}"
+repo_dir = "{{ promptStringOnce . "git_work.repo_dir" "work repo directory" | default "~/work" }}"
+{{- end }}
+
 {{ range list "json" "jsonc" "json5" -}}
 [[textconv]]
 pattern = "**/*.{{ . }}"

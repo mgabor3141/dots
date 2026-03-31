@@ -1,0 +1,15 @@
+{{- if hasKey . "git_work" -}}
+#!/usr/bin/env bash
+# work git identity: {{ .git_work.name }} <{{ .git_work.email }}> in {{ .git_work.repo_dir }}
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+{{ $dir := .git_work.repo_dir | replace "~" .chezmoi.homeDir -}}
+mkdir -p {{ $dir | quote }}
+cat > {{ joinPath $dir ".gitconfig" | quote }} << EOF
+[user]
+	name = {{ .git_work.name }}
+	email = {{ .git_work.email }}
+	signingkey = {{ .chezmoi.homeDir }}/.ssh/git-signing-work.pub
+EOF
+{{- end }}

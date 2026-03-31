@@ -4,6 +4,12 @@
 name = "{{ .git.name }}"
 email = "{{ .git.email }}"
 
+[signing]
+behavior = "own"
+backend = "ssh"
+key = "{{ .chezmoi.homeDir }}/.ssh/git-signing-personal.pub"
+backends.ssh.allowed-signers = "{{ .chezmoi.homeDir }}/.ssh/allowed_signers"
+
 [ui]
 editor = "true"  # no-op so agents/scripts don't hang; fish wrapper sets JJ_EDITOR for interactive use
 default-command = ["log", "--no-pager", "--reversed"]
@@ -86,3 +92,13 @@ auto-track-bookmarks = "main | master | trunk"
 
 [templates]
 git_push_bookmark = '''"mgabor/" ++ description.first_line().lower().trim().replace(regex:'\W+', "-").remove_prefix('-').remove_suffix('-').replace(regex:'((?:[^-]+-){5}).*', "$1").remove_suffix('-')'''
+{{- if hasKey . "git_work" }}
+
+[[--scope]]
+--when.repositories = ["{{ .git_work.repo_dir }}"]
+[--scope.user]
+name = "{{ .git_work.name }}"
+email = "{{ .git_work.email }}"
+[--scope.signing]
+key = "{{ .chezmoi.homeDir }}/.ssh/git-signing-work.pub"
+{{- end }}

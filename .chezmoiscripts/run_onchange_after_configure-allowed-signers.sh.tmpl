@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# signing keys: {{ .git.email }}{{ if hasKey . "git_work" }} {{ .git_work.email }}{{ end }}
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+signers={{ .chezmoi.homeDir | quote }}/.ssh/allowed_signers
+: > "$signers"
+
+key={{ .chezmoi.homeDir | quote }}/.ssh/git-signing-personal.pub
+if [ -f "$key" ]; then
+    echo "{{ .git.email }} $(cat "$key")" >> "$signers"
+fi
+
+{{ if hasKey . "git_work" -}}
+key={{ .chezmoi.homeDir | quote }}/.ssh/git-signing-work.pub
+if [ -f "$key" ]; then
+    echo "{{ .git_work.email }} $(cat "$key")" >> "$signers"
+fi
+{{- end }}
