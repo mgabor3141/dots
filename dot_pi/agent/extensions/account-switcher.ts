@@ -133,7 +133,9 @@ export default function (pi: ExtensionAPI) {
 		const profiles = loadProfiles();
 		const labels = Object.keys(profiles);
 		if (labels.length === 0) {
-			ctx.ui.notify("No saved profiles. Use /account save <name> first.", "warning");
+			// Guide first-time setup: save current credentials as a profile
+			const label = (await ctx.ui.input("No profiles yet. Save current credentials as:"))?.trim();
+			if (label) await handleSave(label, ctx);
 			return;
 		}
 
@@ -199,7 +201,12 @@ export default function (pi: ExtensionAPI) {
 
 		const providers = Object.keys(current).join(", ");
 		const verb = overwriting ? "Updated" : "Saved";
-		ctx.ui.notify(`${verb} profile '${label}' (${providers}).`, "success");
+		const profileCount = Object.keys(profiles).length;
+		let msg = `${verb} profile '${label}' (${providers}).`;
+		if (profileCount === 1) {
+			msg += " Now /login to your other account, then /account save <name>.";
+		}
+		ctx.ui.notify(msg, "success");
 	}
 
 	async function handleRm(name: string | undefined, ctx: ExtensionCommandContext) {
