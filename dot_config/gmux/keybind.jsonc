@@ -1,0 +1,5 @@
+[
+  // Remap Ctrl+Alt+T to send Ctrl+T (browser steals Ctrl+T for new tab)
+  { "key": "secondary+alt+t", "action": "sendKeys", "args": "ctrl+t" },
+  { "key": "cmd+c", "action": "copyOrInterrupt" },
+]

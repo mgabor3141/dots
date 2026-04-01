@@ -38,7 +38,6 @@ export PATH="$HOME/.local/bin:/mnt/user/appdata/chezmoi/bin:/mnt/user/appdata/no
 {{- end }}
 
 {{- if eq .chezmoi.os "darwin" }}
-export PATH="/opt/homebrew/bin:$PATH"
 export XDG_CONFIG_HOME="$HOME/.config"
 
 export SSH_AUTH_SOCK=$HOME/Library/Containers/com.bitwarden.desktop/Data/.bitwarden-ssh-agent.sock

@@ -1779,7 +1779,11 @@ allow_remote_control socket-only
 #: yes
 #:     Remote control requests are always accepted.
 
+#{{- if eq .chezmoi.os "darwin" }}
+listen_on unix:/tmp/kitty-{kitty_pid}
+#{{- else }}
 listen_on unix:@kitty-{kitty_pid}
+#{{- end }}
 
 #: Listen to the specified socket for remote control connections. Note
 #: that this will apply to all kitty instances. It can be overridden
