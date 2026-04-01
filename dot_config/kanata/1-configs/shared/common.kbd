@@ -8,7 +8,9 @@
 )
 
 ;; Secondary modifier: Cmd on macOS, Ctrl on Linux (used for app shortcuts like Copy, Paste)
-;; WM modifier: Ctrl on macOS, Meta on Linux (used for window manager keybinds)
+;; WM modifier: Ctrl+Alt+Cmd on macOS, Meta on Linux (used for window manager keybinds)
+;;   WM doesn't include Shift so WM+Shift is available for "move" variants.
+;;   WM+Shift = Hyper (Ctrl+Shift+Alt+Cmd).
 ;;
 ;; On macOS, nop0/nop1 are held as markers so @tab can detect which semantic
 ;; modifier is active (regardless of which physical key triggers it).
@@ -24,7 +26,7 @@
   (defalias
     lsecondary (multi lmet nop0
                   (on-release release-virtualkey v-ctrl))
-    wm-modifier (multi lctl nop1
+    wm-modifier (multi lctl lalt lmet nop1
                   (on-release release-virtualkey v-cmd))
   )
 )
@@ -38,7 +40,7 @@
   lse @lsecondary
 )
 
-(platform (macos) (defalias sleep C-S-A-M-s)) ;; Hyper+S → Hammerspoon triggers systemSleep
+(platform (macos) (defalias sleep C-S-A-M-y)) ;; Hyper+Y → Hammerspoon triggers systemSleep
 (platform (linux) (defalias sleep sleep))
 
 ;; MacOS specific remaps, intended to standardize key positions between platforms
@@ -73,12 +75,12 @@
     ;; (macOS sends bare F13 as a system-defined event that hs.hotkey can't bind)
     (f13)       (lctl lsft lalt lmet m)
 
-    ;; F21 → Hyper+S (sleep) — sent by Go60 ZMK firmware alongside C_SLEEP.
+    ;; F21 → Hyper+Y (sleep) — sent by Go60 ZMK firmware alongside C_SLEEP.
     ;; C_SLEEP works on Linux but macOS ignores it entirely, so we remap F21 here.
-    (f21)       (lctl lsft lalt lmet s)
+    (f21)       (lctl lsft lalt lmet y)
 
     ;; WM+G → WM+Space
-    (lctl g)    (lctl spc)
+    (lctl lalt lmet g)    (lctl lalt lmet spc)
   )
 )
 (platform (linux)
@@ -108,9 +110,9 @@
       ;; @lsecondary held (nop0 marker) → un-swap: release Cmd, hold Ctrl, send Tab
       ((and nop0 (not (input virtual v-ctrl)) (not (input virtual v-cmd))))
         (multi (release-key lmet) (on-press press-vkey v-ctrl) lctl tab) break
-      ;; @wm-modifier held (nop1 marker) → un-swap: release Ctrl, hold Cmd, send Tab
+      ;; @wm-modifier held (nop1 marker) → un-swap: release Ctrl+Alt, Cmd stays held
       ((and nop1 (not (input virtual v-ctrl)) (not (input virtual v-cmd))))
-        (multi (release-key lctl) (on-press press-vkey v-cmd) lmet tab) break
+        (multi (release-key lctl) (release-key lalt) tab) break
       ;; Default: plain tab (unmodified, or subsequent presses with virtual key held)
       () tab break
     )

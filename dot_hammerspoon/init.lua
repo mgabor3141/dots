@@ -2,7 +2,7 @@
 
 hs.ipc.cliInstall()
 
-hs.hotkey.bind({"ctrl"}, "escape", function()
+hs.hotkey.bind({"ctrl", "alt", "cmd"}, "escape", function()
     hs.spaces.toggleMissionControl()
 end)
 
@@ -35,18 +35,18 @@ cmdQHotkey = hs.hotkey.bind({"cmd"}, "q",
     end
 )
 
-hs.hotkey.bind({"ctrl"}, "X", function()
+hs.hotkey.bind({"ctrl", "alt", "cmd"}, "X", function()
     hs.window.focusedWindow():close()
 end)
 
-hs.hotkey.bind({"ctrl"}, ".", function()
+hs.hotkey.bind({"ctrl", "alt", "cmd"}, ".", function()
     hs.eventtap.keyStroke({"ctrl", "cmd"}, "space")
 end)
 
--- Sleep trigger (Hyper+S via kanata).
--- Razer: physical Break key → kanata @sleep alias → Hyper+S
--- Go60: ZMK sends C_SLEEP (Linux) + F21 (macOS) → kanata defoverride → Hyper+S
-hs.hotkey.bind({"ctrl", "shift", "alt", "cmd"}, "s", function()
+-- Sleep trigger (Hyper+Y via kanata).
+-- Razer: physical Break key → kanata @sleep alias → Hyper+Y
+-- Go60: ZMK sends C_SLEEP (Linux) + F21 (macOS) → kanata defoverride → Hyper+Y
+hs.hotkey.bind({"ctrl", "shift", "alt", "cmd"}, "y", function()
     -- Delay the sleep so it's not immediately woken up by the keyup
     hs.timer.doAfter(0.5, function()
         hs.caffeinate.systemSleep()

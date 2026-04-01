@@ -22,11 +22,10 @@
 )
 
 (defalias
-  ;; ctrl on double tap, fn otherwise
-  fnc (tap-dance-eager 200 (
-    @fn
-    lctl
-  ))
+  ;; Hold: fn layer with ctrl applied to all non-top-row keys.
+  ;; ctrl is NOT held at the layer level; instead fn-ctrl explicitly maps each key
+  ;; to C-<key>, so the top row fires plain media/system keys with no ctrl involved.
+  fnc (layer-while-held fn-ctrl)
 )
 
 ;; MacBook ANSI (single row enter) physical layout
@@ -62,4 +61,17 @@
   _    _    _    _         _              _    _         home pgdn end
 
   _
+)
+
+;; fn-ctrl: fn layer with ctrl explicitly applied to every non-top-row key.
+;; No ctrl is held at the layer level, so the top row fires plain media/system keys.
+(deflayer fn-ctrl
+  lrld   brdn   brup   mctl   sls    @dct   dnd    prev   pp     next   mute   vold   volu
+  C-grv  C-1    C-2    C-3    C-4    C-5    C-6    C-7    C-8    C-9    C-0    C--    C-=    C-bspc
+  @tab   C-q    C-w    C-e    C-r    C-t    C-y    C-u    C-i    C-o    C-p    C-[    C-]    C-\
+  esc    C-a    C-s    C-d    C-f    C-g    C-h    C-j    C-k    C-l    C-;    C-'    C-ret
+  lsft   C-z    C-x    C-c    C-v    C-b    C-n    C-m    C-,    C-.    C-/    rsft   pgup
+  lalt   @fnc   @wm    lmet          spc                   rmet   @fnc          home   pgdn   end
+
+  C-grv
 )
