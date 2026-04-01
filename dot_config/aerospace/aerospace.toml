@@ -51,52 +51,50 @@ preset = "qwerty"
 [mode.main.binding]
 # Workspace bindings
 # NOTE: If adding/changing workspaces, also update ~/.config/aerospace/workspaces.conf
-ctrl-a = "workspace 1A"
-ctrl-q = "workspace 2Q"
-ctrl-w = "workspace 3W"
-ctrl-r = "exec-and-forget ~/.config/wm-scripts/last-numbered-ws.sh switch"
-ctrl-t = "workspace 4T"
-ctrl-1 = "workspace 51"
-ctrl-2 = "workspace 62"
-ctrl-3 = "workspace 73"
-ctrl-4 = "workspace 84"
-ctrl-5 = "workspace 95"
+ctrl-alt-cmd-a = "workspace 1A"
+ctrl-alt-cmd-q = "workspace 2Q"
+ctrl-alt-cmd-w = "workspace 3W"
+ctrl-alt-cmd-r = "exec-and-forget ~/.config/wm-scripts/last-numbered-ws.sh switch"
+ctrl-alt-cmd-t = "workspace 4T"
+ctrl-alt-cmd-1 = "workspace 51"
+ctrl-alt-cmd-2 = "workspace 62"
+ctrl-alt-cmd-3 = "workspace 73"
+ctrl-alt-cmd-4 = "workspace 84"
+ctrl-alt-cmd-5 = "workspace 95"
 
-ctrl-shift-a = ["move-node-to-workspace --focus-follows-window 1A", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-q = ["move-node-to-workspace --focus-follows-window 2Q", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-w = ["move-node-to-workspace --focus-follows-window 3W", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-r = "exec-and-forget ~/.config/wm-scripts/last-numbered-ws.sh move"
-ctrl-shift-t = ["move-node-to-workspace --focus-follows-window 4T", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-1 = ["move-node-to-workspace --focus-follows-window 51", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 51", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-2 = ["move-node-to-workspace --focus-follows-window 62", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 62", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-3 = ["move-node-to-workspace --focus-follows-window 73", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 73", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-4 = ["move-node-to-workspace --focus-follows-window 84", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 84", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-5 = ["move-node-to-workspace --focus-follows-window 95", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 95", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-a = ["move-node-to-workspace --focus-follows-window 1A", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-q = ["move-node-to-workspace --focus-follows-window 2Q", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-w = ["move-node-to-workspace --focus-follows-window 3W", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-r = "exec-and-forget ~/.config/wm-scripts/last-numbered-ws.sh move"
+ctrl-shift-alt-cmd-t = ["move-node-to-workspace --focus-follows-window 4T", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-1 = ["move-node-to-workspace --focus-follows-window 51", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 51", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-2 = ["move-node-to-workspace --focus-follows-window 62", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 62", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-3 = ["move-node-to-workspace --focus-follows-window 73", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 73", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-4 = ["move-node-to-workspace --focus-follows-window 84", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 84", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-5 = ["move-node-to-workspace --focus-follows-window 95", "exec-and-forget ~/.config/wm-scripts/update-editor-mapping.sh 95", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 
-ctrl-f20 = "workspace-back-and-forth"
+ctrl-alt-cmd-f20 = "workspace-back-and-forth"
 
-ctrl-left  = "focus left"
-ctrl-right = "focus right"
-ctrl-up    = "exec-and-forget aerospace focus up --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace prev --stdin"
-ctrl-down  = "exec-and-forget aerospace focus down --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace next --stdin"
-ctrl-s     = "focus left"
-ctrl-f     = "focus right"
-ctrl-e     = "exec-and-forget aerospace focus up --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace prev --stdin"
-ctrl-d     = "exec-and-forget aerospace focus down --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace next --stdin"
+ctrl-alt-cmd-left  = "focus left"
+ctrl-alt-cmd-right = "focus right"
+ctrl-alt-cmd-up    = "exec-and-forget aerospace focus up --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace prev --stdin"
+ctrl-alt-cmd-down  = "exec-and-forget aerospace focus down --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace next --stdin"
+ctrl-alt-cmd-s     = "focus left"
+ctrl-alt-cmd-f     = "focus right"
+ctrl-alt-cmd-e     = "exec-and-forget aerospace focus up --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace prev --stdin"
+ctrl-alt-cmd-d     = "exec-and-forget aerospace focus down --boundaries-action fail || aerospace list-workspaces --monitor focused --empty no | aerospace workspace next --stdin"
 
-ctrl-shift-left  = "move left --boundaries-action stop"
-ctrl-shift-right = "move right --boundaries-action stop"
-ctrl-shift-up    = ["move-node-to-workspace --focus-follows-window prev", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-down  = ["move-node-to-workspace --focus-follows-window next", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-s     = "move left --boundaries-action stop"
-ctrl-shift-f     = "move right --boundaries-action stop"
-ctrl-shift-e     = ["move-node-to-workspace --focus-follows-window prev", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
-ctrl-shift-d     = ["move-node-to-workspace --focus-follows-window next", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-left  = "move left --boundaries-action stop"
+ctrl-shift-alt-cmd-right = "move right --boundaries-action stop"
+ctrl-shift-alt-cmd-up    = ["move-node-to-workspace --focus-follows-window prev", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-down  = ["move-node-to-workspace --focus-follows-window next", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-s     = "move left --boundaries-action stop"
+ctrl-shift-alt-cmd-f     = "move right --boundaries-action stop"
+ctrl-shift-alt-cmd-e     = ["move-node-to-workspace --focus-follows-window prev", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
+ctrl-shift-alt-cmd-d     = ["move-node-to-workspace --focus-follows-window next", "exec-and-forget sketchybar --trigger aerospace_node_moved"]
 
-ctrl-z = "layout floating tiling"
-ctrl-b = "layout h_tiles h_accordion"
-ctrl-c = "mode main" # no-op: swallow key so it doesn't pass through to app
-ctrl-v = "mode main" # no-op: swallow key so it doesn't pass through to app
+ctrl-alt-cmd-z = "layout floating tiling"
+ctrl-alt-cmd-b = "layout h_tiles h_accordion"
 
 [[on-window-detected]]
 if.app-id = "com.apple.finder"
