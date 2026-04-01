@@ -1,3 +1,6 @@
 source /usr/share/cachyos-zsh-config/cachyos-config.zsh
 
+# Make direnv work in non-interactive bash subprocesses (editor/agent tool calls).
+export BASH_ENV="$HOME/.config/direnv/bash-env.sh"
+
 eval "$(direnv hook zsh)"

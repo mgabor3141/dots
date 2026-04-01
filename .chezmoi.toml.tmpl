@@ -15,6 +15,7 @@ email = "{{ promptStringOnce . "git.email" "git email" }}"
 name = "{{ promptStringOnce . "git_work.name" "work git name" }}"
 email = "{{ promptStringOnce . "git_work.email" "work git email" }}"
 repo_dir = "{{ promptStringOnce . "git_work.repo_dir" "work repo directory" | default "~/work" }}"
+github_org = "{{ promptStringOnce . "git_work.github_org" "work GitHub organization" | default "" }}"
 {{- end }}
 
 {{ range list "json" "jsonc" "json5" -}}

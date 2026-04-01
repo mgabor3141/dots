@@ -3,6 +3,10 @@ set -a
 [ -f "$HOME/.env" ] && . "$HOME/.env"
 set +a
 
+# Make direnv work in non-interactive bash (editor/agent tool calls).
+# Interactive shells use `direnv hook` instead for prompt-driven updates.
+export BASH_ENV="$HOME/.config/direnv/bash-env.sh"
+
 export EDITOR=nano
 {{- if not .headless }}
 export VISUAL="zed --wait"

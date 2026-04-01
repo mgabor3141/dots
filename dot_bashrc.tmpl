@@ -2,6 +2,9 @@
 # ~/.bashrc for headless server system
 #
 
+# Make direnv work in non-interactive bash (editor/agent tool calls).
+export BASH_ENV="$HOME/.config/direnv/bash-env.sh"
+
 # If not running interactively, don't do anything
 [[ $- != *i* ]] && return
 

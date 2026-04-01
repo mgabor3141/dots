@@ -1,17 +1,18 @@
 [core]
 	autocrlf = "input"
+{{- if hasKey . "git_work" }}
+	hooksPath = {{ joinPath .chezmoi.homeDir ".config" "git" "hooks" }}
+{{- end }}
 [user]
 	name = {{ .git.name }}
 	email = {{ .git.email }}
 	signingkey = {{ .chezmoi.homeDir }}/.ssh/git-signing-personal.pub
-{{- if eq .chezmoi.os "linux" }}
 [credential "https://github.com"]
 	helper =
 	helper = !/usr/bin/env gh auth git-credential
 [credential "https://gist.github.com"]
 	helper =
 	helper = !/usr/bin/env gh auth git-credential
-{{- end }}
 [diff]
 	tool = rtk
 [difftool "rtk"]

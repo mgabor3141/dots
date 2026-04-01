@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Block commits in work-org repos when the shell is still using the
+# default personal gh config dir. See dot_config/git/README.md.
+set -euo pipefail
+
+github_owner_from_url() {
+    local url="$1"
+    local owner_repo
+
+    case "$url" in
+        git@github.com:*)
+            owner_repo=${url#git@github.com:}
+            ;;
+        ssh://git@github.com/*)
+            owner_repo=${url#ssh://git@github.com/}
+            ;;
+        https://github.com/*)
+            owner_repo=${url#https://github.com/}
+            ;;
+        http://github.com/*)
+            owner_repo=${url#http://github.com/}
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    owner_repo=${owner_repo%.git}
+    printf '%s\n' "${owner_repo%%/*}"
+}
+
+WORK_ORG={{ if and (hasKey . "git_work") (hasKey .git_work "github_org") .git_work.github_org }}{{ .git_work.github_org | quote }}{{ else }}""{{ end }}
+[[ -n "$WORK_ORG" ]] || exit 0
+WORK_ORG=$(printf '%s' "$WORK_ORG" | tr '[:upper:]' '[:lower:]')
+
+match=false
+while IFS= read -r remote; do
+    [[ -n "$remote" ]] || continue
+    remote_url=$(git remote get-url "$remote" 2>/dev/null || true)
+    owner=$(github_owner_from_url "$remote_url" 2>/dev/null || true)
+    [[ -n "$owner" ]] || continue
+    owner=$(printf '%s' "$owner" | tr '[:upper:]' '[:lower:]')
+    if [[ "$owner" == "$WORK_ORG" ]]; then
+        match=true
+        break
+    fi
+done < <(git remote)
+
+$match || exit 0
+
+default_gh_config_dir="$HOME/.config/gh"
+active_gh_config_dir="${GH_CONFIG_DIR:-$default_gh_config_dir}"
+
+case "$active_gh_config_dir" in
+    "$default_gh_config_dir"|"$default_gh_config_dir"/)
+        echo "Refusing commit: this repository belongs to the work GitHub organization, but GH_CONFIG_DIR is still using the default personal gh config." >&2
+        echo "Open a shell inside the work directory first, or export GH_CONFIG_DIR to your work gh config dir." >&2
+        echo "Bypass: git commit --no-verify" >&2
+        exit 1
+        ;;
+esac

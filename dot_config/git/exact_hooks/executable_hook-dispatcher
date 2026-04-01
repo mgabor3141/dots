@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Generic git hook dispatcher.
+#
+# All hook names (pre-commit, commit-msg, pre-push, etc.) are symlinks
+# to this script. It determines the hook type from its own filename,
+# runs any global scripts from hooks.d/<hooktype>/, then delegates to
+# the repo-local .git/hooks/<hooktype> if it exists.
+#
+# This preserves local hook compatibility when core.hooksPath is set.
+
+set -euo pipefail
+
+HOOK_TYPE="$(basename "$0")"
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# --- Run global hook scripts for this type ---
+global_dir="$HOOK_DIR/hooks.d/$HOOK_TYPE"
+if [[ -d "$global_dir" ]]; then
+    for script in "$global_dir"/*; do
+        [[ -x "$script" ]] || continue
+        "$script" "$@" || exit $?
+    done
+fi
+
+# --- Delegate to repo-local hook ---
+git_dir=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null) || exit 0
+local_hook="$git_dir/hooks/$HOOK_TYPE"
+
+if [[ -x "$local_hook" ]] && [[ "$(cd "$(dirname "$local_hook")" && pwd)/$(basename "$local_hook")" != "$HOOK_DIR/$HOOK_TYPE" ]]; then
+    exec "$local_hook" "$@"
+fi
