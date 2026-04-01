@@ -1,9 +1,10 @@
 """
-pr-status — Show status of your recent PRs across multiple GitHub repos.
+pr-status — Show status of your recent PRs across GitHub.
 
-Discovers repos from subdirectories or from your recent GitHub PR activity.
-Groups PRs by ticket ID, shows review state, CI status, and deployment
-status (preprod/prod) when detectable from CI commit statuses or branch models.
+Discovers PRs globally using GitHub search, then enriches only the matching PRs
+with per-repo detail. Groups PRs by ticket ID, shows review state, CI status,
+and deployment status (preprod/prod) when detectable from branch models or CI
+commit statuses.
 
 Usage:
     pr-status [options]
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -31,11 +33,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from .deploy import detect_deploy_status
-from .discover import (
-    Repo, assign_display_attrs,
-    discover_repos_local, discover_repos_from_prs,
-)
-from .fetch import fetch_prs
+from .discover import Repo, build_repo_index, discover_pr_stubs
+from .fetch import enrich_pr
 from .model import DeployState, PR, PRLifecycle
 from .notify import diff_and_notify
 from .render import render
@@ -51,56 +50,82 @@ class Snapshot:
     prs: list[PR]
 
 
+def render_snapshot(snapshot: Snapshot, slack: bool) -> list[str]:
+    repos = build_repo_index([pr.repo for pr in snapshot.prs])
+    return render(snapshot.prs, repos, slack)
+
+
 def run_once(
-    repos: list[Repo],
     author: str,
     since: str,
     check_deploy: bool,
     slack: bool,
+    enrich_cache: dict[tuple[str, int], tuple[str, PR]],
 ) -> tuple[Snapshot, list[str]]:
     """Run one full cycle. Returns (snapshot, output_lines)."""
     t0 = time.monotonic()
-    print(f"{DIM}Fetching PRs across {len(repos)} repos...{NC}", file=sys.stderr)
+    print(f"{DIM}Searching GitHub for relevant PRs...{NC}", file=sys.stderr)
+    pr_stubs = discover_pr_stubs(author, since)
 
     all_prs: list[PR] = []
-    with ThreadPoolExecutor(max_workers=len(repos)) as pool:
-        futures = {pool.submit(fetch_prs, repo, author, since): repo for repo in repos}
-        for f in as_completed(futures):
-            all_prs.extend(f.result())
+    pending: list[dict] = []
+    for pr_stub in pr_stubs:
+        key = (pr_stub["_repo"], pr_stub["number"])
+        cached = enrich_cache.get(key)
+        if cached and cached[0] == pr_stub.get("updatedAt", ""):
+            pr = cached[1]
+            pr.sources = list(pr_stub.get("_sources") or [])
+            all_prs.append(pr)
+        else:
+            pending.append(pr_stub)
+
+    if pending:
+        print(f"{DIM}Fetching PR details for {len(pending)} PRs...{NC}", file=sys.stderr)
+        with ThreadPoolExecutor(max_workers=min(8, len(pending))) as pool:
+            futures = {pool.submit(enrich_pr, pr_stub): pr_stub for pr_stub in pending}
+            for f in as_completed(futures):
+                pr_stub = futures[f]
+                pr = f.result()
+                if not pr:
+                    continue
+                all_prs.append(pr)
+                enrich_cache[(pr.repo, pr.number)] = (pr_stub.get("updatedAt", ""), pr)
 
     t1 = time.monotonic()
+    repos = build_repo_index([pr.repo for pr in all_prs])
 
     if not check_deploy:
-        # Without deploy checks, treat merged PRs as "merged" (not "unknown")
         for pr in all_prs:
             if pr.lifecycle == PRLifecycle.MERGED:
                 pr.deploy = DeployState.MERGED
-    else:
+    elif repos:
         print(f"{DIM}Checking deployment status...{NC}", file=sys.stderr)
         repo_prs: dict[str, list[PR]] = {}
         for pr in all_prs:
-            repo_prs.setdefault(pr.repo, []).append(pr)
+            if "authored_merged" in set(pr.sources):
+                repo_prs.setdefault(pr.repo, []).append(pr)
 
-        with ThreadPoolExecutor(max_workers=len(repos)) as pool:
-            futures = {}
-            for repo in repos:
-                prs = repo_prs.get(repo.name, [])
-                futures[pool.submit(detect_deploy_status, repo, prs)] = repo
-
-            for f in as_completed(futures):
-                repo = futures[f]
-                deploy_info, warnings = f.result()
-                for pr in repo_prs.get(repo.name, []):
-                    if pr.number in deploy_info:
-                        pr.deploy = deploy_info[pr.number]
-                for w in warnings:
-                    print(f"{YELLOW}  ⚠ {repo.name}: {w}{NC}", file=sys.stderr)
+        deploy_repos = [repo for repo in repos if repo_prs.get(repo.owner_repo)]
+        if deploy_repos:
+            with ThreadPoolExecutor(max_workers=min(8, len(deploy_repos))) as pool:
+                futures = {
+                    pool.submit(detect_deploy_status, repo, repo_prs[repo.owner_repo]): repo
+                    for repo in deploy_repos
+                }
+                for f in as_completed(futures):
+                    repo = futures[f]
+                    deploy_info, warnings = f.result()
+                    for pr in repo_prs.get(repo.owner_repo, []):
+                        if pr.number in deploy_info:
+                            pr.deploy = deploy_info[pr.number]
+                    for w in warnings:
+                        print(f"{YELLOW}  ⚠ {repo.owner_repo}: {w}{NC}", file=sys.stderr)
 
     t2 = time.monotonic()
-    print(f"{DIM}Done (PRs: {t1 - t0:.0f}s, deploy: {t2 - t1:.0f}s){NC}", file=sys.stderr)
+    print(f"{DIM}Done (discover: {t1 - t0:.0f}s, deploy: {t2 - t1:.0f}s){NC}", file=sys.stderr)
 
-    lines = render(all_prs, repos, slack)
-    return Snapshot(prs=all_prs), lines
+    snapshot = Snapshot(prs=all_prs)
+    return snapshot, render_snapshot(snapshot, slack)
 
 
 def main() -> None:
@@ -125,43 +150,63 @@ def main() -> None:
         "%Y-%m-%dT%H:%M:%SZ"
     )
 
-    repos = discover_repos_local()
-    if not repos:
-        print(f"{DIM}No local repos found, discovering from GitHub PR history...{NC}", file=sys.stderr)
-        repos = discover_repos_from_prs(args.author, since)
+    enrich_cache: dict[tuple[str, int], tuple[str, PR]] = {}
 
-    if not repos:
-        print("No repos found. Run from a directory with git repos, or ensure you have recent PRs on GitHub.", file=sys.stderr)
-        sys.exit(1)
-
-    assign_display_attrs(repos)
-
-    if args.watch is None:
-        snapshot, lines = run_once(repos, args.author, since, args.deploy, args.slack)
+    def draw(lines: list[str]) -> None:
+        if args.watch is not None:
+            os.system("clear")
         for line in lines:
             print(line)
+
+    resized = False
+
+    def on_resize(signum, frame) -> None:
+        nonlocal resized
+        resized = True
+
+    if hasattr(signal, "SIGWINCH"):
+        signal.signal(signal.SIGWINCH, on_resize)
+
+    if args.watch is None:
+        snapshot, lines = run_once(args.author, since, args.deploy, args.slack, enrich_cache)
+        if not snapshot.prs:
+            print("No PRs found.", file=sys.stderr)
+            sys.exit(1)
+        draw(lines)
     else:
         prev: Optional[Snapshot] = None
+        current_snapshot: Optional[Snapshot] = None
+        current_lines: list[str] = []
         while True:
             try:
-                current, lines = run_once(repos, args.author, since, args.deploy, args.slack)
+                current_snapshot, current_lines = run_once(
+                    args.author, since, args.deploy, args.slack, enrich_cache,
+                )
             except KeyboardInterrupt:
                 break
             except Exception as e:
                 print(f"{RED}Error: {e}{NC}", file=sys.stderr)
-                current, lines = None, []
+                current_snapshot, current_lines = None, []
 
-            os.system("clear")
-            for line in lines:
-                print(line)
+            draw(current_lines)
+            resized = False
 
-            if prev and current:
-                diff_and_notify(prev.prs, current.prs)
-            if current:
-                prev = current
+            if prev and current_snapshot:
+                diff_and_notify(prev.prs, current_snapshot.prs)
+            if current_snapshot:
+                prev = current_snapshot
 
             try:
-                time.sleep(args.watch)
+                deadline = time.monotonic() + args.watch
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    if resized and current_snapshot:
+                        current_lines = render_snapshot(current_snapshot, args.slack)
+                        draw(current_lines)
+                        resized = False
+                    time.sleep(min(0.2, remaining))
             except KeyboardInterrupt:
                 break
 

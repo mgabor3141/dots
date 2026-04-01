@@ -47,10 +47,18 @@ def diff_and_notify(old_prs: list[PR], new_prs: list[PR]) -> None:
 
     for key, new_pr in new_by_key.items():
         old_pr = old_by_key.get(key)
+        title = _short_title(new_pr)
+
         if not old_pr:
+            if "review_requested" in set(new_pr.sources):
+                changes.append(f"👀 Review requested: {title}")
             continue
 
-        title = _short_title(new_pr)
+        old_sources = set(old_pr.sources)
+        new_sources = set(new_pr.sources)
+        if "review_requested" in new_sources and "review_requested" not in old_sources:
+            changes.append(f"👀 Review requested: {title}")
+
         old_ds = old_pr.display_state
         new_ds = new_pr.display_state
 

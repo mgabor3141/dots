@@ -1,43 +1,36 @@
-"""Fetch PRs from GitHub."""
+"""Fetch and enrich PRs from GitHub."""
 
 from __future__ import annotations
 
 import json
 from typing import Optional
 
-from .discover import Repo
 from .model import PR, parse_pr
 from .util import run
 
 PR_FIELDS = (
-    "number,title,state,isDraft,createdAt,mergedAt,mergeCommit,"
+    "number,title,state,isDraft,createdAt,updatedAt,mergedAt,mergeCommit,"
     "headRefName,baseRefName,author,reviews,reviewRequests,"
     "statusCheckRollup,reviewDecision,mergeStateStatus,mergeable,url"
 )
 
 
-def fetch_prs(repo: Repo, author: str, since: str) -> list[PR]:
-    """Fetch recent PRs for a repo and parse into model objects."""
-    env = {"GIT_DIR": repo.git_dir} if repo.git_dir else {}
+def enrich_pr(pr_stub: dict) -> Optional[PR]:
+    """Fetch the rich PR details needed for rendering and notifications."""
     result = run(
-        ["gh", "pr", "list",
-         "--repo", repo.owner_repo,
-         "--author", author, "--state", "all", "--limit", "50",
-         "--json", PR_FIELDS],
-        env=env, timeout=30,
+        [
+            "gh", "pr", "view", str(pr_stub["number"]),
+            "--repo", pr_stub["_repo"],
+            "--json", PR_FIELDS,
+        ],
+        timeout=30,
     )
     if not result:
-        return []
+        return None
 
     try:
-        raw_prs = json.loads(result)
+        raw = json.loads(result)
     except json.JSONDecodeError:
-        return []
+        return None
 
-    prs = []
-    for raw in raw_prs:
-        created = raw.get("createdAt", "")
-        merged = raw.get("mergedAt", "")
-        if created >= since or (merged and merged >= since):
-            prs.append(parse_pr(raw, repo.name))
-    return prs
+    return parse_pr(raw, pr_stub["_repo"], list(pr_stub.get("_sources") or []))

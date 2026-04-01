@@ -1,4 +1,4 @@
-"""Repo discovery: local filesystem and GitHub API fallback."""
+"""PR and repo discovery via GitHub search, plus optional local repo helpers."""
 
 from __future__ import annotations
 
@@ -123,32 +123,88 @@ def _find_git_dir(d: Path) -> Optional[str]:
 
 
 # ============================================================
-# Remote discovery (from PR activity)
+# Global PR discovery
 # ============================================================
 
+SEARCH_FIELDS = "number,title,state,isDraft,createdAt,updatedAt,closedAt,url,repository,author"
 
-def discover_repos_from_prs(author: str, since: str) -> list[Repo]:
-    result = run(
-        ["gh", "search", "prs",
-         "--author", author,
-         "--created", f">={since[:10]}",
-         "--limit", "100",
-         "--json", "repository"],
-        timeout=15,
-    )
-    if not result:
+
+def _parse_search_results(raw: Optional[str], source: str) -> list[dict]:
+    if not raw:
         return []
 
     try:
-        items = json.loads(result)
+        prs = json.loads(raw)
     except json.JSONDecodeError:
         return []
 
+    items = []
+    for pr in prs:
+        repo = (pr.get("repository") or {}).get("nameWithOwner", "")
+        if not repo:
+            continue
+        pr["_repo"] = repo
+        pr["_sources"] = [source]
+        items.append(pr)
+    return items
+
+
+def _search_prs(args: list[str], source: str) -> list[dict]:
+    result = run(
+        ["gh", "search", "prs", "--limit", "100", "--json", SEARCH_FIELDS, *args],
+        timeout=30,
+    )
+    return _parse_search_results(result, source)
+
+
+def discover_pr_stubs(author: str, since: str) -> list[dict]:
+    """Discover authored, merged, and review-requested PRs globally."""
+    since_day = since[:10]
+    buckets = [
+        _search_prs(["--author", author, "--state", "open"], "authored_open"),
+        _search_prs(["--review-requested", author, "--state", "open"], "review_requested"),
+        _search_prs([f"author:{author} is:merged merged:>={since_day}"], "authored_merged"),
+    ]
+
+    merged: dict[tuple[str, int], dict] = {}
+    for bucket in buckets:
+        for pr in bucket:
+            key = (pr["_repo"], pr["number"])
+            existing = merged.get(key)
+            if existing:
+                sources = set(existing.get("_sources") or [])
+                sources.update(pr.get("_sources") or [])
+                existing["_sources"] = sorted(sources)
+                if pr.get("updatedAt", "") > existing.get("updatedAt", ""):
+                    existing.update({k: v for k, v in pr.items() if not k.startswith("_")})
+            else:
+                merged[key] = pr
+
+    return sorted(
+        merged.values(),
+        key=lambda pr: pr.get("updatedAt") or pr.get("createdAt", ""),
+        reverse=True,
+    )
+
+
+def discover_repos_from_prs(author: str, since: str) -> list[Repo]:
     seen: dict[str, Repo] = {}
-    for item in items:
-        repo_info = item.get("repository", {})
-        owner_repo = repo_info.get("nameWithOwner", "")
-        name = repo_info.get("name", "")
-        if owner_repo and owner_repo not in seen:
-            seen[owner_repo] = Repo(name=name, owner_repo=owner_repo)
+    for item in discover_pr_stubs(author, since):
+        owner_repo = item.get("_repo", "")
+        if not owner_repo or owner_repo in seen:
+            continue
+        name = owner_repo.split("/", 1)[-1]
+        seen[owner_repo] = Repo(name=name, owner_repo=owner_repo)
     return list(seen.values())
+
+
+def build_repo_index(owner_repos: list[str]) -> list[Repo]:
+    seen: dict[str, Repo] = {}
+    for owner_repo in owner_repos:
+        seen.setdefault(
+            owner_repo,
+            Repo(name=owner_repo.split("/", 1)[-1], owner_repo=owner_repo),
+        )
+    repos = list(seen.values())
+    assign_display_attrs(repos)
+    return repos

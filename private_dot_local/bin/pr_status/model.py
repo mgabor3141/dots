@@ -143,8 +143,10 @@ class PR:
     ci_failed: list[str] = field(default_factory=list)
     is_draft: bool = False
     created_at: str = ""
+    updated_at: str = ""
     merged_at: str = ""
     has_conflicts: bool = False
+    sources: list[str] = field(default_factory=list)
 
     # Raw data for notification diffing
     _raw: dict = field(default_factory=dict, repr=False)
@@ -235,7 +237,7 @@ def derive_display_state(pr: PR) -> DisplayState:
 # ============================================================
 
 
-def parse_pr(raw: dict, repo_name: str) -> PR:
+def parse_pr(raw: dict, repo_name: str, sources: Optional[list[str]] = None) -> PR:
     """Parse a raw GH API PR dict into our model."""
     state = raw.get("state", "")
     is_draft = raw.get("isDraft", False)
@@ -289,8 +291,10 @@ def parse_pr(raw: dict, repo_name: str) -> PR:
         ci_failed=ci_failed,
         is_draft=is_draft,
         created_at=raw.get("createdAt", ""),
+        updated_at=raw.get("updatedAt", ""),
         merged_at=raw.get("mergedAt", ""),
         has_conflicts=has_conflicts,
+        sources=list(sources or []),
         _raw=raw,
     )
 
