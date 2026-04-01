@@ -1,3 +1,15 @@
 #!/usr/bin/env sh
 
+# Wrapper: prefer real 'zed' binary, fall back to 'zeditor'.
+# Since this script is named 'zed', skip our own directory to avoid recursion.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+IFS=:
+for dir in $PATH; do
+    case "$dir" in "$SCRIPT_DIR") continue ;; esac
+    if [ -x "$dir/zed" ]; then
+        exec "$dir/zed" "$@"
+    fi
+done
+
 exec zeditor "$@"
