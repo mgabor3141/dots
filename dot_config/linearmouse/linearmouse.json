@@ -84,6 +84,25 @@
       "pointer": {
         "acceleration": 0.55
       }
+    },
+    {
+      "if": {
+        "device": {
+          "category": "mouse",
+          "vendorID": "0x1d50",
+          "productID": "0x615e"
+        }
+      },
+      "pointer": {
+        "acceleration": 2,
+        "speed": 0.32,
+        "disableAcceleration": false
+      },
+      "scrolling": {
+        "reverse": {
+          "vertical": true
+        }
+      }
     }
   ]
 }

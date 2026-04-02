@@ -26,7 +26,6 @@ device_name() {
     case "$1" in
         macbook-ansi.kbd) echo "Apple Internal Keyboard / Trackpad" ;;
         razer.kbd) echo "Razer BlackWidow Ultimate" ;;
-        go60.kbd) echo "Go60" ;;
     esac
 }
 
@@ -117,7 +116,7 @@ mkdir -p "$LOG_DIR"
 log "Starting kanata-manager"
 pkill -x kanata 2>/dev/null || true
 
-CONFIGS="macbook-ansi.kbd razer.kbd go60.kbd"
+CONFIGS="macbook-ansi.kbd razer.kbd"
 last_poll=$(date +%s)
 
 while true; do
