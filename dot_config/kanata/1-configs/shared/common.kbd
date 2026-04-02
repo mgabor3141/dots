@@ -75,10 +75,6 @@
     ;; (macOS sends bare F13 as a system-defined event that hs.hotkey can't bind)
     (f13)       (lctl lsft lalt lmet m)
 
-    ;; F21 → Hyper+Y (sleep) — sent by Go60 ZMK firmware alongside C_SLEEP.
-    ;; C_SLEEP works on Linux but macOS ignores it entirely, so we remap F21 here.
-    (f21)       (lctl lsft lalt lmet y)
-
     ;; WM+G → WM+Space
     (lctl lalt lmet g)    (lctl lalt lmet spc)
   )

@@ -64,7 +64,7 @@ F13-F24 are used as an internal signaling bus between firmware, kanata, and appl
 | F18 | Kanata substitute for Alt+Left on macOS (frees Alt+Left for word navigation). |
 | F19 | Kanata substitute for Alt+Right on macOS (frees Alt+Right for word navigation). |
 | F20 | Workspace back-and-forth. Kanata `@wm` tap output → Aerospace (macOS) / niri (Linux). |
-| F21 | Sleep. Go60 ZMK firmware sends this alongside C_SLEEP. Kanata remaps to Hyper+S on macOS. |
+| F21 | Unassigned. (Previously used for sleep; Go60 now sends Hyper+Y directly.) |
 | F22-F23 | Unassigned. |
 | F24 | Razer physical key (right of RAlt) → Fn layer toggle. |
 
