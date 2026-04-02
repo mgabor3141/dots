@@ -1,0 +1,15 @@
+{
+    "smooth": true,
+    "smoothVertical": true,
+    "smoothHorizontal": true,
+    "reverse": false,
+    "reverseVertical": false,
+    "reverseHorizontal": false,
+    "speed": 2.7,
+    "step": 33.6,
+    "duration": 4.35,
+    "deadZone": 1,
+    "hideStatusItem": false,
+    "updateCheckOnAppStart": false,
+    "updateIncludingBetaVersion": false
+}

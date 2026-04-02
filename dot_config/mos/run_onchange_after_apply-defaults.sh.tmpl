@@ -1,0 +1,42 @@
+#!/bin/bash
+{{- if ne .chezmoi.os "darwin" }}
+exit 0
+{{- end }}
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# Mos defaults for Go60 Cirque trackpad smooth scrolling
+# Config hash: {{ include "dot_config/mos/defaults.json" | sha256sum }}
+
+echo "Applying Mos defaults..."
+
+DOMAIN="com.caldis.Mos"
+
+while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" == \#* ]] && continue
+    case "$value" in
+        true)  defaults write "$DOMAIN" "$key" -bool true ;;
+        false) defaults write "$DOMAIN" "$key" -bool false ;;
+        *.*) defaults write "$DOMAIN" "$key" -float "$value" ;;
+        *) defaults write "$DOMAIN" "$key" -int "$value" ;;
+    esac
+done < <(python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    d = json.load(f)
+for k, v in d.items():
+    if isinstance(v, bool):
+        print(f'{k}={str(v).lower()}')
+    else:
+        print(f'{k}={v}')
+" "${HOME}/.config/mos/defaults.json")
+
+echo "✅ Mos defaults applied"
+
+# Restart Mos if running
+if pgrep -x Mos >/dev/null 2>&1; then
+    echo "Restarting Mos..."
+    killall Mos
+    sleep 1
+    open -a Mos
+fi
