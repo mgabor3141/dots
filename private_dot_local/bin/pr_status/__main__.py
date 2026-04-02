@@ -61,10 +61,15 @@ def run_once(
     check_deploy: bool,
     slack: bool,
     enrich_cache: dict[tuple[str, int], tuple[str, PR]],
+    quiet: bool = False,
 ) -> tuple[Snapshot, list[str]]:
     """Run one full cycle. Returns (snapshot, output_lines)."""
+    def log(msg: str) -> None:
+        if not quiet:
+            print(msg, file=sys.stderr)
+
     t0 = time.monotonic()
-    print(f"{DIM}Searching GitHub for relevant PRs...{NC}", file=sys.stderr)
+    log(f"{DIM}Searching GitHub for relevant PRs...{NC}")
     pr_stubs = discover_pr_stubs(author, since)
 
     all_prs: list[PR] = []
@@ -80,7 +85,7 @@ def run_once(
             pending.append(pr_stub)
 
     if pending:
-        print(f"{DIM}Fetching PR details for {len(pending)} PRs...{NC}", file=sys.stderr)
+        log(f"{DIM}Fetching PR details for {len(pending)} PRs...{NC}")
         with ThreadPoolExecutor(max_workers=min(8, len(pending))) as pool:
             futures = {pool.submit(enrich_pr, pr_stub): pr_stub for pr_stub in pending}
             for f in as_completed(futures):
@@ -99,7 +104,7 @@ def run_once(
             if pr.lifecycle == PRLifecycle.MERGED:
                 pr.deploy = DeployState.MERGED
     elif repos:
-        print(f"{DIM}Checking deployment status...{NC}", file=sys.stderr)
+        log(f"{DIM}Checking deployment status...{NC}")
         repo_prs: dict[str, list[PR]] = {}
         for pr in all_prs:
             if "authored_merged" in set(pr.sources):
@@ -119,10 +124,10 @@ def run_once(
                         if pr.number in deploy_info:
                             pr.deploy = deploy_info[pr.number]
                     for w in warnings:
-                        print(f"{YELLOW}  ⚠ {repo.owner_repo}: {w}{NC}", file=sys.stderr)
+                        log(f"{YELLOW}  ⚠ {repo.owner_repo}: {w}{NC}")
 
     t2 = time.monotonic()
-    print(f"{DIM}Done (discover: {t1 - t0:.0f}s, deploy: {t2 - t1:.0f}s){NC}", file=sys.stderr)
+    log(f"{DIM}Done (discover: {t1 - t0:.0f}s, deploy: {t2 - t1:.0f}s){NC}")
 
     snapshot = Snapshot(prs=all_prs)
     return snapshot, render_snapshot(snapshot, slack)
@@ -154,7 +159,9 @@ def main() -> None:
 
     def draw(lines: list[str]) -> None:
         if args.watch is not None:
-            os.system("clear")
+            # Move cursor home and clear below (avoids full terminal flash)
+            sys.stdout.write("\033[H\033[J")
+            sys.stdout.flush()
         for line in lines:
             print(line)
 
@@ -181,6 +188,7 @@ def main() -> None:
             try:
                 current_snapshot, current_lines = run_once(
                     args.author, since, args.deploy, args.slack, enrich_cache,
+                    quiet=True,
                 )
             except KeyboardInterrupt:
                 break
@@ -188,7 +196,10 @@ def main() -> None:
                 print(f"{RED}Error: {e}{NC}", file=sys.stderr)
                 current_snapshot, current_lines = None, []
 
-            draw(current_lines)
+            if current_lines:
+                draw(current_lines)
+            elif current_snapshot and not current_snapshot.prs:
+                draw([f"\033[2mNo PRs found. Waiting {args.watch}s before retrying...\033[0m"])
             resized = False
 
             if prev and current_snapshot:

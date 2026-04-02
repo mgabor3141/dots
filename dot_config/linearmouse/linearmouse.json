@@ -94,8 +94,8 @@
         }
       },
       "pointer": {
-        "acceleration": 2,
-        "speed": 0.32,
+        "acceleration": "unset",
+        "speed": 0.1,
         "disableAcceleration": false
       },
       "scrolling": {
