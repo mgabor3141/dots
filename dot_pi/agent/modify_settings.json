@@ -8,12 +8,11 @@
   "packages": [
     /*# includeTemplate "indent" (dict "n" 4 "text"
       (includeTemplate "yapp-packages" (dict "names"
-        (list "pi-enclave") "chezmoi" .chezmoi)))
+        (list "pi-bash-bg") "chezmoi" .chezmoi)))
     -*/
     /*#- if stat (joinPath .chezmoi.homeDir "dev/yapp/packages/jj/package.json") */
     /*# joinPath .chezmoi.homeDir "dev/yapp/packages/jj" | printf `"%s",` */
     /*# end -*/
-    "npm:@aliou/pi-processes",
     "npm:pi-librarian",
     "npm:pi-brave-search",
     "npm:pi-github",
