@@ -6,7 +6,7 @@ set -Eeuo pipefail
 while IFS= read -r line; do
     case "$line" in
         *"Event 'change' on source #"*)
-            discord_id=$(niri msg --json windows | jq -r '.[] | select(.app_id == "vesktop") | .id')
+            discord_id=$(niri msg --json windows 2>/dev/null | jq -r '.[] | select(.app_id == "vesktop") | .id' 2>/dev/null) || true
 
             if pactl get-source-mute @DEFAULT_SOURCE@ | grep -q "Mute: yes"; then
                 # Muted

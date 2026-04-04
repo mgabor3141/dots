@@ -141,6 +141,7 @@ watchexec
 wayland-pipewire-idle-inhibit
 wayland-protocols
 websocat
+wev
 wtype
 xl2tpd
 xorg-xinit
