@@ -62,3 +62,9 @@ jj rebase -r <rev> -A <new-parent>
   - `jj restore path/to/file --from <rev> --into <other-rev>` — copy whole-file content between revisions.
 - For **individual hunks**, there is no great non-interactive path-based command.
 - If the changes belong to older commits in the stack, `jj absorb` can often auto-place them into the right ancestors.
+
+## Conflicts
+
+Conflicts are a first class citizen in jj. Conflicted changesets can be moved around and edited like any other changeset. The conflict markers are similar to git's, but give a bit more information about each conflicted hunk.
+
+Resolve conflicts by selecting each conflicted commit with `jj edit` and fixing the conflicts in the working copy. Start from the oldest conflicts, as resolving earlier conflicts might resolve later ones too.
