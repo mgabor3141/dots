@@ -7,3 +7,5 @@ Then consider if there is anything else that would be a good idea to improve bef
 If you make any improvements, add them in a new commit.
 
 Repeat these steps until you are satisfied, and maybe perhaps even proud of your work.
+
+Last, make sure that any relevant PR title and description is up to date.

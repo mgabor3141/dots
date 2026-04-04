@@ -6,6 +6,16 @@
 
 When working on a service or system, don't stop at "it's running". Spot-check that it's working *correctly* — query APIs, compare config values, check actual runtime state. Flag discrepancies even if they're outside the immediate task scope.
 
+## Testing
+
+Not everything needs a test, but when something does, make sure you write good tests. You know what makes a good test: you don't need me to tell you that it should test code behavior over implementation details. Bad tests for example test language features, specific strings that can change over time making them brittle, do more harm than good and should be eradicated like the plague.
+
+Never modify test inputs, fixtures, or synthetic data to make assertions pass. If a test can't distinguish correct from incorrect behavior with real data, the test is wrong, not the data. Fix the assertion or acknowledge the gap.
+
+## Types
+
+The type system is your friend. It helps you by flagging that your prior assumptions no longer hold true. Encode your assumptions in the type system. Never bypass the type system by using `any` or other means, if you feel you need to you are likely approaching the problem wrong. Step back and reassess.
+
 ## Writing Style
 
 Avoid using emdashes. They are an indicator of "AI slop" and undermine credibility. Prefer commas, semicolons, colons, or separate sentences.
