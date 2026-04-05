@@ -26,19 +26,27 @@ PipeWire/WirePlumber setup with Focusrite Scarlett 8i6 USB Gen 3, supporting sep
 
 **Key design:** The Scarlett is direct-connected to the Linux PC (not on the KVM). This eliminates USB bounce issues and xHCI deadlock risk. MacBook audio reaches the Scarlett via the monitor's headphone jack → analogue inputs.
 
-## PipeWire virtual sinks and sources
+## PipeWire virtual sinks and mic loopback
 
-Defined declaratively in `~/.config/pipewire/pipewire.conf.d/10-virtual-sinks.conf` using `libpipewire-module-loopback`. Each module creates two internally-linked nodes. WirePlumber handles linking to/from hardware via `target.object`.
+Defined declaratively in `~/.config/pipewire/pipewire.conf.d/10-virtual-sinks.conf` using `libpipewire-module-loopback`.
 
 | Node | Type | Purpose |
 |------|------|---------|
 | `system-audio` | Sink | All apps (default sink) |
 | `comms` | Sink | Discord/comms (via stream-restore) |
-| `mic` | Source | All apps (default source); mute hotkey mutes this |
+| `mic` | Source | Loopback from Scarlett (default source); mute hotkey mutes this |
 
-The `mic` virtual source wraps the Scarlett hardware mic. Muting it silences the mic for Discord and other apps, while handy (dictation) bypasses it by connecting directly to the Scarlett via a WirePlumber stream rule.
+## Mic mute
 
-No scripts, no systemd services; PipeWire creates everything at startup.
+```
+Scarlett mic → [mic loopback] → apps (default source)
+                  ↑ mute here
+Scarlett mic → handy (direct, bypasses mute)
+```
+
+**Mute hotkey** (F13 / XF86AudioMicMute) mutes the `mic` loopback. Apps connected to `mic` get silence.
+
+**Handy bypass**: The `mute-events-handler` watches for handy's capture stream and rewires it directly to the raw Scarlett via `pw-link`. WirePlumber's policy engine can't resolve raw hardware as a stream target (find-defined-target consistently fails to match SiLinkable nodes), so we bypass it at the PipeWire graph level.
 
 ## Scarlett hardware mixer
 
@@ -63,11 +71,9 @@ Full ALSA mixer state saved in `.docs/scarlett-mixer.state` (load via `alsa-scar
 
 `~/.config/wireplumber/wireplumber.conf.d/51-audio-routing.conf`:
 - Sets `system-audio` as the default configured sink
-- Sets `mic` (virtual source) as the default configured source
-- Routes handy directly to the Scarlett mic (bypasses virtual mic, unaffected by mute)
+- Sets `mic` (loopback) as the default configured source
 - Disables unused devices: Behringer UCA, NVIDIA HDMI/DP
 - Deprioritizes Sunshine sinks (`priority.session = 0`)
-- Prevents Scarlett mic from auto-connecting
 
 Discord routing to `comms` is persisted via stream-restore in `~/.local/state/wireplumber/stream-properties`.
 

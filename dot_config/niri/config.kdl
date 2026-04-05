@@ -115,14 +115,14 @@ binds {
     // XF86AudioRaiseVolume               allow-when-locked=true { spawn-sh "pactl set-volume @DEFAULT_AUDIO_SINK@ 0.1+"; }
     // XF86AudioLowerVolume               allow-when-locked=true { spawn-sh "pactl set-volume @DEFAULT_AUDIO_SINK@ 0.1-"; }
     XF86AudioMute                      allow-when-locked=true { spawn-sh "pactl set-sink-mute @DEFAULT_SINK@ toggle"; }
-    XF86AudioMicMute                   allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
+    XF86AudioMicMute                   allow-when-locked=true { spawn-sh "pactl set-source-mute mic toggle"; }
     XF86AudioNext                      allow-when-locked=true { spawn-sh "playerctl next"; }
     XF86AudioPause                     allow-when-locked=true { spawn-sh "playerctl play-pause"; }
     XF86AudioPlay                      allow-when-locked=true { spawn-sh "playerctl play-pause"; }
     XF86AudioStop                      allow-when-locked=true { spawn-sh "playerctl play-pause"; }
     XF86AudioPrev                      allow-when-locked=true { spawn-sh "playerctl previous"; }
 
-    F13                                allow-when-locked=true { spawn-sh "pactl set-source-mute @DEFAULT_SOURCE@ toggle"; }
+    F13                                allow-when-locked=true { spawn-sh "pactl set-source-mute mic toggle"; }
     F14                                allow-when-locked=true { spawn-sh "handy --toggle-transcription"; }
 
     // ─── Brightness Controls ───
@@ -450,7 +450,7 @@ binds {
     window-rule {
         match app-id="steam"
         exclude title=r#"^notificationtoasts_\d+_desktop$"#
-        open-on-workspace "W"
+        open-on-workspace "Q"
         open-focused true
     }
 
