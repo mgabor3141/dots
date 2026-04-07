@@ -213,7 +213,7 @@
                 "id": "shortcuts-card"
             },
             {
-                "enabled": false,
+                "enabled": true,
                 "id": "audio-card"
             },
             {
@@ -465,7 +465,7 @@
         "enableMarkdown": true,
         "enableMediaToast": false,
         "enabled": true,
-        "location": "bottom_right",
+        "location": "top",
         "lowUrgencyDuration": 3,
         "monitors": [
         ],
