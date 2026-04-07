@@ -1,4 +1,3 @@
-abduco-git
 blackwidow-macro-git
 customizepkg-git
 handy-bin
