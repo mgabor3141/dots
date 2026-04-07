@@ -1,244 +1,163 @@
 /**
  * Account switcher for pi.
  *
- * Manages credential profiles across all providers so you can switch
- * between accounts (e.g., personal vs work) without re-logging in.
+ * Manages per-provider credential slots so you can switch between accounts
+ * (e.g., personal vs work Anthropic) without affecting other providers.
+ *
+ * A "slot" is a named credential for a specific provider (e.g., anthropic/work).
+ * Switching by slot name operates across all providers that have a slot with
+ * that name, so consistently naming slots "work" and "personal" gives you
+ * profile-like behavior without explicit profile management.
  *
  * Commands:
- *   /account           - switch to a different profile (interactive)
- *   /account <name>    - quick-switch to a named profile
- *   /account name      - rename the active profile
- *   /account rm        - remove a saved profile
+ *   /account                   - interactive: view state and switch
+ *   /account <slot>            - switch all providers that have this slot to it
+ *   /account <provider> <slot> - switch a single provider to a specific slot
+ *   /account save [prov] [name] - save a provider's current credential as a named slot
+ *   /account rm                - remove a slot
+ *   /account status            - show all slots and active selections
  *
- * New logins are detected automatically: a file watcher on auth.json
- * notices credential changes while the agent is idle (token refreshes
- * only happen during API calls, so idle changes indicate /login). New
- * profiles get a random name; use /account name to rename.
- *
- * Token refresh is handled transparently: credential changes during
- * agent activity are auto-saved to the active profile so refresh tokens
- * stay fresh.
+ * No file watcher or auto-detection. Credentials are saved explicitly.
+ * Token refreshes are captured automatically on switch and session shutdown
+ * by syncing auth.json back into the active slots.
  *
  * Writes directly to AuthStorage, so switched credentials take effect
  * immediately without restarting pi.
  */
 
 import type { AuthStorageData, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { existsSync, readFileSync, writeFileSync, chmodSync, watch, type FSWatcher } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, chmodSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-type Profiles = Record<string, AuthStorageData>;
+/** Single credential (OAuth or API key). Extracted from AuthStorageData. */
+type AuthCredential = AuthStorageData[string];
 
-const ADJECTIVES = [
-	"amber", "blue", "coral", "crimson", "dusk",
-	"ember", "frost", "golden", "jade", "lunar",
-	"misty", "onyx", "pearl", "ruby", "sage",
-	"silver", "teal", "velvet", "violet", "zinc",
-];
-const NOUNS = [
-	"bear", "crane", "dove", "eagle", "falcon",
-	"fox", "hawk", "heron", "lynx", "osprey",
-	"otter", "owl", "puma", "raven", "seal",
-	"sparrow", "swan", "tiger", "wolf", "wren",
-];
+interface AccountStore {
+	version: 2;
+	/** Per-provider credential slots: provider -> { slotName -> credential } */
+	slots: Record<string, Record<string, AuthCredential>>;
+	/** Currently active slot name for each provider */
+	active: Record<string, string>;
+}
+
+const SUBCOMMANDS = new Set(["save", "rm", "status"]);
 
 export default function (pi: ExtensionAPI) {
 	const agentDir = join(process.env.HOME!, ".pi", "agent");
-	const authJsonPath = join(agentDir, "auth.json");
-	const profilesPath = join(agentDir, "auth-profiles.json");
-	const activePath = join(agentDir, "active-profile");
+	const storePath = join(agentDir, "auth-profiles.json");
+	const legacyActivePath = join(agentDir, "active-profile");
 
 	let sessionCtx: ExtensionContext | undefined;
-	let agentActive = false;
-	let lastAppliedState: string | undefined;
-	let fileWatcher: FSWatcher | undefined;
 
-	// --- Random name generation ---
+	// ── Storage ──────────────────────────────────────────────────────────
 
-	function generateName(existing: Profiles): string {
-		for (let i = 0; i < 100; i++) {
-			const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
-			const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-			const name = `${adj}-${noun}`;
-			if (!(name in existing)) return name;
-		}
-		return `account-${Date.now()}`;
+	function emptyStore(): AccountStore {
+		return { version: 2, slots: {}, active: {} };
 	}
 
-	// --- Profile persistence helpers ---
-
-	function loadProfiles(): Profiles {
-		if (!existsSync(profilesPath)) return {};
-		return JSON.parse(readFileSync(profilesPath, "utf-8"));
-	}
-
-	function saveProfiles(profiles: Profiles) {
-		writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), "utf-8");
-		chmodSync(profilesPath, 0o600);
-	}
-
-	function getActiveLabel(): string | undefined {
-		if (!existsSync(activePath)) return undefined;
-		const label = readFileSync(activePath, "utf-8").trim();
-		return label || undefined;
-	}
-
-	function setActiveLabel(label: string | undefined) {
-		if (label) {
-			writeFileSync(activePath, label, "utf-8");
-		} else if (existsSync(activePath)) {
-			writeFileSync(activePath, "", "utf-8");
+	function loadStore(): AccountStore {
+		if (!existsSync(storePath)) return emptyStore();
+		try {
+			const raw = JSON.parse(readFileSync(storePath, "utf-8"));
+			if (raw.version === 2) return raw as AccountStore;
+			// Old format (pre-v2): discard; old data was mostly duplicates
+			return emptyStore();
+		} catch {
+			return emptyStore();
 		}
 	}
 
-	// --- Credential helpers ---
+	function saveStore(store: AccountStore) {
+		writeFileSync(storePath, JSON.stringify(store, null, 2), "utf-8");
+		chmodSync(storePath, 0o600);
+	}
 
-	function getAllCredentials(ctx: ExtensionContext): AuthStorageData {
+	// ── Credential helpers ───────────────────────────────────────────────
+
+	function getCurrentCredentials(ctx: ExtensionContext): AuthStorageData {
 		return ctx.modelRegistry.authStorage.getAll();
 	}
 
-	function applyCredentials(ctx: ExtensionContext, creds: AuthStorageData) {
+	function getProviderList(ctx: ExtensionContext): string[] {
+		return ctx.modelRegistry.authStorage.list();
+	}
+
+	/**
+	 * Sync current auth.json credentials back into their active slots.
+	 * This captures token refreshes that happened since last sync.
+	 * Only updates providers that already have an active slot in the store.
+	 */
+	function syncActiveSlots(store: AccountStore, ctx: ExtensionContext): void {
+		const current = getCurrentCredentials(ctx);
+		for (const [provider, credential] of Object.entries(current)) {
+			const activeSlot = store.active[provider];
+			if (activeSlot && store.slots[provider]?.[activeSlot]) {
+				store.slots[provider][activeSlot] = credential;
+			}
+		}
+	}
+
+	/**
+	 * Apply credentials from active slots to AuthStorage.
+	 * If onlyProviders is specified, only those providers are touched.
+	 */
+	function applyActiveSlots(
+		store: AccountStore,
+		ctx: ExtensionContext,
+		onlyProviders?: Set<string>,
+	) {
 		const auth = ctx.modelRegistry.authStorage;
-		const currentProviders = new Set(auth.list());
-		const newProviders = new Set(Object.keys(creds));
-
-		for (const [provider, credential] of Object.entries(creds)) {
-			auth.set(provider, credential);
-		}
-
-		for (const provider of currentProviders) {
-			if (!newProviders.has(provider)) {
-				auth.remove(provider);
+		for (const [provider, slotName] of Object.entries(store.active)) {
+			if (onlyProviders && !onlyProviders.has(provider)) continue;
+			const credential = store.slots[provider]?.[slotName];
+			if (credential) {
+				auth.set(provider, credential);
 			}
 		}
-
-		lastAppliedState = JSON.stringify(auth.getAll());
 	}
 
-	// --- File watcher ---
-
-	function startWatcher() {
-		if (!existsSync(authJsonPath)) return;
-		try {
-			let timeout: ReturnType<typeof setTimeout> | undefined;
-			fileWatcher = watch(authJsonPath, () => {
-				if (timeout) clearTimeout(timeout);
-				timeout = setTimeout(handleAuthFileChange, 300);
-			});
-		} catch {
-			// fs.watch not available; fall back to manual management only
-		}
-	}
-
-	function handleAuthFileChange() {
-		if (!sessionCtx) return;
-
-		const auth = sessionCtx.modelRegistry.authStorage;
-		auth.reload();
-		const current = auth.getAll();
-		if (Object.keys(current).length === 0) return;
-
-		const currentState = JSON.stringify(current);
-
-		// Ignore our own writes
-		if (currentState === lastAppliedState) return;
-
-		const active = getActiveLabel();
-		const profiles = loadProfiles();
-
-		if (agentActive) {
-			// Token refresh during API call: update active profile silently
-			if (active && active in profiles) {
-				profiles[active] = current;
-				saveProfiles(profiles);
-				lastAppliedState = currentState;
-			}
-			return;
-		}
-
-		// Agent is idle and credentials changed: likely a /login
-		// Check if it matches the active profile (could be a late refresh write)
-		if (active && active in profiles) {
-			const savedState = JSON.stringify(profiles[active]);
-			if (savedState === currentState) return;
-		}
-
-		// New credentials: save as a new profile
-		const name = generateName(profiles);
-		profiles[name] = current;
-		saveProfiles(profiles);
-		setActiveLabel(name);
-		lastAppliedState = currentState;
-		sessionCtx.ui.notify(
-			`New login detected, saved as '${name}'. Use /account name to rename.`,
-			"info",
-		);
-	}
-
-	// --- Agent activity tracking ---
-
-	pi.on("agent_start", async () => { agentActive = true; });
-	pi.on("agent_end", async () => { agentActive = false; });
-
-	// --- Session lifecycle ---
+	// ── Lifecycle ────────────────────────────────────────────────────────
 
 	pi.on("session_start", async (_event, ctx) => {
 		sessionCtx = ctx;
 
-		const profiles = loadProfiles();
-		const current = getAllCredentials(ctx);
-
-		// Auto-create first profile if credentials exist but no profiles saved
-		if (Object.keys(profiles).length === 0 && Object.keys(current).length > 0) {
-			const name = generateName(profiles);
-			profiles[name] = current;
-			saveProfiles(profiles);
-			setActiveLabel(name);
-			lastAppliedState = JSON.stringify(current);
-			ctx.ui.notify(
-				`Saved current credentials as '${name}'. Use /account name to rename.`,
-				"info",
-			);
+		// Clean up legacy files from v1
+		if (existsSync(legacyActivePath)) {
+			try { unlinkSync(legacyActivePath); } catch { /* ignore */ }
 		}
 
-		// Apply active profile from disk
-		const active = getActiveLabel();
-		if (active) {
-			const latest = loadProfiles();
-			if (active in latest) {
-				applyCredentials(ctx, latest[active]);
-			}
+		// Apply active slots on startup (restores last-used credentials)
+		const store = loadStore();
+		if (Object.keys(store.active).length > 0) {
+			applyActiveSlots(store, ctx);
 		}
-
-		startWatcher();
 	});
 
 	pi.on("session_shutdown", async () => {
-		// Final autosave before exit
 		if (sessionCtx) {
-			const active = getActiveLabel();
-			if (active) {
-				const profiles = loadProfiles();
-				if (active in profiles) {
-					profiles[active] = getAllCredentials(sessionCtx);
-					saveProfiles(profiles);
-				}
+			const store = loadStore();
+			if (Object.keys(store.active).length > 0) {
+				syncActiveSlots(store, sessionCtx);
+				saveStore(store);
 			}
 		}
-
-		fileWatcher?.close();
-		fileWatcher = undefined;
 		sessionCtx = undefined;
 	});
 
-	// --- Commands ---
+	// ── Command registration ─────────────────────────────────────────────
 
 	pi.registerCommand("account", {
-		description: "Switch account profile (or: /account name, /account rm)",
+		description: "Switch accounts (/account save, rm, status)",
 		getArgumentCompletions: (prefix: string) => {
-			const subs = ["name", "rm"];
-			const profiles = Object.keys(loadProfiles());
-			const all = [...subs, ...profiles];
+			const store = loadStore();
+			// Collect all unique slot names + subcommands
+			const slotNames = new Set<string>();
+			for (const slots of Object.values(store.slots)) {
+				for (const name of Object.keys(slots)) {
+					slotNames.add(name);
+				}
+			}
+			const all = [...SUBCOMMANDS, ...slotNames];
 			const filtered = all
 				.filter((s) => s.startsWith(prefix))
 				.map((s) => ({ value: s, label: s }));
@@ -248,130 +167,298 @@ export default function (pi: ExtensionAPI) {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const sub = parts[0];
 
-			if (sub === "name") {
-				await handleName(parts[1], ctx);
+			if (sub === "status") {
+				handleStatus(ctx);
+			} else if (sub === "save") {
+				await handleSave(parts[1], parts[2], ctx);
 			} else if (sub === "rm") {
-				await handleRm(parts[1], ctx);
+				await handleRm(ctx);
+			} else if (parts.length === 2) {
+				// /account <provider> <slot>
+				await switchProvider(parts[0], parts[1], ctx);
 			} else if (sub) {
-				await handleUse(sub, ctx);
+				// /account <slot> (cross-provider switch)
+				await handleSwitchBySlotName(sub, ctx);
 			} else {
-				await handleInteractiveSwitch(ctx);
+				await handleInteractive(ctx);
 			}
 		},
 	});
 
-	async function handleInteractiveSwitch(ctx: ExtensionContext) {
-		const profiles = loadProfiles();
-		const labels = Object.keys(profiles);
-		if (labels.length === 0) {
-			ctx.ui.notify("No saved profiles. Use /login first.", "warning");
+	// ── Status helpers ───────────────────────────────────────────────────
+
+	/**
+	 * Build a status summary showing each provider's state:
+	 * - Logged-in providers with saved slots show slot names (active marked *)
+	 * - Logged-in providers without saved slots are flagged as unsaved
+	 * - Saved providers not currently in auth.json are noted
+	 */
+	function buildStatusLines(store: AccountStore, ctx: ExtensionContext): string[] {
+		const loggedIn = new Set(getProviderList(ctx));
+		const allProviders = new Set([...loggedIn, ...Object.keys(store.slots)]);
+		const lines: string[] = [];
+
+		for (const provider of allProviders) {
+			const slots = store.slots[provider];
+			const hasSlots = slots && Object.keys(slots).length > 0;
+			const isLoggedIn = loggedIn.has(provider);
+			const active = store.active[provider];
+
+			if (hasSlots) {
+				const slotDisplay = Object.keys(slots)
+					.map((s) => (s === active ? `${s}*` : s))
+					.join(" | ");
+				const suffix = isLoggedIn ? "" : " (not logged in)";
+				lines.push(`  ${provider}: ${slotDisplay}${suffix}`);
+			} else if (isLoggedIn) {
+				lines.push(`  ${provider}: logged in (not saved)`);
+			}
+		}
+
+		return lines;
+	}
+
+	// ── /account status ──────────────────────────────────────────────────
+
+	function handleStatus(ctx: ExtensionContext) {
+		const store = loadStore();
+		const lines = buildStatusLines(store, ctx);
+
+		if (lines.length === 0) {
+			ctx.ui.notify(
+				"No credentials found. Use /login, then /account save.",
+				"info",
+			);
 			return;
 		}
 
-		if (labels.length === 1) {
-			ctx.ui.notify(`Only one profile ('${labels[0]}'). Use /login to add another account.`, "info");
+		ctx.ui.notify(lines.join("\n"), "info");
+	}
+
+	// ── /account save [provider] [name] ──────────────────────────────────
+
+	async function handleSave(
+		providerArg: string | undefined,
+		nameArg: string | undefined,
+		ctx: ExtensionContext,
+	) {
+		const providers = getProviderList(ctx);
+		if (providers.length === 0) {
+			ctx.ui.notify("No credentials in auth.json. Use /login first.", "warning");
 			return;
 		}
 
-		const active = getActiveLabel();
-		const items = labels.map((l) => {
-			const providers = Object.keys(profiles[l]).join(", ");
-			const prefix = l === active ? "* " : "  ";
-			return `${prefix}${l}  (${providers})`;
-		});
+		let provider = providerArg;
+		if (!provider) {
+			if (providers.length === 1) {
+				provider = providers[0];
+			} else {
+				provider = await ctx.ui.select(
+					"Save credential for which provider?",
+					providers,
+				);
+			}
+		}
+		if (!provider) return;
 
-		const choice = await ctx.ui.select("Switch account:", items);
+		if (!providers.includes(provider)) {
+			ctx.ui.notify(`No credential for '${provider}' in auth.json.`, "error");
+			return;
+		}
+
+		let name = nameArg;
+		if (!name) {
+			name = (await ctx.ui.input(`Name for this ${provider} credential:`))?.trim();
+		}
+		if (!name) return;
+
+		const store = loadStore();
+		const current = getCurrentCredentials(ctx);
+		const credential = current[provider];
+		if (!credential) {
+			ctx.ui.notify(`No credential for '${provider}'.`, "error");
+			return;
+		}
+
+		// Confirm overwrite if slot exists
+		if (store.slots[provider]?.[name]) {
+			const ok = await ctx.ui.confirm(
+				"Overwrite",
+				`Slot '${provider}/${name}' already exists. Overwrite?`,
+			);
+			if (!ok) return;
+		}
+
+		if (!store.slots[provider]) store.slots[provider] = {};
+		store.slots[provider][name] = credential;
+		store.active[provider] = name;
+		saveStore(store);
+
+		ctx.ui.notify(`Saved ${provider} credential as '${name}'.`, "info");
+	}
+
+	// ── /account <slot> (cross-provider switch) ──────────────────────────
+
+	async function handleSwitchBySlotName(slotName: string, ctx: ExtensionContext) {
+		const store = loadStore();
+
+		// Find all providers that have a slot with this name
+		const matchingProviders: string[] = [];
+		for (const [provider, slots] of Object.entries(store.slots)) {
+			if (slotName in slots) {
+				matchingProviders.push(provider);
+			}
+		}
+
+		if (matchingProviders.length === 0) {
+			ctx.ui.notify(`No providers have a slot named '${slotName}'.`, "error");
+			return;
+		}
+
+		// Sync token refreshes before switching
+		syncActiveSlots(store, ctx);
+
+		// Switch only providers where the active slot actually differs
+		const changedProviders = new Set<string>();
+		for (const provider of matchingProviders) {
+			if (store.active[provider] !== slotName) {
+				store.active[provider] = slotName;
+				changedProviders.add(provider);
+			}
+		}
+
+		if (changedProviders.size === 0) {
+			saveStore(store);
+			ctx.ui.notify(`Already on '${slotName}'.`, "info");
+			return;
+		}
+
+		applyActiveSlots(store, ctx, changedProviders);
+		saveStore(store);
+
+		const changed = [...changedProviders].join(", ");
+		ctx.ui.notify(`Switched to '${slotName}' (${changed}).`, "info");
+	}
+
+	// ── /account <provider> <slot> ───────────────────────────────────────
+
+	async function switchProvider(
+		provider: string,
+		slot: string,
+		ctx: ExtensionContext,
+	) {
+		const store = loadStore();
+		if (!store.slots[provider]?.[slot]) {
+			ctx.ui.notify(`No slot '${provider}/${slot}'.`, "error");
+			return;
+		}
+
+		if (store.active[provider] === slot) {
+			ctx.ui.notify(`${provider} is already on '${slot}'.`, "info");
+			return;
+		}
+
+		syncActiveSlots(store, ctx);
+		store.active[provider] = slot;
+		applyActiveSlots(store, ctx, new Set([provider]));
+		saveStore(store);
+
+		ctx.ui.notify(`Switched ${provider} to '${slot}'.`, "info");
+	}
+
+	// ── /account rm ──────────────────────────────────────────────────────
+
+	async function handleRm(ctx: ExtensionContext) {
+		const store = loadStore();
+
+		const options: string[] = [];
+		const items: Array<{ provider: string; slot: string }> = [];
+
+		for (const [provider, slots] of Object.entries(store.slots)) {
+			for (const slot of Object.keys(slots)) {
+				const isActive = store.active[provider] === slot;
+				options.push(`${provider}/${slot}${isActive ? " (active)" : ""}`);
+				items.push({ provider, slot });
+			}
+		}
+
+		if (options.length === 0) {
+			ctx.ui.notify("Nothing to remove.", "warning");
+			return;
+		}
+
+		const choice = await ctx.ui.select("Remove slot:", options);
 		if (choice === undefined) return;
 
-		const label = labels[items.indexOf(choice)];
-		if (label === active) {
-			ctx.ui.notify(`Already on '${label}'.`, "info");
-			return;
+		const { provider, slot } = items[options.indexOf(choice)];
+		const isActive = store.active[provider] === slot;
+		const remaining = Object.keys(store.slots[provider]).filter((s) => s !== slot);
+
+		if (isActive) {
+			const msg = remaining.length === 0
+				? `'${provider}/${slot}' is the only slot for this provider. Remove?`
+				: `'${provider}/${slot}' is active. Will switch to '${remaining[0]}'. Remove?`;
+			const ok = await ctx.ui.confirm("Remove active slot", msg);
+			if (!ok) return;
+		} else {
+			const ok = await ctx.ui.confirm("Remove slot", `Delete '${provider}/${slot}'?`);
+			if (!ok) return;
 		}
 
-		await handleUse(label, ctx);
+		delete store.slots[provider][slot];
+
+		if (Object.keys(store.slots[provider]).length === 0) {
+			delete store.slots[provider];
+			delete store.active[provider];
+		} else if (isActive) {
+			store.active[provider] = remaining[0];
+			applyActiveSlots(store, ctx, new Set([provider]));
+		}
+
+		saveStore(store);
+		ctx.ui.notify(`Removed '${provider}/${slot}'.`, "info");
 	}
 
-	async function handleUse(label: string, ctx: ExtensionContext) {
-		const profiles = loadProfiles();
-		if (!(label in profiles)) {
-			const available = Object.keys(profiles).join(", ") || "(none)";
-			ctx.ui.notify(`No profile '${label}'. Available: ${available}`, "error");
+	// ── /account (interactive) ───────────────────────────────────────────
+
+	async function handleInteractive(ctx: ExtensionContext) {
+		const store = loadStore();
+		const statusLines = buildStatusLines(store, ctx);
+
+		if (statusLines.length === 0) {
+			ctx.ui.notify(
+				"No accounts configured. Use /login, then /account save.",
+				"info",
+			);
 			return;
 		}
 
-		// Autosave outgoing profile
-		const active = getActiveLabel();
-		if (active && active in profiles) {
-			profiles[active] = getAllCredentials(ctx);
-			saveProfiles(profiles);
-		}
+		// Build switch options for providers with multiple slots
+		const options: string[] = [];
+		const actions: Array<{ provider: string; slot: string }> = [];
 
-		// Apply new profile (re-read in case saveProfiles updated)
-		const latest = loadProfiles();
-		applyCredentials(ctx, latest[label]);
-
-		setActiveLabel(label);
-		ctx.ui.notify(`Switched to '${label}'.`, "success");
-	}
-
-	async function handleName(newName: string | undefined, ctx: ExtensionContext) {
-		const active = getActiveLabel();
-		if (!active) {
-			ctx.ui.notify("No active profile to rename.", "warning");
-			return;
-		}
-
-		let label = newName;
-		if (!label) {
-			label = (await ctx.ui.input(`Rename '${active}' to:`))?.trim();
-		}
-		if (!label) return;
-
-		if (label === active) return;
-
-		const profiles = loadProfiles();
-		if (label in profiles) {
-			ctx.ui.notify(`Profile '${label}' already exists.`, "error");
-			return;
-		}
-
-		profiles[label] = profiles[active];
-		delete profiles[active];
-		saveProfiles(profiles);
-		setActiveLabel(label);
-		ctx.ui.notify(`Renamed '${active}' to '${label}'.`, "success");
-	}
-
-	async function handleRm(name: string | undefined, ctx: ExtensionContext) {
-		let label = name;
-		if (!label) {
-			const profiles = loadProfiles();
-			const labels = Object.keys(profiles);
-			if (labels.length === 0) {
-				ctx.ui.notify("No profiles to remove.", "warning");
-				return;
+		for (const [provider, slots] of Object.entries(store.slots)) {
+			const slotNames = Object.keys(slots);
+			if (slotNames.length <= 1) continue;
+			const active = store.active[provider];
+			for (const slot of slotNames) {
+				if (slot === active) continue;
+				options.push(`${provider} → ${slot}`);
+				actions.push({ provider, slot });
 			}
-			label = await ctx.ui.select("Remove profile:", labels);
 		}
-		if (!label) return;
 
-		const profiles = loadProfiles();
-		if (!(label in profiles)) {
-			ctx.ui.notify(`No profile '${label}'.`, "error");
+		if (options.length === 0) {
+			// No switching possible; just show status
+			ctx.ui.notify(statusLines.join("\n"), "info");
 			return;
 		}
 
-		const ok = await ctx.ui.confirm("Remove profile", `Delete '${label}'?`);
-		if (!ok) return;
+		const title = statusLines.join("\n") + "\n\nSwitch to:";
+		const choice = await ctx.ui.select(title, options);
+		if (choice === undefined) return;
 
-		delete profiles[label];
-		saveProfiles(profiles);
-
-		if (getActiveLabel() === label) {
-			setActiveLabel(undefined);
-		}
-
-		ctx.ui.notify(`Removed profile '${label}'.`, "success");
+		const { provider, slot } = actions[options.indexOf(choice)];
+		await switchProvider(provider, slot, ctx);
 	}
 }
