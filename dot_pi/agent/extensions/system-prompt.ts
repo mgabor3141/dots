@@ -65,7 +65,7 @@ function buildJjNote(state: JjState, cwd: string): string {
 
 // ── prompt construction ──────────────────────────────────────────────────────
 
-const PREAMBLE = `You are running inside pi, a coding agent harness.
+const PREAMBLE = `You are running inside a coding agent harness.
 
 Non-obvious tool notes:
 - Prefer relative paths over absolute paths. You can assume that all relative paths will be resolved from the current working directory.
