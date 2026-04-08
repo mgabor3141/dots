@@ -42,8 +42,18 @@ if test -f ~/.fish_profile
   source ~/.fish_profile
 end
 
-# Append common directories for executable files to $PATH
-fish_add_path ~/.local/bin ~/.bun/bin /run/current-system/sw/bin /nix/var/nix/profiles/default/bin
+# Homebrew env (without PATH; we control PATH order below)
+if test -x /opt/homebrew/bin/brew
+  set -gx HOMEBREW_PREFIX /opt/homebrew
+  set -gx HOMEBREW_CELLAR /opt/homebrew/Cellar
+  set -gx HOMEBREW_REPOSITORY /opt/homebrew
+  set -q MANPATH; and set -gx MANPATH '' $MANPATH
+  set -gx INFOPATH /opt/homebrew/share/info $INFOPATH
+end
+
+# PATH: --move ensures order even if entries already exist.
+# Result: .local/bin, .bun/bin, brew, nix, then system.
+fish_add_path --move ~/.local/bin ~/.bun/bin /opt/homebrew/bin /opt/homebrew/sbin /run/current-system/sw/bin /nix/var/nix/profiles/default/bin
 
 ## Functions
 # Functions needed for !! and !$ https://github.com/oh-my-fish/plugin-bang-bang
