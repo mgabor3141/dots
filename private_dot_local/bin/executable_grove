@@ -86,15 +86,47 @@ def load_config(grove_dir_or_file: Path) -> dict:
         return tomllib.load(f)
 
 
+# Schema: field name -> (allowed types, description)
+_CONFIG_SCHEMA: dict[str, tuple[tuple[type, ...], str]] = {
+    "sync":   ((list,),        "list of strings"),
+    "setup":  ((str,),         "string"),
+    "editor": ((bool, str),    "bool or string"),
+}
+
+
+def _validate_config(config: dict, source: str) -> None:
+    """Validate config keys and types. Dies on first error."""
+    for key, value in config.items():
+        schema = _CONFIG_SCHEMA.get(key)
+        if schema is None:
+            die(f"unknown config key '{key}' in {source}\n"
+                f"  Valid keys: {', '.join(sorted(_CONFIG_SCHEMA))}")
+        allowed_types, desc = schema
+        if not isinstance(value, allowed_types):
+            die(f"invalid type for '{key}' in {source}: "
+                f"expected {desc}, got {type(value).__name__}")
+    # sync items must all be strings
+    sync = config.get("sync", [])
+    for i, item in enumerate(sync):
+        if not isinstance(item, str):
+            die(f"sync[{i}] in {source} must be a string, "
+                f"got {type(item).__name__}")
+
+
 def load_global_config() -> dict:
     """Load global config from ~/.config/grove/config.toml."""
-    return load_config(GLOBAL_CONFIG_DIR / "config.toml")
+    config = load_config(GLOBAL_CONFIG_DIR / "config.toml")
+    if config:
+        _validate_config(config, str(GLOBAL_CONFIG_DIR / "config.toml"))
+    return config
 
 
 def merged_config(grove_dir: Path) -> dict:
     """Load global config, then overlay project config on top."""
     global_cfg = load_global_config()
     project_cfg = load_config(grove_dir)
+    if project_cfg:
+        _validate_config(project_cfg, str(grove_dir / GROVE_CONFIG))
     merged = {**global_cfg, **project_cfg}
     return merged
 
@@ -544,7 +576,15 @@ def create_workspace(project_root: Path, name: str,
             print(f"  warning: setup exited with code {result.returncode}")
 
     # Open editor: CLI flag > config > nothing
-    editor_cmd = config.get("editor", "")
+    # editor can be true (use $VISUAL/$EDITOR), a string command, or false/absent.
+    editor_cfg = config.get("editor", "")
+    if editor_cfg is True:
+        editor_cmd = os.environ.get("VISUAL", "") or os.environ.get("EDITOR", "")
+    elif isinstance(editor_cfg, str):
+        editor_cmd = editor_cfg
+    else:
+        editor_cmd = ""
+
     if open_editor is False:
         editor_cmd = ""
     elif open_editor is None and not editor_cmd:
