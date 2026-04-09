@@ -21,16 +21,20 @@
  * Token refreshes are captured automatically on switch and session shutdown
  * by syncing auth.json back into the active slots.
  *
+ * On session start, auth.json is the source of truth: we only restore
+ * credentials from slots for providers MISSING from auth.json. Fresh
+ * credentials already in auth.json are never overwritten by slot data.
+ *
  * Writes directly to AuthStorage, so switched credentials take effect
  * immediately without restarting pi.
  */
 
-import type { AuthStorageData, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { AuthCredential, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { existsSync, readFileSync, writeFileSync, chmodSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-/** Single credential (OAuth or API key). Extracted from AuthStorageData. */
-type AuthCredential = AuthStorageData[string];
+/** Shape of auth.json: provider -> credential. */
+type AuthStorageData = Record<string, AuthCredential>;
 
 interface AccountStore {
 	version: 2;
@@ -85,7 +89,13 @@ export default function (pi: ExtensionAPI) {
 	/**
 	 * Sync current auth.json credentials back into their active slots.
 	 * This captures token refreshes that happened since last sync.
-	 * Only updates providers that already have an active slot in the store.
+	 *
+	 * LIMITATION: assumes auth.json reflects the same account as the active
+	 * slot. If the user runs /login <provider> mid-session without then
+	 * running /account save, auth.json contains credentials for a different
+	 * account than the active slot name suggests, and syncing would write
+	 * the new account's credentials into the old slot. The /account save
+	 * workflow is the recommended way to change accounts after /login.
 	 */
 	function syncActiveSlots(store: AccountStore, ctx: ExtensionContext): void {
 		const current = getCurrentCredentials(ctx);
@@ -126,10 +136,25 @@ export default function (pi: ExtensionAPI) {
 			try { unlinkSync(legacyActivePath); } catch { /* ignore */ }
 		}
 
-		// Apply active slots on startup (restores last-used credentials)
+		// Restore ONLY providers missing from auth.json. Never overwrite
+		// fresh credentials already in auth.json with data from slots: the
+		// slot may have a stale refresh token (e.g., if a previous session
+		// crashed before session_shutdown could sync), and pi's refresh
+		// mechanism would then fail on the next API call.
 		const store = loadStore();
-		if (Object.keys(store.active).length > 0) {
-			applyActiveSlots(store, ctx);
+		if (Object.keys(store.active).length === 0) return;
+
+		// Reload to pick up any changes made since AuthStorage was constructed
+		ctx.modelRegistry.authStorage.reload();
+		const loggedIn = new Set(getProviderList(ctx));
+		const toRestore = new Set<string>();
+		for (const provider of Object.keys(store.active)) {
+			if (!loggedIn.has(provider)) {
+				toRestore.add(provider);
+			}
+		}
+		if (toRestore.size > 0) {
+			applyActiveSlots(store, ctx, toRestore);
 		}
 	});
 
