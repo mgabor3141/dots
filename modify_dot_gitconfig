@@ -1,3 +1,8 @@
+{{- /* chezmoi:modify-template */ -}}
+{{- $existing := dict -}}
+{{- if .chezmoi.stdin }}
+{{-   $existing = .chezmoi.stdin | fromIni -}}
+{{- end -}}
 [core]
 	autocrlf = "input"
 {{- if hasKey . "git_work" }}
@@ -39,4 +44,10 @@
 {{- if hasKey . "git_work" }}
 [includeIf "gitdir:{{ .git_work.repo_dir }}/"]
 	path = {{ .git_work.repo_dir }}/.gitconfig
+{{- end }}
+{{- if hasKey $existing "safe" }}
+[safe]
+{{-   range $key, $value := index $existing "safe" }}
+	{{ $key }} = {{ $value }}
+{{-   end }}
 {{- end }}
