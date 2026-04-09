@@ -16,20 +16,15 @@ check() {
 # Array must be started (persistent storage available)
 check '[ -d /mnt/user/appdata ]' "/mnt/user/appdata not available (array not started?)"
 
-# Persistent home must exist
+# Persistent home must exist and be writable
 check '[ -d /mnt/user/appdata/home ]' "/mnt/user/appdata/home does not exist"
+check '[ -w /mnt/user/appdata/home ]' "/mnt/user/appdata/home is not writable"
 
-# Key symlinks must be in place (dotfiles_setup must have run)
+# Key symlinks must be in place in /root (dotfiles_setup must have run)
+# These are what make the persistent files accessible at runtime paths
 for name in .local .config .cache; do
-  check "[ -L /root/$name ]" "/root/$name is not a symlink (dotfiles_setup not run?)"
+  check "[ -L /root/$name ]" "/root/$name is not a symlink (run dotfiles_setup)"
 done
-
-# .local must point to persistent storage
-if [ -L /root/.local ]; then
-  target="$(readlink /root/.local)"
-  check '[ "$target" = "/mnt/user/appdata/home/.local" ]' \
-    "/root/.local points to $target, expected /mnt/user/appdata/home/.local"
-fi
 
 if [ "$errors" -gt 0 ]; then
   echo "" >&2
