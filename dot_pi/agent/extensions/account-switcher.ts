@@ -1,489 +1,645 @@
 /**
  * Account switcher for pi.
  *
- * Manages per-provider credential slots so you can switch between accounts
- * (e.g., personal vs work Anthropic) without affecting other providers.
+ * Per provider, there is at most one active credential in auth.json. Inactive
+ * credentials live in named slots in auth-profiles.json. A small `current`
+ * marker records what the active auth.json credential is called, if known.
  *
- * A "slot" is a named credential for a specific provider (e.g., anthropic/work).
- * Switching by slot name operates across all providers that have a slot with
- * that name, so consistently naming slots "work" and "personal" gives you
- * profile-like behavior without explicit profile management.
+ * This avoids sync logic entirely:
+ * - auth.json is always the live credential pi uses and refreshes
+ * - slots are only touched by explicit /account commands
+ * - switching is implemented as an explicit swap
  *
  * Commands:
- *   /account                   - interactive: view state and switch
- *   /account <slot>            - switch all providers that have this slot to it
- *   /account <provider> <slot> - switch a single provider to a specific slot
- *   /account save [prov] [name] - save a provider's current credential as a named slot
- *   /account rm                - remove a slot
- *   /account status            - show all slots and active selections
+ *   /account                          - interactive overview + actions
+ *   /account status                   - show active + saved state
+ *   /account login [prov]             - OAuth login managed by this extension;
+ *                                       leaves the provider active but unnamed
+ *   /account name [prov] [name]       - label the active auth.json credential
+ *                                       for a provider without moving it
+ *   /account use [prov] [name]        - if [name] exists, swap to it
+ *                                       if [name] does not exist, park the
+ *                                       current active auth under that name
+ *                                       and clear auth.json for that provider
+ *   /account rm [prov] [name]         - delete an inactive saved slot
  *
- * No file watcher or auto-detection. Credentials are saved explicitly.
- * Token refreshes are captured automatically on switch and session shutdown
- * by syncing auth.json back into the active slots.
+ * Examples:
+ *   /account login anthropic
+ *   /account name anthropic work
+ *   /account use anthropic work        # parks current active auth as 'work'
+ *   /account login anthropic
+ *   /account name anthropic personal
+ *   /account use anthropic work        # swaps personal <-> work
+ *   /account use anthropic personal    # swaps work <-> personal
  *
- * On session start, auth.json is the source of truth: we only restore
- * credentials from slots for providers MISSING from auth.json. Fresh
- * credentials already in auth.json are never overwritten by slot data.
- *
- * Writes directly to AuthStorage, so switched credentials take effect
- * immediately without restarting pi.
+ * Important:
+ *   /account name only labels the current active auth. It does NOT protect it
+ *   from being overwritten by a later built-in /login. Prefer /account login
+ *   so this extension can keep its state consistent. To safely log in again,
+ *   use /account use <provider> <new-name> with a name that does not already
+ *   exist, then /account login <provider>.
  */
 
 import type { AuthCredential, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { existsSync, readFileSync, writeFileSync, chmodSync, unlinkSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Shape of auth.json: provider -> credential. */
-type AuthStorageData = Record<string, AuthCredential>;
-
 interface AccountStore {
-	version: 2;
-	/** Per-provider credential slots: provider -> { slotName -> credential } */
+	version: 3;
 	slots: Record<string, Record<string, AuthCredential>>;
-	/** Currently active slot name for each provider */
-	active: Record<string, string>;
+	current: Record<string, string>;
 }
 
-const SUBCOMMANDS = new Set(["save", "rm", "status"]);
+const SUBCOMMANDS = new Set(["login", "name", "use", "rm", "status"]);
 
 export default function (pi: ExtensionAPI) {
 	const agentDir = join(process.env.HOME!, ".pi", "agent");
 	const storePath = join(agentDir, "auth-profiles.json");
 	const legacyActivePath = join(agentDir, "active-profile");
 
-	let sessionCtx: ExtensionContext | undefined;
-
-	// ── Storage ──────────────────────────────────────────────────────────
-
 	function emptyStore(): AccountStore {
-		return { version: 2, slots: {}, active: {} };
+		return { version: 3, slots: {}, current: {} };
 	}
 
 	function loadStore(): AccountStore {
 		if (!existsSync(storePath)) return emptyStore();
 		try {
-			const raw = JSON.parse(readFileSync(storePath, "utf-8"));
-			if (raw.version === 2) return raw as AccountStore;
-			// Old format (pre-v2): discard; old data was mostly duplicates
-			return emptyStore();
+			const raw = JSON.parse(readFileSync(storePath, "utf-8")) as Partial<AccountStore>;
+			if (raw.version !== 3) return emptyStore();
+			return {
+				version: 3,
+				slots: raw.slots ?? {},
+				current: raw.current ?? {},
+			};
 		} catch {
 			return emptyStore();
 		}
 	}
 
-	function saveStore(store: AccountStore) {
+	function saveStore(store: AccountStore): void {
 		writeFileSync(storePath, JSON.stringify(store, null, 2), "utf-8");
 		chmodSync(storePath, 0o600);
 	}
 
-	// ── Credential helpers ───────────────────────────────────────────────
-
-	function getCurrentCredentials(ctx: ExtensionContext): AuthStorageData {
-		return ctx.modelRegistry.authStorage.getAll();
-	}
-
-	function getProviderList(ctx: ExtensionContext): string[] {
+	function authProviders(ctx: ExtensionContext): string[] {
 		return ctx.modelRegistry.authStorage.list();
 	}
 
-	/**
-	 * Sync current auth.json credentials back into their active slots.
-	 * This captures token refreshes that happened since last sync.
-	 *
-	 * LIMITATION: assumes auth.json reflects the same account as the active
-	 * slot. If the user runs /login <provider> mid-session without then
-	 * running /account save, auth.json contains credentials for a different
-	 * account than the active slot name suggests, and syncing would write
-	 * the new account's credentials into the old slot. The /account save
-	 * workflow is the recommended way to change accounts after /login.
-	 */
-	function syncActiveSlots(store: AccountStore, ctx: ExtensionContext): void {
-		const current = getCurrentCredentials(ctx);
-		for (const [provider, credential] of Object.entries(current)) {
-			const activeSlot = store.active[provider];
-			if (activeSlot && store.slots[provider]?.[activeSlot]) {
-				store.slots[provider][activeSlot] = credential;
-			}
+	function authHas(ctx: ExtensionContext, provider: string): boolean {
+		return ctx.modelRegistry.authStorage.has(provider);
+	}
+
+	function authGet(ctx: ExtensionContext, provider: string): AuthCredential | undefined {
+		return ctx.modelRegistry.authStorage.get(provider);
+	}
+
+	function authSet(ctx: ExtensionContext, provider: string, credential: AuthCredential): void {
+		ctx.modelRegistry.authStorage.set(provider, credential);
+	}
+
+	function authRemove(ctx: ExtensionContext, provider: string): void {
+		ctx.modelRegistry.authStorage.remove(provider);
+	}
+
+	function getSavedProviders(store: AccountStore): string[] {
+		return Object.keys(store.slots).filter((provider) => Object.keys(store.slots[provider] ?? {}).length > 0);
+	}
+
+	function getKnownProviders(store: AccountStore): string[] {
+		return [...new Set([...Object.keys(store.current), ...getSavedProviders(store)])];
+	}
+
+	function getSlotNames(store: AccountStore, provider: string): string[] {
+		return Object.keys(store.slots[provider] ?? {});
+	}
+
+	function cleanupProvider(store: AccountStore, provider: string): void {
+		if (store.slots[provider] && Object.keys(store.slots[provider]).length === 0) {
+			delete store.slots[provider];
+		}
+		if (!(provider in store.current)) return;
+		if (store.current[provider] === "") {
+			delete store.current[provider];
 		}
 	}
 
-	/**
-	 * Apply credentials from active slots to AuthStorage.
-	 * If onlyProviders is specified, only those providers are touched.
-	 */
-	function applyActiveSlots(
-		store: AccountStore,
-		ctx: ExtensionContext,
-		onlyProviders?: Set<string>,
-	) {
-		const auth = ctx.modelRegistry.authStorage;
-		for (const [provider, slotName] of Object.entries(store.active)) {
-			if (onlyProviders && !onlyProviders.has(provider)) continue;
-			const credential = store.slots[provider]?.[slotName];
-			if (credential) {
-				auth.set(provider, credential);
+	function sanitizeStore(store: AccountStore, activeProviders: ReadonlySet<string>): boolean {
+		let changed = false;
+		for (const provider of Object.keys(store.slots)) {
+			if (Object.keys(store.slots[provider] ?? {}).length === 0) {
+				delete store.slots[provider];
+				changed = true;
 			}
 		}
+		for (const [provider, currentName] of Object.entries(store.current)) {
+			if (!activeProviders.has(provider) || store.slots[provider]?.[currentName]) {
+				delete store.current[provider];
+				changed = true;
+			}
+		}
+		return changed;
 	}
 
-	// ── Lifecycle ────────────────────────────────────────────────────────
-
-	pi.on("session_start", async (_event, ctx) => {
-		sessionCtx = ctx;
-
-		// Clean up legacy files from v1
-		if (existsSync(legacyActivePath)) {
-			try { unlinkSync(legacyActivePath); } catch { /* ignore */ }
-		}
-
-		// Restore ONLY providers missing from auth.json. Never overwrite
-		// fresh credentials already in auth.json with data from slots: the
-		// slot may have a stale refresh token (e.g., if a previous session
-		// crashed before session_shutdown could sync), and pi's refresh
-		// mechanism would then fail on the next API call.
-		const store = loadStore();
-		if (Object.keys(store.active).length === 0) return;
-
-		// Reload to pick up any changes made since AuthStorage was constructed
+	function loadCanonicalStore(ctx: ExtensionContext): AccountStore {
 		ctx.modelRegistry.authStorage.reload();
-		const loggedIn = new Set(getProviderList(ctx));
-		const toRestore = new Set<string>();
-		for (const provider of Object.keys(store.active)) {
-			if (!loggedIn.has(provider)) {
-				toRestore.add(provider);
-			}
+		const store = loadStore();
+		const activeProviders = new Set(authProviders(ctx));
+		if (sanitizeStore(store, activeProviders)) {
+			saveStore(store);
 		}
-		if (toRestore.size > 0) {
-			applyActiveSlots(store, ctx, toRestore);
+		return store;
+	}
+
+	function getCurrentName(store: AccountStore, provider: string): string | undefined {
+		const name = store.current[provider];
+		return name && name.length > 0 ? name : undefined;
+	}
+
+	async function chooseActiveProvider(ctx: ExtensionContext, prompt: string): Promise<string | undefined> {
+		ctx.modelRegistry.authStorage.reload();
+		const providers = authProviders(ctx);
+		if (providers.length === 0) return undefined;
+		if (providers.length === 1) return providers[0];
+		return await ctx.ui.select(prompt, providers);
+	}
+
+	async function chooseSavedProvider(store: AccountStore, ctx: ExtensionContext, prompt: string): Promise<string | undefined> {
+		const providers = getSavedProviders(store);
+		if (providers.length === 0) return undefined;
+		if (providers.length === 1) return providers[0];
+		return await ctx.ui.select(prompt, providers);
+	}
+
+	async function openInBrowser(url: string): Promise<void> {
+		try {
+			if (process.platform === "darwin") {
+				await pi.exec("open", [url]);
+				return;
+			}
+			if (process.platform === "linux") {
+				await pi.exec("xdg-open", [url]);
+				return;
+			}
+			if (process.platform === "win32") {
+				await pi.exec("cmd", ["/c", "start", "", url]);
+			}
+		} catch {
+			// Ignore browser launch failures; the URL is still shown to the user.
 		}
-	});
+	}
 
-	pi.on("session_shutdown", async () => {
-		if (sessionCtx) {
-			const store = loadStore();
-			if (Object.keys(store.active).length > 0) {
-				syncActiveSlots(store, sessionCtx);
-				saveStore(store);
-			}
-		}
-		sessionCtx = undefined;
-	});
+	async function promptForSlotName(ctx: ExtensionContext, prompt: string): Promise<string | undefined> {
+		const name = (await ctx.ui.input(prompt))?.trim();
+		return name && name.length > 0 ? name : undefined;
+	}
 
-	// ── Command registration ─────────────────────────────────────────────
+	async function resolveCurrentNameForSwap(
+		store: AccountStore,
+		provider: string,
+		ctx: ExtensionContext,
+		targetName: string,
+	): Promise<string | undefined> {
+		const currentName = getCurrentName(store, provider);
+		if (currentName) return currentName;
+		return await promptForSlotName(
+			ctx,
+			`Current ${provider} auth is unnamed. Name it before switching to '${targetName}':`,
+		);
+	}
 
-	pi.registerCommand("account", {
-		description: "Switch accounts (/account save, rm, status)",
-		getArgumentCompletions: (prefix: string) => {
-			const store = loadStore();
-			// Collect all unique slot names + subcommands
-			const slotNames = new Set<string>();
-			for (const slots of Object.values(store.slots)) {
-				for (const name of Object.keys(slots)) {
-					slotNames.add(name);
-				}
-			}
-			const all = [...SUBCOMMANDS, ...slotNames];
-			const filtered = all
-				.filter((s) => s.startsWith(prefix))
-				.map((s) => ({ value: s, label: s }));
-			return filtered.length > 0 ? filtered : null;
-		},
-		handler: async (args, ctx) => {
-			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
-			const sub = parts[0];
-
-			if (sub === "status") {
-				handleStatus(ctx);
-			} else if (sub === "save") {
-				await handleSave(parts[1], parts[2], ctx);
-			} else if (sub === "rm") {
-				await handleRm(ctx);
-			} else if (parts.length === 2) {
-				// /account <provider> <slot>
-				await switchProvider(parts[0], parts[1], ctx);
-			} else if (sub) {
-				// /account <slot> (cross-provider switch)
-				await handleSwitchBySlotName(sub, ctx);
-			} else {
-				await handleInteractive(ctx);
-			}
-		},
-	});
-
-	// ── Status helpers ───────────────────────────────────────────────────
-
-	/**
-	 * Build a status summary showing each provider's state:
-	 * - Logged-in providers with saved slots show slot names (active marked *)
-	 * - Logged-in providers without saved slots are flagged as unsaved
-	 * - Saved providers not currently in auth.json are noted
-	 */
 	function buildStatusLines(store: AccountStore, ctx: ExtensionContext): string[] {
-		const loggedIn = new Set(getProviderList(ctx));
-		const allProviders = new Set([...loggedIn, ...Object.keys(store.slots)]);
+		ctx.modelRegistry.authStorage.reload();
+		const loggedIn = authProviders(ctx);
 		const lines: string[] = [];
 
-		for (const provider of allProviders) {
-			const slots = store.slots[provider];
-			const hasSlots = slots && Object.keys(slots).length > 0;
-			const isLoggedIn = loggedIn.has(provider);
-			const active = store.active[provider];
+		if (loggedIn.length > 0) {
+			lines.push("Active (auth.json):");
+			for (const provider of loggedIn) {
+				const currentName = getCurrentName(store, provider);
+				lines.push(`  ${provider} -> ${currentName ?? "(unnamed)"}`);
+			}
+		} else {
+			lines.push("Active (auth.json): (none)");
+		}
 
-			if (hasSlots) {
-				const slotDisplay = Object.keys(slots)
-					.map((s) => (s === active ? `${s}*` : s))
-					.join(" | ");
-				const suffix = isLoggedIn ? "" : " (not logged in)";
-				lines.push(`  ${provider}: ${slotDisplay}${suffix}`);
-			} else if (isLoggedIn) {
-				lines.push(`  ${provider}: logged in (not saved)`);
+		const savedProviders = getSavedProviders(store);
+		if (savedProviders.length > 0) {
+			lines.push("", "Saved slots:");
+			for (const provider of savedProviders) {
+				for (const name of getSlotNames(store, provider)) {
+					lines.push(`  ${provider}/${name}`);
+				}
 			}
 		}
 
 		return lines;
 	}
 
-	// ── /account status ──────────────────────────────────────────────────
-
-	function handleStatus(ctx: ExtensionContext) {
-		const store = loadStore();
-		const lines = buildStatusLines(store, ctx);
-
-		if (lines.length === 0) {
-			ctx.ui.notify(
-				"No credentials found. Use /login, then /account save.",
-				"info",
-			);
-			return;
-		}
-
-		ctx.ui.notify(lines.join("\n"), "info");
+	function handleStatus(ctx: ExtensionContext): void {
+		const store = loadCanonicalStore(ctx);
+		ctx.ui.notify(buildStatusLines(store, ctx).join("\n"), "info");
 	}
 
-	// ── /account save [provider] [name] ──────────────────────────────────
-
-	async function handleSave(
+	async function handleLogin(
 		providerArg: string | undefined,
-		nameArg: string | undefined,
 		ctx: ExtensionContext,
-	) {
-		const providers = getProviderList(ctx);
+	): Promise<void> {
+		ctx.modelRegistry.authStorage.reload();
+		const providers = ctx.modelRegistry.authStorage.getOAuthProviders();
 		if (providers.length === 0) {
-			ctx.ui.notify("No credentials in auth.json. Use /login first.", "warning");
+			ctx.ui.notify("No OAuth providers are available for login.", "warning");
 			return;
 		}
 
 		let provider = providerArg;
 		if (!provider) {
-			if (providers.length === 1) {
-				provider = providers[0];
-			} else {
-				provider = await ctx.ui.select(
-					"Save credential for which provider?",
-					providers,
-				);
-			}
+			const providerIds = providers.map((p) => p.id);
+			provider = providerIds.length === 1 ? providerIds[0] : await ctx.ui.select("Login to which provider?", providerIds);
 		}
 		if (!provider) return;
 
-		if (!providers.includes(provider)) {
-			ctx.ui.notify(`No credential for '${provider}' in auth.json.`, "error");
+		const providerInfo = providers.find((p) => p.id === provider);
+		if (!providerInfo) {
+			ctx.ui.notify(`Unknown OAuth provider '${provider}'.`, "error");
+			return;
+		}
+
+		if (authHas(ctx, provider)) {
+			ctx.ui.notify(
+				`auth.json already has ${provider}. Use '/account use ${provider} <new-name>' to store it safely first, or '/logout ${provider}' to discard it.`,
+				"error",
+			);
+			return;
+		}
+
+		ctx.ui.setStatus("account-login", `Logging in to ${provider}...`);
+		try {
+			await ctx.modelRegistry.authStorage.login(provider, {
+				onAuth: (info) => {
+					const instructions = info.instructions ?? "Open this URL in your browser to continue:";
+					ctx.ui.notify(`${provider}: ${instructions}\n${info.url}`, "info");
+					void openInBrowser(info.url);
+				},
+				onPrompt: async (prompt) => {
+					const value = await ctx.ui.input(prompt.message, prompt.placeholder);
+					if (value !== undefined) return value;
+					if (prompt.allowEmpty) return "";
+					throw new Error("Login cancelled");
+				},
+				onProgress: (message) => {
+					ctx.ui.setStatus("account-login", `${provider}: ${message}`);
+				},
+				onManualCodeInput: providerInfo.usesCallbackServer
+					? undefined
+					: async () => {
+						const value = await ctx.ui.input(`Paste the authorization code or redirect URL for ${provider}:`);
+						if (value !== undefined) return value;
+						throw new Error("Login cancelled");
+					},
+			});
+			ctx.modelRegistry.refresh();
+			const store = loadCanonicalStore(ctx);
+			delete store.current[provider];
+			saveStore(store);
+			ctx.ui.notify(`Logged in to ${provider}. The active auth is now unnamed; use '/account name ${provider} <name>' if you want to label it.`, "info");
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (message !== "Login cancelled") {
+				ctx.ui.notify(`Login failed for ${provider}: ${message}`, "error");
+			}
+		} finally {
+			ctx.ui.setStatus("account-login", undefined);
+		}
+	}
+
+	async function handleName(
+		providerArg: string | undefined,
+		nameArg: string | undefined,
+		ctx: ExtensionContext,
+	): Promise<void> {
+		ctx.modelRegistry.authStorage.reload();
+		const loggedIn = authProviders(ctx);
+		if (loggedIn.length === 0) {
+			ctx.ui.notify("No credentials in auth.json to label.", "warning");
+			return;
+		}
+
+		let provider = providerArg;
+		if (!provider) {
+			provider = await chooseActiveProvider(ctx, "Name which active provider?");
+		}
+		if (!provider) return;
+
+		if (!authHas(ctx, provider)) {
+			ctx.ui.notify(`No active credential for '${provider}'.`, "error");
 			return;
 		}
 
 		let name = nameArg;
 		if (!name) {
-			name = (await ctx.ui.input(`Name for this ${provider} credential:`))?.trim();
+			name = await promptForSlotName(ctx, `Name for current ${provider} auth:`);
 		}
 		if (!name) return;
 
-		const store = loadStore();
-		const current = getCurrentCredentials(ctx);
-		const credential = current[provider];
-		if (!credential) {
-			ctx.ui.notify(`No credential for '${provider}'.`, "error");
+		const store = loadCanonicalStore(ctx);
+		const existingSlot = store.slots[provider]?.[name];
+		const currentName = getCurrentName(store, provider);
+		if (existingSlot && currentName !== name) {
+			ctx.ui.notify(
+				`Slot '${provider}/${name}' already exists as an inactive saved account. Use '/account use ${provider} ${name}' to switch to it, or remove it first.`,
+				"error",
+			);
 			return;
 		}
 
-		// Confirm overwrite if slot exists
+		store.current[provider] = name;
+		saveStore(store);
+		ctx.ui.notify(`Current ${provider} auth is now labeled '${name}'.`, "info");
+	}
+
+	async function handleUse(
+		providerArg: string | undefined,
+		nameArg: string | undefined,
+		ctx: ExtensionContext,
+	): Promise<void> {
+		const store = loadCanonicalStore(ctx);
+
+		let provider = providerArg;
+		if (!provider) {
+			const activeProviders = authProviders(ctx);
+			const savedProviders = getSavedProviders(store);
+			const providers = [...new Set([...activeProviders, ...savedProviders])];
+			if (providers.length === 0) {
+				ctx.ui.notify("No credentials configured. Use /account login first.", "warning");
+				return;
+			}
+			provider = providers.length === 1 ? providers[0] : await ctx.ui.select("Use which provider?", providers);
+		}
+		if (!provider) return;
+
+		let name = nameArg;
+		if (!name) {
+			const slotNames = getSlotNames(store, provider);
+			name = slotNames.length === 1
+				? slotNames[0]
+				: await promptForSlotName(ctx, `Slot name to use for ${provider}:`);
+		}
+		if (!name) return;
+
+		const activeCredential = authGet(ctx, provider);
+		const hasActive = activeCredential !== undefined;
+		const targetCredential = store.slots[provider]?.[name];
+
+		// Existing slot: activate it, swapping current active auth out if needed.
+		if (targetCredential) {
+			if (hasActive) {
+				const currentName = await resolveCurrentNameForSwap(store, provider, ctx, name);
+				if (!currentName) return;
+				if (currentName === name) {
+					ctx.ui.notify(`'${provider}/${name}' is already the active account.`, "info");
+					return;
+				}
+				if (store.slots[provider]?.[currentName]) {
+					ctx.ui.notify(
+						`Cannot switch because '${provider}/${currentName}' already exists as a saved slot. Rename or remove it first.`,
+						"error",
+					);
+					return;
+				}
+
+				if (!store.slots[provider]) store.slots[provider] = {};
+				store.slots[provider][currentName] = activeCredential;
+				authSet(ctx, provider, targetCredential);
+				delete store.slots[provider][name];
+				store.current[provider] = name;
+				cleanupProvider(store, provider);
+				saveStore(store);
+				ctx.ui.notify(`Switched ${provider} from '${currentName}' to '${name}'.`, "info");
+				return;
+			}
+
+			authSet(ctx, provider, targetCredential);
+			delete store.slots[provider][name];
+			store.current[provider] = name;
+			cleanupProvider(store, provider);
+			saveStore(store);
+			ctx.ui.notify(`Loaded ${provider}/${name} into auth.json.`, "info");
+			return;
+		}
+
+		// Missing slot name: park current active auth under this new name.
+		if (!hasActive) {
+			ctx.ui.notify(`No active '${provider}' auth to store as '${name}'.`, "error");
+			return;
+		}
+
 		if (store.slots[provider]?.[name]) {
-			const ok = await ctx.ui.confirm(
-				"Overwrite",
-				`Slot '${provider}/${name}' already exists. Overwrite?`,
-			);
-			if (!ok) return;
+			ctx.ui.notify(`Slot '${provider}/${name}' already exists.`, "error");
+			return;
 		}
 
 		if (!store.slots[provider]) store.slots[provider] = {};
-		store.slots[provider][name] = credential;
-		store.active[provider] = name;
+		store.slots[provider][name] = activeCredential;
+		authRemove(ctx, provider);
+		delete store.current[provider];
+		cleanupProvider(store, provider);
 		saveStore(store);
-
-		ctx.ui.notify(`Saved ${provider} credential as '${name}'.`, "info");
+		ctx.ui.notify(
+			`Stored current ${provider} auth as '${name}' and cleared auth.json for that provider. You can now /account login ${provider} safely.`,
+			"info",
+		);
 	}
 
-	// ── /account <slot> (cross-provider switch) ──────────────────────────
-
-	async function handleSwitchBySlotName(slotName: string, ctx: ExtensionContext) {
-		const store = loadStore();
-
-		// Find all providers that have a slot with this name
-		const matchingProviders: string[] = [];
-		for (const [provider, slots] of Object.entries(store.slots)) {
-			if (slotName in slots) {
-				matchingProviders.push(provider);
-			}
-		}
-
-		if (matchingProviders.length === 0) {
-			ctx.ui.notify(`No providers have a slot named '${slotName}'.`, "error");
-			return;
-		}
-
-		// Sync token refreshes before switching
-		syncActiveSlots(store, ctx);
-
-		// Switch only providers where the active slot actually differs
-		const changedProviders = new Set<string>();
-		for (const provider of matchingProviders) {
-			if (store.active[provider] !== slotName) {
-				store.active[provider] = slotName;
-				changedProviders.add(provider);
-			}
-		}
-
-		if (changedProviders.size === 0) {
-			saveStore(store);
-			ctx.ui.notify(`Already on '${slotName}'.`, "info");
-			return;
-		}
-
-		applyActiveSlots(store, ctx, changedProviders);
-		saveStore(store);
-
-		const changed = [...changedProviders].join(", ");
-		ctx.ui.notify(`Switched to '${slotName}' (${changed}).`, "info");
-	}
-
-	// ── /account <provider> <slot> ───────────────────────────────────────
-
-	async function switchProvider(
-		provider: string,
-		slot: string,
+	async function handleRm(
+		providerArg: string | undefined,
+		nameArg: string | undefined,
 		ctx: ExtensionContext,
-	) {
-		const store = loadStore();
-		if (!store.slots[provider]?.[slot]) {
-			ctx.ui.notify(`No slot '${provider}/${slot}'.`, "error");
-			return;
-		}
-
-		if (store.active[provider] === slot) {
-			ctx.ui.notify(`${provider} is already on '${slot}'.`, "info");
-			return;
-		}
-
-		syncActiveSlots(store, ctx);
-		store.active[provider] = slot;
-		applyActiveSlots(store, ctx, new Set([provider]));
-		saveStore(store);
-
-		ctx.ui.notify(`Switched ${provider} to '${slot}'.`, "info");
-	}
-
-	// ── /account rm ──────────────────────────────────────────────────────
-
-	async function handleRm(ctx: ExtensionContext) {
-		const store = loadStore();
-
+	): Promise<void> {
+		const store = loadCanonicalStore(ctx);
+		const items: Array<{ provider: string; name: string }> = [];
 		const options: string[] = [];
-		const items: Array<{ provider: string; slot: string }> = [];
-
 		for (const [provider, slots] of Object.entries(store.slots)) {
-			for (const slot of Object.keys(slots)) {
-				const isActive = store.active[provider] === slot;
-				options.push(`${provider}/${slot}${isActive ? " (active)" : ""}`);
-				items.push({ provider, slot });
+			for (const name of Object.keys(slots)) {
+				items.push({ provider, name });
+				options.push(`${provider}/${name}`);
 			}
 		}
 
-		if (options.length === 0) {
-			ctx.ui.notify("Nothing to remove.", "warning");
+		if (items.length === 0) {
+			ctx.ui.notify("No saved slots to remove.", "warning");
 			return;
 		}
 
-		const choice = await ctx.ui.select("Remove slot:", options);
-		if (choice === undefined) return;
+		let provider = providerArg;
+		let name = nameArg;
+		if (!provider) {
+			provider = await chooseSavedProvider(store, ctx, "Remove from which provider?");
+		}
+		if (!provider) return;
+		if (!name) {
+			const slotNames = getSlotNames(store, provider);
+			if (slotNames.length === 0) {
+				ctx.ui.notify(`No saved slots for '${provider}'.`, "error");
+				return;
+			}
+			name = slotNames.length === 1 ? slotNames[0] : await ctx.ui.select(`Remove which ${provider} slot?`, slotNames);
+		}
+		if (!name) return;
 
-		const { provider, slot } = items[options.indexOf(choice)];
-		const isActive = store.active[provider] === slot;
-		const remaining = Object.keys(store.slots[provider]).filter((s) => s !== slot);
-
-		if (isActive) {
-			const msg = remaining.length === 0
-				? `'${provider}/${slot}' is the only slot for this provider. Remove?`
-				: `'${provider}/${slot}' is active. Will switch to '${remaining[0]}'. Remove?`;
-			const ok = await ctx.ui.confirm("Remove active slot", msg);
-			if (!ok) return;
-		} else {
-			const ok = await ctx.ui.confirm("Remove slot", `Delete '${provider}/${slot}'?`);
-			if (!ok) return;
+		if (!store.slots[provider]?.[name]) {
+			ctx.ui.notify(`No slot '${provider}/${name}'.`, "error");
+			return;
 		}
 
-		delete store.slots[provider][slot];
+		const ok = await ctx.ui.confirm(
+			"Remove slot",
+			`Delete '${provider}/${name}'? This cannot be undone.`,
+		);
+		if (!ok) return;
 
-		if (Object.keys(store.slots[provider]).length === 0) {
-			delete store.slots[provider];
-			delete store.active[provider];
-		} else if (isActive) {
-			store.active[provider] = remaining[0];
-			applyActiveSlots(store, ctx, new Set([provider]));
-		}
-
+		delete store.slots[provider][name];
+		cleanupProvider(store, provider);
 		saveStore(store);
-		ctx.ui.notify(`Removed '${provider}/${slot}'.`, "info");
+		ctx.ui.notify(`Removed '${provider}/${name}'.`, "info");
 	}
 
-	// ── /account (interactive) ───────────────────────────────────────────
-
-	async function handleInteractive(ctx: ExtensionContext) {
-		const store = loadStore();
+	async function handleInteractive(ctx: ExtensionContext): Promise<void> {
+		const store = loadCanonicalStore(ctx);
 		const statusLines = buildStatusLines(store, ctx);
+		const activeProviders = authProviders(ctx);
+		const savedProviders = getSavedProviders(store);
 
-		if (statusLines.length === 0) {
-			ctx.ui.notify(
-				"No accounts configured. Use /login, then /account save.",
-				"info",
-			);
+		if (activeProviders.length === 0 && savedProviders.length === 0) {
+			ctx.ui.notify("No credentials configured. Use /account login to add one.", "info");
 			return;
 		}
 
-		// Build switch options for providers with multiple slots
+		type Action =
+			| { kind: "login"; provider: string }
+			| { kind: "name"; provider: string }
+			| { kind: "use"; provider: string; name: string };
+
 		const options: string[] = [];
-		const actions: Array<{ provider: string; slot: string }> = [];
+		const actions: Action[] = [];
+		const oauthProviders = ctx.modelRegistry.authStorage.getOAuthProviders().map((p) => p.id);
+
+		for (const provider of oauthProviders) {
+			if (activeProviders.includes(provider)) continue;
+			options.push(`Login ${provider}`);
+			actions.push({ kind: "login", provider });
+		}
+
+		for (const provider of activeProviders) {
+			const currentName = getCurrentName(store, provider);
+			options.push(`Name ${provider}${currentName ? ` as ${currentName}` : ""}`);
+			actions.push({ kind: "name", provider });
+		}
 
 		for (const [provider, slots] of Object.entries(store.slots)) {
-			const slotNames = Object.keys(slots);
-			if (slotNames.length <= 1) continue;
-			const active = store.active[provider];
-			for (const slot of slotNames) {
-				if (slot === active) continue;
-				options.push(`${provider} → ${slot}`);
-				actions.push({ provider, slot });
+			for (const name of Object.keys(slots)) {
+				options.push(`Use ${provider}/${name}`);
+				actions.push({ kind: "use", provider, name });
 			}
 		}
 
-		if (options.length === 0) {
-			// No switching possible; just show status
-			ctx.ui.notify(statusLines.join("\n"), "info");
-			return;
+		if (activeProviders.length > 0) {
+			for (const provider of activeProviders) {
+				options.push(`Use ${provider}/<new name>  (store current and clear active auth)`);
+				actions.push({ kind: "use", provider, name: "" });
+			}
 		}
 
-		const title = statusLines.join("\n") + "\n\nSwitch to:";
-		const choice = await ctx.ui.select(title, options);
+		const choice = await ctx.ui.select(statusLines.join("\n") + "\n", options);
 		if (choice === undefined) return;
-
-		const { provider, slot } = actions[options.indexOf(choice)];
-		await switchProvider(provider, slot, ctx);
+		const action = actions[options.indexOf(choice)];
+		if (action.kind === "login") {
+			await handleLogin(action.provider, ctx);
+			return;
+		}
+		if (action.kind === "name") {
+			await handleName(action.provider, undefined, ctx);
+			return;
+		}
+		if (action.name) {
+			await handleUse(action.provider, action.name, ctx);
+			return;
+		}
+		const newName = await promptForSlotName(ctx, `New name for current ${action.provider} auth:`);
+		if (!newName) return;
+		await handleUse(action.provider, newName, ctx);
 	}
+
+	pi.on("session_start", async (_event, ctx) => {
+		if (existsSync(legacyActivePath)) {
+			try { unlinkSync(legacyActivePath); } catch { /* ignore */ }
+		}
+		ctx.modelRegistry.authStorage.reload();
+		const store = loadStore();
+		const activeProviders = new Set(authProviders(ctx));
+		sanitizeStore(store, activeProviders);
+		saveStore(store);
+	});
+
+	pi.registerCommand("account", {
+		description: "Manage account credentials (/account login, name, use, rm, status)",
+		getArgumentCompletions: (prefix: string) => {
+			const parts = prefix.split(/\s+/);
+			const store = loadStore();
+
+			if (parts.length <= 1) {
+				const input = parts[0] ?? "";
+				return [...SUBCOMMANDS]
+					.filter((subcommand) => subcommand.startsWith(input))
+					.map((subcommand) => ({ value: subcommand, label: subcommand }));
+			}
+
+			const sub = parts[0];
+			const input = parts[parts.length - 1];
+
+			if (parts.length === 2 && (sub === "use" || sub === "rm")) {
+				const providers = sub === "use" ? getKnownProviders(store) : getSavedProviders(store);
+				return providers
+					.filter((provider) => provider.startsWith(input))
+					.map((provider) => ({ value: provider, label: provider }));
+			}
+
+			if (parts.length === 3 && (sub === "use" || sub === "rm")) {
+				const provider = parts[1];
+				return getSlotNames(store, provider)
+					.filter((name) => name.startsWith(input))
+					.map((name) => ({ value: name, label: name }));
+			}
+
+			return null;
+		},
+		handler: async (args, ctx) => {
+			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
+			const sub = parts[0];
+			if (sub === "status") {
+				handleStatus(ctx);
+				return;
+			}
+			if (sub === "login") {
+				await handleLogin(parts[1], ctx);
+				return;
+			}
+			if (sub === "name") {
+				await handleName(parts[1], parts[2], ctx);
+				return;
+			}
+			if (sub === "use") {
+				await handleUse(parts[1], parts[2], ctx);
+				return;
+			}
+			if (sub === "rm") {
+				await handleRm(parts[1], parts[2], ctx);
+				return;
+			}
+			if (sub) {
+				ctx.ui.notify(`Unknown subcommand '${sub}'. Use: login, name, use, rm, status.`, "error");
+				return;
+			}
+			await handleInteractive(ctx);
+		},
+	});
 }
