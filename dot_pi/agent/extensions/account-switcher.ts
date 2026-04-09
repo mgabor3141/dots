@@ -13,8 +13,6 @@
  * Commands:
  *   /account                          - interactive overview + actions
  *   /account status                   - show active + saved state
- *   /account login [prov]             - OAuth login managed by this extension;
- *                                       leaves the provider active but unnamed
  *   /account name [prov] [name]       - label the active auth.json credential
  *                                       for a provider without moving it
  *   /account use [prov] [name]        - if [name] exists, swap to it
@@ -24,20 +22,19 @@
  *   /account rm [prov] [name]         - delete an inactive saved slot
  *
  * Examples:
- *   /account login anthropic
+ *   /login anthropic
  *   /account name anthropic work
  *   /account use anthropic work        # parks current active auth as 'work'
- *   /account login anthropic
+ *   /login anthropic
  *   /account name anthropic personal
  *   /account use anthropic work        # swaps personal <-> work
  *   /account use anthropic personal    # swaps work <-> personal
  *
  * Important:
- *   /account name only labels the current active auth. It does NOT protect it
- *   from being overwritten by a later built-in /login. Prefer /account login
- *   so this extension can keep its state consistent. To safely log in again,
- *   use /account use <provider> <new-name> with a name that does not already
- *   exist, then /account login <provider>.
+ *   Built-in /login overwrites the active auth in auth.json. That is the
+ *   intended way to replace the current account. After /login, use /account
+ *   name to relabel the new active auth, or /account use <provider> <new-name>
+ *   to park it under a new slot name.
  */
 
 import type { AuthCredential, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
@@ -50,7 +47,7 @@ interface AccountStore {
 	current: Record<string, string>;
 }
 
-const SUBCOMMANDS = new Set(["login", "name", "use", "rm", "status"]);
+const SUBCOMMANDS = new Set(["name", "use", "rm", "status"]);
 
 export default function (pi: ExtensionAPI) {
 	const agentDir = join(process.env.HOME!, ".pi", "agent");
@@ -170,24 +167,6 @@ export default function (pi: ExtensionAPI) {
 		return await ctx.ui.select(prompt, providers);
 	}
 
-	async function openInBrowser(url: string): Promise<void> {
-		try {
-			if (process.platform === "darwin") {
-				await pi.exec("open", [url]);
-				return;
-			}
-			if (process.platform === "linux") {
-				await pi.exec("xdg-open", [url]);
-				return;
-			}
-			if (process.platform === "win32") {
-				await pi.exec("cmd", ["/c", "start", "", url]);
-			}
-		} catch {
-			// Ignore browser launch failures; the URL is still shown to the user.
-		}
-	}
-
 	async function promptForSlotName(ctx: ExtensionContext, prompt: string): Promise<string | undefined> {
 		const name = (await ctx.ui.input(prompt))?.trim();
 		return name && name.length > 0 ? name : undefined;
@@ -238,78 +217,6 @@ export default function (pi: ExtensionAPI) {
 	function handleStatus(ctx: ExtensionContext): void {
 		const store = loadCanonicalStore(ctx);
 		ctx.ui.notify(buildStatusLines(store, ctx).join("\n"), "info");
-	}
-
-	async function handleLogin(
-		providerArg: string | undefined,
-		ctx: ExtensionContext,
-	): Promise<void> {
-		ctx.modelRegistry.authStorage.reload();
-		const providers = ctx.modelRegistry.authStorage.getOAuthProviders();
-		if (providers.length === 0) {
-			ctx.ui.notify("No OAuth providers are available for login.", "warning");
-			return;
-		}
-
-		let provider = providerArg;
-		if (!provider) {
-			const providerIds = providers.map((p) => p.id);
-			provider = providerIds.length === 1 ? providerIds[0] : await ctx.ui.select("Login to which provider?", providerIds);
-		}
-		if (!provider) return;
-
-		const providerInfo = providers.find((p) => p.id === provider);
-		if (!providerInfo) {
-			ctx.ui.notify(`Unknown OAuth provider '${provider}'.`, "error");
-			return;
-		}
-
-		if (authHas(ctx, provider)) {
-			ctx.ui.notify(
-				`auth.json already has ${provider}. Use '/account use ${provider} <new-name>' to store it safely first, or '/logout ${provider}' to discard it.`,
-				"error",
-			);
-			return;
-		}
-
-		ctx.ui.setStatus("account-login", `Logging in to ${provider}...`);
-		try {
-			await ctx.modelRegistry.authStorage.login(provider, {
-				onAuth: (info) => {
-					const instructions = info.instructions ?? "Open this URL in your browser to continue:";
-					ctx.ui.notify(`${provider}: ${instructions}\n${info.url}`, "info");
-					void openInBrowser(info.url);
-				},
-				onPrompt: async (prompt) => {
-					const value = await ctx.ui.input(prompt.message, prompt.placeholder);
-					if (value !== undefined) return value;
-					if (prompt.allowEmpty) return "";
-					throw new Error("Login cancelled");
-				},
-				onProgress: (message) => {
-					ctx.ui.setStatus("account-login", `${provider}: ${message}`);
-				},
-				onManualCodeInput: providerInfo.usesCallbackServer
-					? undefined
-					: async () => {
-						const value = await ctx.ui.input(`Paste the authorization code or redirect URL for ${provider}:`);
-						if (value !== undefined) return value;
-						throw new Error("Login cancelled");
-					},
-			});
-			ctx.modelRegistry.refresh();
-			const store = loadCanonicalStore(ctx);
-			delete store.current[provider];
-			saveStore(store);
-			ctx.ui.notify(`Logged in to ${provider}. The active auth is now unnamed; use '/account name ${provider} <name>' if you want to label it.`, "info");
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			if (message !== "Login cancelled") {
-				ctx.ui.notify(`Login failed for ${provider}: ${message}`, "error");
-			}
-		} finally {
-			ctx.ui.setStatus("account-login", undefined);
-		}
 	}
 
 	async function handleName(
@@ -370,7 +277,7 @@ export default function (pi: ExtensionAPI) {
 			const savedProviders = getSavedProviders(store);
 			const providers = [...new Set([...activeProviders, ...savedProviders])];
 			if (providers.length === 0) {
-				ctx.ui.notify("No credentials configured. Use /account login first.", "warning");
+				ctx.ui.notify("No credentials configured. Use /login first.", "warning");
 				return;
 			}
 			provider = providers.length === 1 ? providers[0] : await ctx.ui.select("Use which provider?", providers);
@@ -445,7 +352,7 @@ export default function (pi: ExtensionAPI) {
 		cleanupProvider(store, provider);
 		saveStore(store);
 		ctx.ui.notify(
-			`Stored current ${provider} auth as '${name}' and cleared auth.json for that provider. You can now /account login ${provider} safely.`,
+			`Stored current ${provider} auth as '${name}' and cleared auth.json for that provider. You can now /login ${provider} safely.`,
 			"info",
 		);
 	}
@@ -510,24 +417,16 @@ export default function (pi: ExtensionAPI) {
 		const savedProviders = getSavedProviders(store);
 
 		if (activeProviders.length === 0 && savedProviders.length === 0) {
-			ctx.ui.notify("No credentials configured. Use /account login to add one.", "info");
+			ctx.ui.notify("No credentials configured. Use /login to add one.", "info");
 			return;
 		}
 
 		type Action =
-			| { kind: "login"; provider: string }
 			| { kind: "name"; provider: string }
 			| { kind: "use"; provider: string; name: string };
 
 		const options: string[] = [];
 		const actions: Action[] = [];
-		const oauthProviders = ctx.modelRegistry.authStorage.getOAuthProviders().map((p) => p.id);
-
-		for (const provider of oauthProviders) {
-			if (activeProviders.includes(provider)) continue;
-			options.push(`Login ${provider}`);
-			actions.push({ kind: "login", provider });
-		}
 
 		for (const provider of activeProviders) {
 			const currentName = getCurrentName(store, provider);
@@ -552,10 +451,6 @@ export default function (pi: ExtensionAPI) {
 		const choice = await ctx.ui.select(statusLines.join("\n") + "\n", options);
 		if (choice === undefined) return;
 		const action = actions[options.indexOf(choice)];
-		if (action.kind === "login") {
-			await handleLogin(action.provider, ctx);
-			return;
-		}
 		if (action.kind === "name") {
 			await handleName(action.provider, undefined, ctx);
 			return;
@@ -581,7 +476,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("account", {
-		description: "Manage account credentials (/account login, name, use, rm, status)",
+		description: "Manage account credentials (/account name, use, rm, status)",
 		getArgumentCompletions: (prefix: string) => {
 			const parts = prefix.split(/\s+/);
 			const store = loadStore();
@@ -619,10 +514,6 @@ export default function (pi: ExtensionAPI) {
 				handleStatus(ctx);
 				return;
 			}
-			if (sub === "login") {
-				await handleLogin(parts[1], ctx);
-				return;
-			}
 			if (sub === "name") {
 				await handleName(parts[1], parts[2], ctx);
 				return;
@@ -636,7 +527,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 			if (sub) {
-				ctx.ui.notify(`Unknown subcommand '${sub}'. Use: login, name, use, rm, status.`, "error");
+				ctx.ui.notify(`Unknown subcommand '${sub}'. Use: name, use, rm, status.`, "error");
 				return;
 			}
 			await handleInteractive(ctx);
