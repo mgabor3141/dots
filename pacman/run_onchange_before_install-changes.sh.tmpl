@@ -17,14 +17,18 @@ FOREIGN="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-foreig
 [ -s $FOREIGN ] || { echo "❌ [ERROR] $FOREIGN missing or empty"; exit 1; }
 
 prune() {
-    sudo pacman -Rsu --confirm $(comm -23 <(sort "$1") <(sort "$2")) || true
+    local to_remove
+    to_remove=$(comm -23 <(sort "$1") <(sort "$2")) || true
+    if [ -n "$to_remove" ]; then
+        sudo pacman -Rsu --noconfirm $to_remove || true
+    fi
 }
 
 echo ">>> Installing packages (needed + optional deps)"
-sudo pacman -S --needed - < <(cat "$NEEDED" "$OPTDEPS")
+sudo pacman -S --needed --noconfirm $(cat "$NEEDED" "$OPTDEPS")
 
 echo ">>> Installing foreign packages"
-paru -S --needed --confirm - < "$FOREIGN"
+paru -S --needed --noconfirm $(cat "$FOREIGN")
 
 echo ">>> Pruning removed packages (error means nothing to do)"
 prune <(sudo pacman -Qqetn) "$NEEDED"
