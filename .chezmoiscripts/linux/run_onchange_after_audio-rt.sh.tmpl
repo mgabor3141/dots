@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# {{ include (joinPath .chezmoi.sourceDir ".chezmoiscripts/linux/.audio-rt.conf") | sha256sum }}
+
+# Deploy systemd user manager override so PipeWire gets proper RT scheduling
+
+if [ "$(id -u)" -ne 0 ]; then
+    sudo "$0" "$@"
+    exit $?
+fi
+
+mkdir -p /etc/systemd/system/user@.service.d
+cp "{{ joinPath .chezmoi.sourceDir ".chezmoiscripts/linux/.audio-rt.conf" }}" /etc/systemd/system/user@.service.d/audio-rt.conf
+systemctl daemon-reload
+echo "✅ Applied audio RT limits to user@.service"
