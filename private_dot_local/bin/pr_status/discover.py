@@ -163,7 +163,7 @@ def discover_pr_stubs(author: str, since: str) -> list[dict]:
     buckets = [
         _search_prs(["--author", author, "--state", "open"], "authored_open"),
         _search_prs(["--review-requested", author, "--state", "open"], "review_requested"),
-        _search_prs([f"author:{author} is:merged merged:>={since_day}"], "authored_merged"),
+        _search_prs(["--author", author, "--merged", "--merged-at", f">={since_day}"], "authored_merged"),
     ]
 
     merged: dict[tuple[str, int], dict] = {}
