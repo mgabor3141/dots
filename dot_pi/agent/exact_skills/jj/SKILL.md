@@ -6,7 +6,7 @@ description: >
 
 # jj workflow reference
 
-Prefer to keep editing the last working copy and using `squash` or `split` to move your changes to the actual commits you intend to keep. This allows multiple agents to work in parallel in the same workspace.
+The **working copy** (represented by the @ symbol) is a concept unique to jj. Changes made to files are automatically tracked as part of whichever changeset (commit) the current working copy points to. This can be a changeset that has "already been committed" in git terms, or it can be one that does not yet have a description on top of other changes. The latter is common, as it can be thought of as a staging area.
 
 ## Key commands
 
@@ -22,6 +22,8 @@ Prefer to keep editing the last working copy and using `squash` or `split` to mo
 | Undo last operation | `jj undo` |
 | See what's in @ | `jj diff --stat` |
 | Recent history | `jj log --limit 5` |
+
+Unfortunately there is no way to work with individual hunks without the interactive TUI, so only file level filtering is available for operations. You can work around this by selecting a specific changeset with `jj edit` that needs to be modified.
 
 ## Common patterns
 

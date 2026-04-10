@@ -1,5 +1,5 @@
 ---
-name: pi-dev
+name: harness-dev
 description: >
   Use when working on your agent harness itself — its extensions, SDK, themes, skills, TUI, or configuration.
 ---
