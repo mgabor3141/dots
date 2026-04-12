@@ -36,3 +36,13 @@ Every command supports `--help`. Output defaults to Markdown; use `--output-form
 - **Lighthouse audits** are available inline: `chrome-devtools lighthouse_audit --mode navigation`.
 - **Network inspection**: `list_network_requests` and `get_network_request` let you inspect traffic without browser UI.
 - **Performance traces**: `performance_start_trace` / `performance_stop_trace` capture timeline data for analysis.
+
+## Gotchas
+
+- Screenshot flag is `--filePath`, not `--path`.
+- `evaluate_script` takes a function string: `"() => expr"`, not a bare expression.
+- UIDs reset on reload; never reuse them across navigations.
+- Injected JS is lost on reload.
+- `Warning: --localstorage-file was provided without a valid path` is harmless noise.
+- Use `evaluate_script` for layout measurements (`clientHeight`, `getComputedStyle`); screenshots are for visual confirmation only.
+- `setInterval` + a result array is a good pattern for observing values over time.
