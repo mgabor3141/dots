@@ -1,4 +1,5 @@
 blackwidow-macro-git
+caprine
 customizepkg-git
 handy-bin
 it87-dkms-git

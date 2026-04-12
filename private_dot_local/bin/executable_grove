@@ -17,7 +17,7 @@ Usage:
     grove refresh --all             Fetch and rebase all workspaces
     grove link                      Re-sync symlinks for all workspaces
     grove delete [name]             Delete a workspace
-    grove list (ls)                 List workspaces with status
+    grove clean                     Delete all workspaces with no commits or changes
     grove status                    Show project and repo overview
 """
 
@@ -871,6 +871,46 @@ def delete_workspace(project_root: Path, name: str | None,
     print(f"Deleted workspace: {ws_name}")
 
 
+def clean_workspaces(project_root: Path, force: bool = False) -> None:
+    """Delete all workspaces that have no commits ahead of trunk and no changes."""
+    grove_dir = project_root / GROVE_DIR
+    workspaces = find_workspaces(grove_dir)
+
+    if not workspaces:
+        print("No workspaces found.")
+        return
+
+    repos = find_repos(project_root)
+    cur = current_workspace_name(project_root)
+
+    candidates = []
+    for ws in workspaces:
+        if ws.name == cur:
+            continue  # never delete the workspace we're inside
+        info = _collect_workspace_info(project_root, repos, ws.name)
+        if (info["commits_ahead"] == 0
+                and info["insertions"] == 0
+                and info["deletions"] == 0):
+            candidates.append(ws.name)
+
+    if not candidates:
+        print("No clean workspaces to remove.")
+        return
+
+    print("Clean workspaces to be deleted:")
+    for name in candidates:
+        print(f"  {name}")
+
+    if not force:
+        confirm = input(f"\nDelete {len(candidates)} workspace{'s' if len(candidates) != 1 else ''}? [y/N] ").strip()
+        if confirm.lower() != "y":
+            print("Cancelled.")
+            return
+
+    for name in candidates:
+        delete_workspace(project_root, name, force=True)
+
+
 def _collect_workspace_info(project_root: Path, repos: list[Path],
                            ws_name: str) -> dict:
     """Collect aggregated info for a workspace across all repos."""
@@ -902,22 +942,6 @@ def _collect_workspace_info(project_root: Path, repos: list[Path],
         "description": best_desc,
     }
 
-
-def list_workspaces(project_root: Path) -> None:
-    """List workspaces with status info."""
-    grove_dir = project_root / GROVE_DIR
-    workspaces = find_workspaces(grove_dir)
-
-    if not workspaces:
-        print("No workspaces. Run 'grove new' to get started.")
-        return
-
-    repos = find_repos(project_root)
-    cur = current_workspace_name(project_root)
-
-    for ws in workspaces:
-        info = _collect_workspace_info(project_root, repos, ws.name)
-        _print_workspace_line(ws.name, info, current=(ws.name == cur))
 
 
 def current_workspace_name(project_root: Path) -> str | None:
@@ -1131,8 +1155,10 @@ def parse_args() -> argparse.Namespace:
     del_p.add_argument("-f", "--force", action="store_true",
                        help="Skip confirmation")
 
-    sub.add_parser("list", aliases=["ls"],
-                   help="List workspaces with status")
+    clean_p = sub.add_parser("clean",
+                             help="Delete all workspaces with no commits or changes")
+    clean_p.add_argument("-f", "--force", action="store_true",
+                         help="Skip confirmation")
 
     sub.add_parser("status", help="Show project and repo overview")
 
@@ -1195,9 +1221,9 @@ def main() -> None:
         project_root = find_project_root()
         delete_workspace(project_root, args.name, force=args.force)
 
-    elif args.command in ("list", "ls"):
+    elif args.command == "clean":
         project_root = find_project_root()
-        list_workspaces(project_root)
+        clean_workspaces(project_root, force=args.force)
 
     elif args.command == "status":
         project_root = find_project_root(optional=True)
