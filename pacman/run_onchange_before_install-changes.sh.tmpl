@@ -1,6 +1,5 @@
-#!/bin/bash
-trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2; \
-      echo "Reboot, then run `chezmoi apply` again" >&2' ERR
+#!/usr/bin/env bash
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
 # .pacman-pkglist.txt hash: {{ include "pacman/.pacman-pkglist.txt" | sha256sum }}
@@ -11,10 +10,16 @@ NEEDED="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-pkglist
 OPTDEPS="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-optdeplist.txt"
 FOREIGN="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}/.pacman-foreignpkglist.txt"
 
-# Make sure files exist and are not empty
-[ -s $NEEDED ] || { echo "❌ [ERROR] $NEEDED missing or empty"; exit 1; }
-[ -s $OPTDEPS ] || { echo "❌ [ERROR] $OPTDEPS missing or empty"; exit 1; }
-[ -s $FOREIGN ] || { echo "❌ [ERROR] $FOREIGN missing or empty"; exit 1; }
+[ -s "$NEEDED" ]  || { echo "[ERROR] $NEEDED missing or empty"; exit 1; }
+[ -s "$OPTDEPS" ] || { echo "[ERROR] $OPTDEPS missing or empty"; exit 1; }
+[ -s "$FOREIGN" ] || { echo "[ERROR] $FOREIGN missing or empty"; exit 1; }
+
+# Filter a package list against what's actually available in repos.
+# Packages that were removed/renamed upstream would otherwise fail the
+# entire pacman invocation.
+available_only() {
+    comm -12 <(sort "$1") <(pacman -Ssq 2>/dev/null | sort)
+}
 
 prune() {
     local to_remove
@@ -24,14 +29,17 @@ prune() {
     fi
 }
 
-echo ">>> Installing packages (needed + optional deps)"
-sudo pacman -S --needed --noconfirm $(cat "$NEEDED" "$OPTDEPS")
+echo ">>> Installing needed packages"
+sudo pacman -S --needed --noconfirm $(available_only "$NEEDED")
+
+echo ">>> Installing optional deps (best-effort)"
+sudo pacman -S --needed --noconfirm $(available_only "$OPTDEPS") || true
 
 echo ">>> Installing foreign packages"
-paru -S --needed --noconfirm $(cat "$FOREIGN")
+paru -S --needed --noconfirm $(cat "$FOREIGN") || true
 
-echo ">>> Pruning removed packages (error means nothing to do)"
+echo ">>> Pruning removed packages"
 prune <(sudo pacman -Qqetn) "$NEEDED"
 
-echo ">>> Pruning removed optional / foreign packages (error means nothing to do)"
+echo ">>> Pruning removed optional / foreign packages"
 prune <(sudo pacman -Qqem) <(cat "$OPTDEPS" "$FOREIGN")
