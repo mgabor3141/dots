@@ -1,3 +1,4 @@
 @mariozechner/pi-coding-agent
 @devcontainers/cli
 @antfu/ni
+chrome-devtools-mcp
