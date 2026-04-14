@@ -2,8 +2,9 @@
  * Account switcher for pi.
  *
  * Per provider, there is at most one active credential in auth.json. Inactive
- * credentials live in named slots in auth-profiles.json. A small `current`
- * marker records what the active auth.json credential is called, if known.
+ * credentials live in named slots in auth-profiles.json. A `current` marker
+ * records what the active auth.json credential is called. It also serves as
+ * the pending name for the next /login after a park-and-clear.
  *
  * This avoids sync logic entirely:
  * - auth.json is always the live credential pi uses and refreshes
@@ -11,30 +12,26 @@
  * - switching is implemented as an explicit swap
  *
  * Commands:
- *   /account                          - interactive overview + actions
- *   /account status                   - show active + saved state
- *   /account name [prov] [name]       - label the active auth.json credential
- *                                       for a provider without moving it
- *   /account use [prov] [name]        - if [name] exists, swap to it
- *                                       if [name] does not exist, park the
- *                                       current active auth under that name
- *                                       and clear auth.json for that provider
- *   /account rm [prov] [name]         - delete an inactive saved slot
+ *   /account                - interactive overview + actions
+ *   /account status         - show active + saved state
+ *   /account use [name]     - if [name] exists as a slot, swap to it
+ *                             (parking the current credential under its name)
+ *                             if [name] does not exist, park the current
+ *                             credential and prepare for /login under [name]
+ *   /account rm [name]      - delete an inactive saved slot
  *
- * Examples:
- *   /login anthropic
- *   /account name anthropic work
- *   /account use anthropic work        # parks current active auth as 'work'
- *   /login anthropic
- *   /account name anthropic personal
- *   /account use anthropic work        # swaps personal <-> work
- *   /account use anthropic personal    # swaps work <-> personal
+ * Provider is inferred automatically. When multiple providers match, you are
+ * prompted to choose via the TUI.
  *
- * Important:
- *   Built-in /login overwrites the active auth in auth.json. That is the
- *   intended way to replace the current account. After /login, use /account
- *   name to relabel the new active auth, or /account use <provider> <new-name>
- *   to park it under a new slot name.
+ * Workflow:
+ *   /login anthropic                   # credential A in auth.json (unnamed)
+ *   /account use personal              # "personal" doesn't exist:
+ *                                      #   prompts to name current -> "work"
+ *                                      #   parks A as "work", clears auth.json
+ *                                      #   next /login becomes "personal"
+ *   /login anthropic                   # credential B in auth.json as "personal"
+ *   /account use work                  # swaps: parks B as "personal", loads A
+ *   /account use personal              # swaps: parks A as "work", loads B
  */
 
 import type { AuthCredential, ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
@@ -47,7 +44,7 @@ interface AccountStore {
 	current: Record<string, string>;
 }
 
-const SUBCOMMANDS = new Set(["name", "use", "rm", "status"]);
+const SUBCOMMANDS = new Set(["use", "rm", "status"]);
 
 export default function (pi: ExtensionAPI) {
 	const agentDir = join(process.env.HOME!, ".pi", "agent");
@@ -82,10 +79,6 @@ export default function (pi: ExtensionAPI) {
 		return ctx.modelRegistry.authStorage.list();
 	}
 
-	function authHas(ctx: ExtensionContext, provider: string): boolean {
-		return ctx.modelRegistry.authStorage.has(provider);
-	}
-
 	function authGet(ctx: ExtensionContext, provider: string): AuthCredential | undefined {
 		return ctx.modelRegistry.authStorage.get(provider);
 	}
@@ -99,28 +92,44 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	function getSavedProviders(store: AccountStore): string[] {
-		return Object.keys(store.slots).filter((provider) => Object.keys(store.slots[provider] ?? {}).length > 0);
-	}
-
-	function getKnownProviders(store: AccountStore): string[] {
-		return [...new Set([...Object.keys(store.current), ...getSavedProviders(store)])];
+		return Object.keys(store.slots).filter((p) => Object.keys(store.slots[p] ?? {}).length > 0);
 	}
 
 	function getSlotNames(store: AccountStore, provider: string): string[] {
 		return Object.keys(store.slots[provider] ?? {});
 	}
 
+	function getAllSlotEntries(store: AccountStore): Array<{ provider: string; name: string }> {
+		const entries: Array<{ provider: string; name: string }> = [];
+		for (const [provider, slots] of Object.entries(store.slots)) {
+			for (const name of Object.keys(slots)) {
+				entries.push({ provider, name });
+			}
+		}
+		return entries;
+	}
+
+	function getAllSlotNames(store: AccountStore): string[] {
+		const names = new Set<string>();
+		for (const slots of Object.values(store.slots)) {
+			for (const name of Object.keys(slots)) {
+				names.add(name);
+			}
+		}
+		return [...names];
+	}
+
+	function providersWithSlot(store: AccountStore, name: string): string[] {
+		return Object.keys(store.slots).filter((p) => name in (store.slots[p] ?? {}));
+	}
+
 	function cleanupProvider(store: AccountStore, provider: string): void {
 		if (store.slots[provider] && Object.keys(store.slots[provider]).length === 0) {
 			delete store.slots[provider];
 		}
-		if (!(provider in store.current)) return;
-		if (store.current[provider] === "") {
-			delete store.current[provider];
-		}
 	}
 
-	function sanitizeStore(store: AccountStore, activeProviders: ReadonlySet<string>): boolean {
+	function sanitizeStore(store: AccountStore): boolean {
 		let changed = false;
 		for (const provider of Object.keys(store.slots)) {
 			if (Object.keys(store.slots[provider] ?? {}).length === 0) {
@@ -129,7 +138,8 @@ export default function (pi: ExtensionAPI) {
 			}
 		}
 		for (const [provider, currentName] of Object.entries(store.current)) {
-			if (!activeProviders.has(provider) || store.slots[provider]?.[currentName]) {
+			// Remove empty markers or markers that conflict with a saved slot
+			if (!currentName || store.slots[provider]?.[currentName]) {
 				delete store.current[provider];
 				changed = true;
 			}
@@ -140,8 +150,7 @@ export default function (pi: ExtensionAPI) {
 	function loadCanonicalStore(ctx: ExtensionContext): AccountStore {
 		ctx.modelRegistry.authStorage.reload();
 		const store = loadStore();
-		const activeProviders = new Set(authProviders(ctx));
-		if (sanitizeStore(store, activeProviders)) {
+		if (sanitizeStore(store)) {
 			saveStore(store);
 		}
 		return store;
@@ -152,38 +161,9 @@ export default function (pi: ExtensionAPI) {
 		return name && name.length > 0 ? name : undefined;
 	}
 
-	async function chooseActiveProvider(ctx: ExtensionContext, prompt: string): Promise<string | undefined> {
-		ctx.modelRegistry.authStorage.reload();
-		const providers = authProviders(ctx);
-		if (providers.length === 0) return undefined;
-		if (providers.length === 1) return providers[0];
-		return await ctx.ui.select(prompt, providers);
-	}
-
-	async function chooseSavedProvider(store: AccountStore, ctx: ExtensionContext, prompt: string): Promise<string | undefined> {
-		const providers = getSavedProviders(store);
-		if (providers.length === 0) return undefined;
-		if (providers.length === 1) return providers[0];
-		return await ctx.ui.select(prompt, providers);
-	}
-
 	async function promptForSlotName(ctx: ExtensionContext, prompt: string): Promise<string | undefined> {
 		const name = (await ctx.ui.input(prompt))?.trim();
 		return name && name.length > 0 ? name : undefined;
-	}
-
-	async function resolveCurrentNameForSwap(
-		store: AccountStore,
-		provider: string,
-		ctx: ExtensionContext,
-		targetName: string,
-	): Promise<string | undefined> {
-		const currentName = getCurrentName(store, provider);
-		if (currentName) return currentName;
-		return await promptForSlotName(
-			ctx,
-			`Current ${provider} auth is unnamed. Name it before switching to '${targetName}':`,
-		);
 	}
 
 	function buildStatusLines(store: AccountStore, ctx: ExtensionContext): string[] {
@@ -191,19 +171,25 @@ export default function (pi: ExtensionAPI) {
 		const loggedIn = authProviders(ctx);
 		const lines: string[] = [];
 
+		lines.push("Active:");
 		if (loggedIn.length > 0) {
-			lines.push("Active (auth.json):");
 			for (const provider of loggedIn) {
 				const currentName = getCurrentName(store, provider);
-				lines.push(`  ${provider} -> ${currentName ?? "(unnamed)"}`);
+				lines.push(`  ${provider}: ${currentName ?? "(unnamed)"}`);
 			}
 		} else {
-			lines.push("Active (auth.json): (none)");
+			lines.push("  (none)");
+		}
+
+		for (const [provider, name] of Object.entries(store.current)) {
+			if (!loggedIn.includes(provider) && name) {
+				lines.push(`  ${provider}: awaiting /login as '${name}'`);
+			}
 		}
 
 		const savedProviders = getSavedProviders(store);
 		if (savedProviders.length > 0) {
-			lines.push("", "Saved slots:");
+			lines.push("", "Saved:");
 			for (const provider of savedProviders) {
 				for (const name of getSlotNames(store, provider)) {
 					lines.push(`  ${provider}/${name}`);
@@ -219,110 +205,85 @@ export default function (pi: ExtensionAPI) {
 		ctx.ui.notify(buildStatusLines(store, ctx).join("\n"), "info");
 	}
 
-	async function handleName(
-		providerArg: string | undefined,
-		nameArg: string | undefined,
-		ctx: ExtensionContext,
-	): Promise<void> {
-		ctx.modelRegistry.authStorage.reload();
-		const loggedIn = authProviders(ctx);
-		if (loggedIn.length === 0) {
-			ctx.ui.notify("No credentials in auth.json to label.", "warning");
-			return;
-		}
-
-		let provider = providerArg;
-		if (!provider) {
-			provider = await chooseActiveProvider(ctx, "Name which active provider?");
-		}
-		if (!provider) return;
-
-		if (!authHas(ctx, provider)) {
-			ctx.ui.notify(`No active credential for '${provider}'.`, "error");
-			return;
-		}
+	async function handleUse(nameArg: string | undefined, ctx: ExtensionContext): Promise<void> {
+		const store = loadCanonicalStore(ctx);
+		const activeProviders = authProviders(ctx);
 
 		let name = nameArg;
 		if (!name) {
-			name = await promptForSlotName(ctx, `Name for current ${provider} auth:`);
+			const slotNames = getAllSlotNames(store);
+			if (slotNames.length > 0) {
+				const newOption = "(new name)";
+				const options = [...slotNames, newOption];
+				const choice = await ctx.ui.select("Switch to:", options);
+				if (!choice) return;
+				if (choice === newOption) {
+					name = await promptForSlotName(ctx, "New account name:");
+				} else {
+					name = choice;
+				}
+			} else {
+				name = await promptForSlotName(ctx, "New account name:");
+			}
 		}
 		if (!name) return;
 
-		const store = loadCanonicalStore(ctx);
-		const existingSlot = store.slots[provider]?.[name];
-		const currentName = getCurrentName(store, provider);
-		if (existingSlot && currentName !== name) {
-			ctx.ui.notify(
-				`Slot '${provider}/${name}' already exists as an inactive saved account. Use '/account use ${provider} ${name}' to switch to it, or remove it first.`,
-				"error",
-			);
-			return;
-		}
+		// Resolve provider
+		const slotProvs = providersWithSlot(store, name);
+		let provider: string | undefined;
 
-		store.current[provider] = name;
-		saveStore(store);
-		ctx.ui.notify(`Current ${provider} auth is now labeled '${name}'.`, "info");
-	}
-
-	async function handleUse(
-		providerArg: string | undefined,
-		nameArg: string | undefined,
-		ctx: ExtensionContext,
-	): Promise<void> {
-		const store = loadCanonicalStore(ctx);
-
-		let provider = providerArg;
-		if (!provider) {
-			const activeProviders = authProviders(ctx);
-			const savedProviders = getSavedProviders(store);
-			const providers = [...new Set([...activeProviders, ...savedProviders])];
-			if (providers.length === 0) {
+		if (slotProvs.length > 0) {
+			provider = slotProvs.length === 1
+				? slotProvs[0]
+				: await ctx.ui.select(`'${name}' exists for multiple providers:`, slotProvs);
+		} else {
+			if (activeProviders.length === 0) {
 				ctx.ui.notify("No credentials configured. Use /login first.", "warning");
 				return;
 			}
-			provider = providers.length === 1 ? providers[0] : await ctx.ui.select("Use which provider?", providers);
+			provider = activeProviders.length === 1
+				? activeProviders[0]
+				: await ctx.ui.select("Save which provider's credential?", activeProviders);
 		}
 		if (!provider) return;
-
-		let name = nameArg;
-		if (!name) {
-			const slotNames = getSlotNames(store, provider);
-			name = slotNames.length === 1
-				? slotNames[0]
-				: await promptForSlotName(ctx, `Slot name to use for ${provider}:`);
-		}
-		if (!name) return;
 
 		const activeCredential = authGet(ctx, provider);
 		const hasActive = activeCredential !== undefined;
 		const targetCredential = store.slots[provider]?.[name];
 
-		// Existing slot: activate it, swapping current active auth out if needed.
+		// Case 1: Slot exists, swap to it
 		if (targetCredential) {
 			if (hasActive) {
-				const currentName = await resolveCurrentNameForSwap(store, provider, ctx, name);
-				if (!currentName) return;
+				const currentName = getCurrentName(store, provider);
 				if (currentName === name) {
-					ctx.ui.notify(`'${provider}/${name}' is already the active account.`, "info");
+					ctx.ui.notify(`'${name}' is already the active ${provider} account.`, "info");
 					return;
 				}
-				if (store.slots[provider]?.[currentName]) {
+
+				let parkName = currentName;
+				if (!parkName) {
+					parkName = await promptForSlotName(
+						ctx,
+						`Name the current ${provider} credential before switching to '${name}':`,
+					);
+					if (!parkName) return;
+				}
+
+				if (parkName === name) {
+					ctx.ui.notify(`'${name}' is already the active ${provider} account.`, "info");
+					return;
+				}
+
+				if (store.slots[provider]?.[parkName]) {
 					ctx.ui.notify(
-						`Cannot switch because '${provider}/${currentName}' already exists as a saved slot. Rename or remove it first.`,
+						`Cannot switch: saved slot '${provider}/${parkName}' already exists. Remove it first.`,
 						"error",
 					);
 					return;
 				}
 
 				if (!store.slots[provider]) store.slots[provider] = {};
-				store.slots[provider][currentName] = activeCredential;
-				authSet(ctx, provider, targetCredential);
-				delete store.slots[provider][name];
-				store.current[provider] = name;
-				cleanupProvider(store, provider);
-				saveStore(store);
-				ctx.ui.notify(`Switched ${provider} from '${currentName}' to '${name}'.`, "info");
-				return;
+				store.slots[provider][parkName] = activeCredential;
 			}
 
 			authSet(ctx, provider, targetCredential);
@@ -330,68 +291,94 @@ export default function (pi: ExtensionAPI) {
 			store.current[provider] = name;
 			cleanupProvider(store, provider);
 			saveStore(store);
-			ctx.ui.notify(`Loaded ${provider}/${name} into auth.json.`, "info");
+			ctx.ui.notify(`Switched ${provider} to '${name}'.`, "info");
 			return;
 		}
 
-		// Missing slot name: park current active auth under this new name.
+		// Case 2: Slot doesn't exist, park current and prepare for new login
 		if (!hasActive) {
-			ctx.ui.notify(`No active '${provider}' auth to store as '${name}'.`, "error");
+			ctx.ui.notify(`No active ${provider} credential to save.`, "error");
 			return;
 		}
 
-		if (store.slots[provider]?.[name]) {
-			ctx.ui.notify(`Slot '${provider}/${name}' already exists.`, "error");
+		const currentName = getCurrentName(store, provider);
+		if (currentName === name) {
+			ctx.ui.notify(`'${name}' is already the active ${provider} account.`, "info");
+			return;
+		}
+
+		let parkName = currentName;
+		if (!parkName) {
+			parkName = await promptForSlotName(
+				ctx,
+				`Name the current ${provider} credential before switching to '${name}':`,
+			);
+			if (!parkName) return;
+		}
+
+		if (parkName === name) {
+			// User named the current credential the same as the target.
+			// That just means "this IS that account", so label it and stop.
+			store.current[provider] = name;
+			saveStore(store);
+			ctx.ui.notify(`Named current ${provider} credential '${name}'.`, "info");
+			return;
+		}
+
+		if (store.slots[provider]?.[parkName]) {
+			ctx.ui.notify(
+				`Cannot save: slot '${provider}/${parkName}' already exists. Remove it first.`,
+				"error",
+			);
 			return;
 		}
 
 		if (!store.slots[provider]) store.slots[provider] = {};
-		store.slots[provider][name] = activeCredential;
+		store.slots[provider][parkName] = activeCredential;
 		authRemove(ctx, provider);
-		delete store.current[provider];
+		store.current[provider] = name;
 		cleanupProvider(store, provider);
 		saveStore(store);
 		ctx.ui.notify(
-			`Stored current ${provider} auth as '${name}' and cleared auth.json for that provider. You can now /login ${provider} safely.`,
+			`Saved ${provider} as '${parkName}'. Run /login ${provider} to set up '${name}'.`,
 			"info",
 		);
 	}
 
-	async function handleRm(
-		providerArg: string | undefined,
-		nameArg: string | undefined,
-		ctx: ExtensionContext,
-	): Promise<void> {
+	async function handleRm(nameArg: string | undefined, ctx: ExtensionContext): Promise<void> {
 		const store = loadCanonicalStore(ctx);
-		const items: Array<{ provider: string; name: string }> = [];
-		const options: string[] = [];
-		for (const [provider, slots] of Object.entries(store.slots)) {
-			for (const name of Object.keys(slots)) {
-				items.push({ provider, name });
-				options.push(`${provider}/${name}`);
-			}
-		}
+		const entries = getAllSlotEntries(store);
 
-		if (items.length === 0) {
+		if (entries.length === 0) {
 			ctx.ui.notify("No saved slots to remove.", "warning");
 			return;
 		}
 
-		let provider = providerArg;
 		let name = nameArg;
-		if (!provider) {
-			provider = await chooseSavedProvider(store, ctx, "Remove from which provider?");
-		}
-		if (!provider) return;
+		let provider: string | undefined;
+
 		if (!name) {
-			const slotNames = getSlotNames(store, provider);
-			if (slotNames.length === 0) {
-				ctx.ui.notify(`No saved slots for '${provider}'.`, "error");
+			const options = entries.map((e) => `${e.name} (${e.provider})`);
+			const choice = entries.length === 1
+				? options[0]
+				: await ctx.ui.select("Remove which slot?", options);
+			if (!choice) return;
+			const selected = entries[options.indexOf(choice)];
+			name = selected.name;
+			provider = selected.provider;
+		}
+
+		if (!provider) {
+			const slotProvs = providersWithSlot(store, name);
+			if (slotProvs.length === 0) {
+				ctx.ui.notify(`No slot named '${name}'.`, "error");
 				return;
 			}
-			name = slotNames.length === 1 ? slotNames[0] : await ctx.ui.select(`Remove which ${provider} slot?`, slotNames);
+			provider = slotProvs.length === 1
+				? slotProvs[0]
+				: await ctx.ui.select(`'${name}' exists for multiple providers:`, slotProvs);
 		}
-		if (!name) return;
+		if (!provider) return;
 
 		if (!store.slots[provider]?.[name]) {
 			ctx.ui.notify(`No slot '${provider}/${name}'.`, "error");
@@ -421,47 +408,35 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 
-		type Action =
-			| { kind: "name"; provider: string }
-			| { kind: "use"; provider: string; name: string };
-
 		const options: string[] = [];
-		const actions: Action[] = [];
+		const handlers: Array<() => Promise<void>> = [];
 
+		// Switch to saved slots
+		for (const provider of savedProviders) {
+			for (const name of getSlotNames(store, provider)) {
+				options.push(`Switch to ${name} (${provider})`);
+				handlers.push(() => handleUse(name, ctx));
+			}
+		}
+
+		// Save current and set up new account
 		for (const provider of activeProviders) {
 			const currentName = getCurrentName(store, provider);
-			options.push(`Name ${provider}${currentName ? ` as ${currentName}` : ""}`);
-			actions.push({ kind: "name", provider });
+			options.push(`Save ${currentName ?? provider} and set up new account`);
+			handlers.push(async () => {
+				const newName = await promptForSlotName(ctx, `New account name for ${provider}:`);
+				if (newName) await handleUse(newName, ctx);
+			});
 		}
 
-		for (const [provider, slots] of Object.entries(store.slots)) {
-			for (const name of Object.keys(slots)) {
-				options.push(`Use ${provider}/${name}`);
-				actions.push({ kind: "use", provider, name });
-			}
-		}
-
-		if (activeProviders.length > 0) {
-			for (const provider of activeProviders) {
-				options.push(`Use ${provider}/<new name>  (store current and clear active auth)`);
-				actions.push({ kind: "use", provider, name: "" });
-			}
+		if (options.length === 0) {
+			ctx.ui.notify(statusLines.join("\n"), "info");
+			return;
 		}
 
 		const choice = await ctx.ui.select(statusLines.join("\n") + "\n", options);
 		if (choice === undefined) return;
-		const action = actions[options.indexOf(choice)];
-		if (action.kind === "name") {
-			await handleName(action.provider, undefined, ctx);
-			return;
-		}
-		if (action.name) {
-			await handleUse(action.provider, action.name, ctx);
-			return;
-		}
-		const newName = await promptForSlotName(ctx, `New name for current ${action.provider} auth:`);
-		if (!newName) return;
-		await handleUse(action.provider, newName, ctx);
+		await handlers[options.indexOf(choice)]();
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -470,13 +445,13 @@ export default function (pi: ExtensionAPI) {
 		}
 		ctx.modelRegistry.authStorage.reload();
 		const store = loadStore();
-		const activeProviders = new Set(authProviders(ctx));
-		sanitizeStore(store, activeProviders);
-		saveStore(store);
+		if (sanitizeStore(store)) {
+			saveStore(store);
+		}
 	});
 
 	pi.registerCommand("account", {
-		description: "Manage account credentials (/account name, use, rm, status)",
+		description: "Manage account credentials (/account use, rm, status)",
 		getArgumentCompletions: (prefix: string) => {
 			const parts = prefix.split(/\s+/);
 			const store = loadStore();
@@ -484,23 +459,15 @@ export default function (pi: ExtensionAPI) {
 			if (parts.length <= 1) {
 				const input = parts[0] ?? "";
 				return [...SUBCOMMANDS]
-					.filter((subcommand) => subcommand.startsWith(input))
-					.map((subcommand) => ({ value: subcommand, label: subcommand }));
+					.filter((sub) => sub.startsWith(input))
+					.map((sub) => ({ value: sub, label: sub }));
 			}
 
 			const sub = parts[0];
 			const input = parts[parts.length - 1];
 
 			if (parts.length === 2 && (sub === "use" || sub === "rm")) {
-				const providers = sub === "use" ? getKnownProviders(store) : getSavedProviders(store);
-				return providers
-					.filter((provider) => provider.startsWith(input))
-					.map((provider) => ({ value: provider, label: provider }));
-			}
-
-			if (parts.length === 3 && (sub === "use" || sub === "rm")) {
-				const provider = parts[1];
-				return getSlotNames(store, provider)
+				return getAllSlotNames(store)
 					.filter((name) => name.startsWith(input))
 					.map((name) => ({ value: name, label: name }));
 			}
@@ -514,20 +481,16 @@ export default function (pi: ExtensionAPI) {
 				handleStatus(ctx);
 				return;
 			}
-			if (sub === "name") {
-				await handleName(parts[1], parts[2], ctx);
-				return;
-			}
 			if (sub === "use") {
-				await handleUse(parts[1], parts[2], ctx);
+				await handleUse(parts[1], ctx);
 				return;
 			}
 			if (sub === "rm") {
-				await handleRm(parts[1], parts[2], ctx);
+				await handleRm(parts[1], ctx);
 				return;
 			}
 			if (sub) {
-				ctx.ui.notify(`Unknown subcommand '${sub}'. Use: name, use, rm, status.`, "error");
+				ctx.ui.notify(`Unknown subcommand '${sub}'. Use: use, rm, status.`, "error");
 				return;
 			}
 			await handleInteractive(ctx);
