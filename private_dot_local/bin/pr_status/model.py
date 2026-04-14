@@ -148,6 +148,11 @@ class PR:
     has_conflicts: bool = False
     sources: list[str] = field(default_factory=list)
 
+    # Comment tracking (human comments only, bots excluded)
+    human_comment_count: int = 0
+    last_human_commenter: str = ""
+    last_human_comment_at: str = ""
+
     # Raw data for notification diffing
     _raw: dict = field(default_factory=dict, repr=False)
 
@@ -237,6 +242,35 @@ def derive_display_state(pr: PR) -> DisplayState:
 # ============================================================
 
 
+# ============================================================
+# Bot detection
+# ============================================================
+
+_KNOWN_BOTS: frozenset[str] = frozenset({
+    "coderabbitai",
+    "copilot-pull-request-reviewer",
+    "copilot",
+    "github-advanced-security",
+    "dependabot",
+    "renovate",
+    "codecov",
+    "stale",
+    "sweep-ai",
+    "sonarcloud",
+    "codeclimate",
+    "deepsource-autofix",
+})
+
+
+def is_bot(login: str) -> bool:
+    """Return True if the login looks like a bot account."""
+    if not login:
+        return True
+    if login.endswith("[bot]"):
+        return True
+    return login.lower() in _KNOWN_BOTS
+
+
 def parse_pr(raw: dict, repo_name: str, sources: Optional[list[str]] = None) -> PR:
     """Parse a raw GH API PR dict into our model."""
     state = raw.get("state", "")
@@ -278,6 +312,16 @@ def parse_pr(raw: dict, repo_name: str, sources: Optional[list[str]] = None) -> 
     # CI
     ci, ci_failed = parse_ci(raw)
 
+    # Human comments (excludes the PR author's own comments and bots)
+    pr_author = (raw.get("author") or {}).get("login", "")
+    human_comments = [
+        c for c in (raw.get("comments") or [])
+        if not is_bot((c.get("author") or {}).get("login", ""))
+        and (c.get("author") or {}).get("login", "") != pr_author
+    ]
+    human_comments.sort(key=lambda c: c.get("createdAt", ""))
+    last_comment = human_comments[-1] if human_comments else None
+
     return PR(
         number=raw.get("number", 0),
         title=raw.get("title", ""),
@@ -295,6 +339,9 @@ def parse_pr(raw: dict, repo_name: str, sources: Optional[list[str]] = None) -> 
         merged_at=raw.get("mergedAt", ""),
         has_conflicts=has_conflicts,
         sources=list(sources or []),
+        human_comment_count=len(human_comments),
+        last_human_commenter=(last_comment.get("author") or {}).get("login", "") if last_comment else "",
+        last_human_comment_at=last_comment.get("createdAt", "") if last_comment else "",
         _raw=raw,
     )
 

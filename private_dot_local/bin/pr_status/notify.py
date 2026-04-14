@@ -92,6 +92,15 @@ def diff_and_notify(old_prs: list[PR], new_prs: list[PR]) -> None:
         elif old_pr.has_conflicts and not new_pr.has_conflicts:
             changes.append(f"✅ Conflicts resolved: {title}")
 
+        # ---- New human comments on authored PRs ----
+
+        authored = "authored_open" in set(new_pr.sources) or "authored_merged" in set(new_pr.sources)
+        if authored and new_pr.human_comment_count > old_pr.human_comment_count:
+            commenter = new_pr.last_human_commenter or "Someone"
+            n = new_pr.human_comment_count - old_pr.human_comment_count
+            label = f"{n} comment" + ("s" if n != 1 else "")
+            changes.append(f"💬 {commenter} left {label}: {title}")
+
         # ---- Individual reviewer events (even if aggregate state unchanged) ----
 
         if new_pr.lifecycle not in (PRLifecycle.OPEN, PRLifecycle.DRAFT):

@@ -10,7 +10,7 @@ from .util import run
 
 PR_FIELDS = (
     "number,title,state,isDraft,createdAt,updatedAt,mergedAt,mergeCommit,"
-    "headRefName,baseRefName,author,reviews,reviewRequests,"
+    "headRefName,baseRefName,author,reviews,reviewRequests,comments,"
     "statusCheckRollup,reviewDecision,mergeStateStatus,mergeable,url"
 )
 
