@@ -8,15 +8,32 @@ import subprocess
 from typing import Optional
 
 
-def run(cmd: list[str], env: Optional[dict] = None, timeout: int = 30) -> Optional[str]:
+def run(
+    cmd: list[str],
+    env: Optional[dict] = None,
+    timeout: int = 30,
+    warn_on_failure: Optional[str] = None,
+) -> Optional[str]:
     """Run a command, return stdout or None on failure."""
     try:
         merged_env = {**os.environ, **(env or {})}
         r = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout, env=merged_env,
         )
-        return r.stdout.strip() if r.returncode == 0 else None
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+        if r.returncode == 0:
+            return r.stdout.strip()
+        if warn_on_failure:
+            stderr = r.stderr.strip()
+            if stderr:
+                import sys
+                print(f"\033[2m  ⚠ {warn_on_failure}: {stderr[:120]}\033[0m", file=sys.stderr)
+        return None
+    except subprocess.TimeoutExpired:
+        if warn_on_failure:
+            import sys
+            print(f"\033[2m  ⚠ {warn_on_failure}: timed out after {timeout}s\033[0m", file=sys.stderr)
+        return None
+    except FileNotFoundError:
         return None
 
 

@@ -153,6 +153,7 @@ def _search_prs(args: list[str], source: str) -> list[dict]:
     result = run(
         ["gh", "search", "prs", "--limit", "100", "--json", SEARCH_FIELDS, *args],
         timeout=30,
+        warn_on_failure=f"search ({source})",
     )
     return _parse_search_results(result, source)
 
