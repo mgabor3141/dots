@@ -1,0 +1,15 @@
+{
+    "env": {},
+    "apps": [
+        {
+            "name": "Desktop",
+            "image-path": "desktop.png",
+            "output": "",
+            "cmd": "",
+            "prep-cmd": [],
+            "detached": [],
+            "exclude-global-prep-cmd": false,
+            "auto-detach": true
+        }
+    ]
+}

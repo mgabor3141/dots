@@ -104,6 +104,7 @@ AGENTS.md
 .local/share/applications
 .local/share/icons
 
+.var/app/dev.lizardbyte.app.Sunshine
 flatpak
 pacman
 {{- end }}
