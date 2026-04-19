@@ -500,3 +500,10 @@ binds {
         match app-id=r#"^zenity$"#
         geometry-corner-radius 18
     }
+
+    window-rule {
+        match title=r#"^gsr notify$"#
+        default-floating-position x=0 y=0 relative-to="top-right"
+        geometry-corner-radius 0
+        open-focused false
+    }
