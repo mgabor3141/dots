@@ -2,7 +2,11 @@
 
 Custom PipeWire config lives in `pipewire.conf.d/`:
 
-- `custom.conf` — Lowers `default.clock.min-quantum` to 256 for lower audio latency.
+- `custom.conf` — Sets quantum=256 (5.3ms), min=64, max=1024 for low-latency
+  audio. The Scarlett 8i6 defaults to quantum 2048 (~43ms) which causes
+  noticeable A/V desync in video editors (Kdenlive/MLT). Quantum 256 survives
+  full CPU saturation with RT scheduling active. Going below 128 causes
+  crackling under heavy load.
 - `10-virtual-sinks.conf` — Creates three virtual nodes (System Audio, Comms, Mic)
   as loopbacks in front of the Scarlett interface. Muting the `mic` node silences
   the loopback output to all apps; `handle-mute-events.sh` bypasses that by
