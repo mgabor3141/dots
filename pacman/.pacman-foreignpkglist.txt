@@ -4,7 +4,6 @@ handy-bin
 it87-dkms-git
 kanata-bin
 nautilus-gnome-disks
-niri-git
 opencode-bin
 piper-tts-bin
 piper-voices-en-us

@@ -69,7 +69,6 @@ kdenlive
 kitty
 kvantum-theme-nordic-git
 lazygit
-libsixel
 libva-nvidia-driver
 libva-utils
 libwnck3
@@ -84,12 +83,14 @@ lsscsi
 man-pages
 meld
 mold
+mpv
 mtools
 musl
 namcap
 nano-syntax-highlighting
 netctl
 nfs-utils
+niri-git
 nix
 noctalia-shell
 noto-color-emoji-fontconfig
@@ -98,7 +99,6 @@ nvidia-container-toolkit
 nvidia-prime
 obs-studio
 octopi
-ollama-cuda
 openai-codex
 opendesktop-fonts
 os-prober
@@ -108,6 +108,7 @@ partclone
 protonup-qt
 pv
 pwvucontrol
+python-opencv-cuda
 python-pywal
 qpwgraph
 qt5ct
@@ -117,12 +118,12 @@ reflector
 satty
 sddm
 sg3_utils
-slurp
 sof-firmware
 speedtest-cli
 spoofdpi
 spotify-launcher
 strace
+sunshine
 sushi
 swayidle
 systemd-boot-manager
@@ -142,12 +143,12 @@ wayland-pipewire-idle-inhibit
 wayland-protocols
 websocat
 wev
+wf-recorder
 wtype
 xl2tpd
 xorg-xinit
 xorg-xinput
 xorg-xkill
 xwayland-satellite
-yt-dlp
 zed
 zen-browser-bin

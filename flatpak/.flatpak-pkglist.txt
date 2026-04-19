@@ -1,5 +1,4 @@
 com.moonlight_stream.Moonlight
-com.rustdesk.RustDesk
 com.sindresorhus.Caprine
 com.visualstudio.code
 dev.lizardbyte.app.Sunshine

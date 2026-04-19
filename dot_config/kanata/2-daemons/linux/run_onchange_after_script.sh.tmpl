@@ -98,6 +98,7 @@ User=$KANATA_USER
 Group=$KANATA_USER
 ExecStart=$KANATA_BIN_PATH --cfg "$SYSTEM_KANATA_CONFIG_DST/razer.kbd"
 Restart=yes
+Nice=-10
 # Security
 CapabilityBoundingSet=
 DeviceAllow=/dev/uinput rw

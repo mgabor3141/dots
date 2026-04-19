@@ -37,7 +37,6 @@ python-secretstorage
 python-setuptools
 python-srt_equalizer
 python-truststore
-python-vosk
 python-wxpython
 python-xattr
 qemu-user-static
