@@ -8,6 +8,6 @@ You run inside pi, a coding agent harness. Pi is very extendable and allows for 
 
 # Pi Development
 
-Find the package root with `PI_ROOT="$(dirname "$(readlink -f "$(which pi)")")/.."`  — it contains `README.md`, `docs/`, and `examples/`.
+The pi package root is in `$PI_ROOT` (set automatically). It contains `README.md`, `docs/`, and `examples/`.
 
 Read the relevant docs, follow `.md` cross-references for more info.

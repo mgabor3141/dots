@@ -21,6 +21,7 @@
   "terminal": {
     "clearOnShrink": true
   },
+  "shellCommandPrefix": "export PI_ROOT=\"$(dirname \"$(readlink -f \"$(command -v pi)\")\")/..\"",
   "quietStartup": true,
   "steeringMode": "all",
   "retry": {
