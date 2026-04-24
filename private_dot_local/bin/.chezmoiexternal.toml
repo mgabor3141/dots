@@ -25,23 +25,6 @@
 {{ end -}}
 
 {{- if ne .chezmoi.os "darwin" }}
-{{- $gmuxVersion := (gitHubLatestRelease "gmuxapp/gmux").TagName }}
-["gmux"]
-    type = "archive-file"
-    url = "https://github.com/gmuxapp/gmux/releases/download/{{ $gmuxVersion }}/gmux_{{ trimPrefix "v" $gmuxVersion }}_linux_{{ .chezmoi.arch }}.tar.gz"
-    executable = true
-    path = "gmux"
-    refreshPeriod = "168h"
-
-["gmuxd"]
-    type = "archive-file"
-    url = "https://github.com/gmuxapp/gmux/releases/download/{{ $gmuxVersion }}/gmux_{{ trimPrefix "v" $gmuxVersion }}_linux_{{ .chezmoi.arch }}.tar.gz"
-    executable = true
-    path = "gmuxd"
-    refreshPeriod = "168h"
-{{- end }}
-
-{{- if ne .chezmoi.os "darwin" }}
 ["difft"]
     type = "archive-file"
     url = "https://github.com/Wilfred/difftastic/releases/download/0.67.0/difft-x86_64-unknown-linux-musl.tar.gz"
