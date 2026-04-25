@@ -53,7 +53,7 @@
   },
   {
     "label": "push to main",
-    "command": "jj b s -r @- main && jj gp",
+    "command": "jj gf && reheat && jj b s -r @- main && jj gp",
     "hide": "on_success",
   },
 ]
