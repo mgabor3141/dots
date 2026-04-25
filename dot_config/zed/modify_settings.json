@@ -23,7 +23,7 @@
     },
     "expand_terminal_card": false,
     "expand_edit_card": false,
-    "play_sound_when_agent_done": true,
+    "play_sound_when_agent_done": "always",
     "default_profile": "write",
     "model_parameters": []
   },
@@ -219,15 +219,17 @@
   // Profiles
   "profiles": {
     "Minimal": {
-      "status_bar": {
-        "experimental.show": false
-      },
-      "toolbar": {
-        "agent_review": false,
-        "breadcrumbs": false,
-        "code_actions": false,
-        "quick_actions": false,
-        "selections_menu": false
+      "settings": {
+        "status_bar": {
+          "experimental.show": false
+        },
+        "toolbar": {
+          "agent_review": false,
+          "breadcrumbs": false,
+          "code_actions": false,
+          "quick_actions": false,
+          "selections_menu": false
+        }
       }
     }
   },
