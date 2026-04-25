@@ -1,0 +1,469 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+"""Analyze pi session JSONL files for context-size growth.
+
+Each pi assistant turn records token usage. The total request context size
+for a turn is `input + cacheRead + cacheWrite`. This tool walks a session,
+computes the delta between consecutive assistant turns, and reports the
+biggest jumps along with what the agent did between turns (tool calls and
+their result sizes), so you can spot which actions bloat your context.
+
+Usage:
+    pi-context-growth                         # most recent session for cwd
+    pi-context-growth --cwd /some/path        # most recent session for path
+    pi-context-growth --session FILE          # specific session file
+    pi-context-growth --all                   # all sessions, ranked
+    pi-context-growth --top 20                # show top N jumps (default 10)
+    pi-context-growth --threshold 5000        # only jumps >= N tokens (default 2000)
+"""
+
+import argparse
+import json
+import os
+import sys
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Iterable
+
+SESSIONS_DIR = Path.home() / ".pi" / "agent" / "sessions"
+DEFAULT_THRESHOLD = 2000
+DEFAULT_TOP = 10
+
+
+# ── data model ─────────────────────────────────────────────────────────
+
+
+@dataclass
+class Entry:
+    raw: dict[str, Any]
+    type: str
+    id: str | None
+    parent_id: str | None
+    timestamp: str | None
+
+    @property
+    def message(self) -> dict[str, Any] | None:
+        return self.raw.get("message") if self.type == "message" else None
+
+    @property
+    def role(self) -> str | None:
+        m = self.message
+        return m.get("role") if m else None
+
+
+@dataclass
+class Turn:
+    """An assistant message with its computed context size and what preceded it."""
+
+    entry: Entry
+    index: int  # 0-based assistant turn index within the session branch
+    ctx_tokens: int
+    output_tokens: int
+    tool_calls: list[dict[str, Any]]  # the tool calls this assistant made
+    intervening: list[Entry] = field(default_factory=list)
+    # intervening = entries between the *previous* assistant turn and this one
+    # (typically: toolResult entries from the previous assistant's tool calls,
+    # plus any user message or bashExecution that occurred)
+
+
+@dataclass
+class Jump:
+    from_turn: Turn | None  # None for the very first turn (delta from 0)
+    to_turn: Turn
+    delta: int
+    session_path: Path
+
+    @property
+    def turn_index(self) -> int:
+        return self.to_turn.index
+
+
+# ── parsing ────────────────────────────────────────────────────────────
+
+
+def parse_jsonl(path: Path) -> list[Entry]:
+    entries: list[Entry] = []
+    with path.open("r", encoding="utf-8") as f:
+        for lineno, line in enumerate(f, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError as e:
+                print(
+                    f"warning: {path}:{lineno}: {e}",
+                    file=sys.stderr,
+                )
+                continue
+            entries.append(
+                Entry(
+                    raw=raw,
+                    type=raw.get("type", "unknown"),
+                    id=raw.get("id"),
+                    parent_id=raw.get("parentId"),
+                    timestamp=raw.get("timestamp"),
+                )
+            )
+    return entries
+
+
+def walk_active_branch(entries: list[Entry]) -> list[Entry]:
+    """Return entries on the active branch in chronological order.
+
+    The active branch is the chain from the last entry in the file (current
+    leaf) back to the root via parentId. This handles branched sessions
+    correctly: abandoned branches are excluded.
+    """
+    if not entries:
+        return []
+    by_id: dict[str, Entry] = {e.id: e for e in entries if e.id is not None}
+    # The header entry has type=session and parentId=null; we keep going until
+    # parent_id is None or unknown.
+    leaf = entries[-1]
+    chain: list[Entry] = []
+    cur: Entry | None = leaf
+    seen: set[str] = set()
+    while cur is not None:
+        if cur.id and cur.id in seen:
+            break  # cycle guard
+        if cur.id:
+            seen.add(cur.id)
+        chain.append(cur)
+        if cur.parent_id is None:
+            break
+        cur = by_id.get(cur.parent_id)
+    chain.reverse()
+    return chain
+
+
+# ── analysis ───────────────────────────────────────────────────────────
+
+
+def compute_turns(branch: list[Entry]) -> list[Turn]:
+    turns: list[Turn] = []
+    pending_intervening: list[Entry] = []
+    turn_idx = 0
+    last_compaction_at: int | None = None
+    for entry in branch:
+        if entry.type == "compaction":
+            # After compaction, context resets. Treat the next assistant turn
+            # as a fresh baseline.
+            pending_intervening = [entry]
+            last_compaction_at = turn_idx
+            continue
+        if entry.type != "message":
+            # Track non-message entries (model_change, thinking_level_change,
+            # etc.) as intervening for completeness but they have no content.
+            pending_intervening.append(entry)
+            continue
+        msg = entry.message or {}
+        role = msg.get("role")
+        if role == "assistant":
+            usage = msg.get("usage") or {}
+            ctx = (
+                int(usage.get("input", 0) or 0)
+                + int(usage.get("cacheRead", 0) or 0)
+                + int(usage.get("cacheWrite", 0) or 0)
+            )
+            stop_reason = msg.get("stopReason")
+            # Skip aborted/error turns with no real usage; they don't reflect
+            # actual context size and would corrupt the baseline. Treat them
+            # as intervening so subsequent turns compare to the last real turn.
+            if ctx == 0 and stop_reason in ("aborted", "error"):
+                pending_intervening.append(entry)
+                continue
+            output = int(usage.get("output", 0) or 0)
+            content = msg.get("content") or []
+            tool_calls = [c for c in content if isinstance(c, dict) and c.get("type") == "toolCall"]
+            turns.append(
+                Turn(
+                    entry=entry,
+                    index=turn_idx,
+                    ctx_tokens=ctx,
+                    output_tokens=output,
+                    tool_calls=tool_calls,
+                    intervening=pending_intervening,
+                )
+            )
+            turn_idx += 1
+            pending_intervening = []
+        else:
+            pending_intervening.append(entry)
+    return turns
+
+
+def compute_jumps(turns: list[Turn], session_path: Path, threshold: int) -> list[Jump]:
+    jumps: list[Jump] = []
+    prev: Turn | None = None
+    for t in turns:
+        prev_ctx = prev.ctx_tokens if prev else 0
+        delta = t.ctx_tokens - prev_ctx
+        if delta >= threshold:
+            jumps.append(Jump(from_turn=prev, to_turn=t, delta=delta, session_path=session_path))
+        prev = t
+    return jumps
+
+
+# ── content sizing ─────────────────────────────────────────────────────
+
+
+def estimate_tokens(chars: int) -> int:
+    # A rough heuristic; the real token count varies by tokenizer. Used only
+    # for relative attribution in the "intervening" list, never reported as
+    # ground truth.
+    return max(1, chars // 4)
+
+
+def content_chars(content: Any) -> int:
+    """Count characters in a message content array (strings or block list)."""
+    if content is None:
+        return 0
+    if isinstance(content, str):
+        return len(content)
+    if isinstance(content, list):
+        total = 0
+        for block in content:
+            if isinstance(block, str):
+                total += len(block)
+            elif isinstance(block, dict):
+                if "text" in block and isinstance(block["text"], str):
+                    total += len(block["text"])
+                elif "thinking" in block and isinstance(block["thinking"], str):
+                    total += len(block["thinking"])
+                elif block.get("type") == "image":
+                    # Images are billed as their own block; rough fixed cost.
+                    total += 4000  # ~1k tokens guess
+                elif "data" in block and isinstance(block["data"], str):
+                    total += len(block["data"]) // 10  # base64 overhead
+        return total
+    return 0
+
+
+def describe_intervening(entries: list[Entry]) -> list[str]:
+    """One short line per intervening entry, with size info for the heavy ones."""
+    lines: list[str] = []
+    for e in entries:
+        if e.type == "message":
+            msg = e.raw.get("message") or {}
+            role = msg.get("role")
+            if role == "toolResult":
+                tool = msg.get("toolName", "?")
+                chars = content_chars(msg.get("content"))
+                kb = chars / 1024
+                tok = estimate_tokens(chars)
+                tag = " [ERROR]" if msg.get("isError") else ""
+                lines.append(f"  toolResult({tool}){tag}  ~{kb:5.1f} kB  ~{tok/1000:5.1f}k tok")
+            elif role == "user":
+                chars = content_chars(msg.get("content"))
+                kb = chars / 1024
+                tok = estimate_tokens(chars)
+                # Skip noisy zero-size user messages
+                if chars > 0:
+                    lines.append(f"  user message       ~{kb:5.1f} kB  ~{tok/1000:5.1f}k tok")
+            elif role == "bashExecution":
+                cmd = (msg.get("command") or "").splitlines()[0][:60]
+                out_chars = len(msg.get("output") or "")
+                kb = out_chars / 1024
+                tok = estimate_tokens(out_chars)
+                lines.append(f"  bash !{cmd!r}  ~{kb:.1f} kB  ~{tok/1000:.1f}k tok")
+            elif role == "custom":
+                ct = msg.get("customType", "?")
+                chars = content_chars(msg.get("content"))
+                lines.append(f"  custom({ct})  ~{chars/1024:.1f} kB")
+        elif e.type == "compaction":
+            lines.append("  ↓ compaction")
+        elif e.type == "branch_summary":
+            lines.append("  ↓ branch summary")
+        elif e.type == "model_change":
+            provider = e.raw.get("provider", "?")
+            model_id = e.raw.get("modelId", "?")
+            lines.append(f"  ⚠  model_change → {provider}/{model_id}  (cache invalidated, retokenized)")
+        elif e.type == "thinking_level_change":
+            lvl = e.raw.get("thinkingLevel", "?")
+            lines.append(f"  thinking_level_change → {lvl}")
+    return lines
+
+
+def describe_tool_calls(tool_calls: list[dict[str, Any]]) -> str:
+    if not tool_calls:
+        return "(no tool calls)"
+    parts: list[str] = []
+    for tc in tool_calls:
+        name = tc.get("name", "?")
+        args = tc.get("arguments") or {}
+        summary = summarize_tool_args(name, args)
+        parts.append(f"{name}({summary})" if summary else name)
+    return ", ".join(parts)
+
+
+def summarize_tool_args(name: str, args: dict[str, Any]) -> str:
+    """One-line argument summary keyed by tool name."""
+    if not isinstance(args, dict):
+        return ""
+    if name in ("read", "Read"):
+        p = args.get("path", "")
+        rng = ""
+        if "offset" in args or "limit" in args:
+            rng = f" @{args.get('offset', 1)}+{args.get('limit', '?')}"
+        return f"{p}{rng}"
+    if name in ("write", "Write"):
+        return str(args.get("path", ""))
+    if name in ("edit", "Edit"):
+        return str(args.get("path", ""))
+    if name in ("bash", "Bash"):
+        cmd = (args.get("command") or "").splitlines()[0]
+        return cmd[:80]
+    if name in ("grep", "Grep"):
+        return str(args.get("pattern", ""))[:60]
+    if name in ("glob_files", "find", "Find"):
+        return str(args.get("filePattern") or args.get("pattern") or "")[:60]
+    # Generic fallback: dump first few arg names + lengths
+    keys = list(args.keys())[:3]
+    return ",".join(f"{k}=…" for k in keys)
+
+
+# ── session discovery ──────────────────────────────────────────────────
+
+
+def cwd_session_dir(cwd: Path) -> Path:
+    # pi encodes the cwd by stripping the leading slash, replacing / with -,
+    # and wrapping with double-dashes: /home/x → --home-x--
+    resolved = str(cwd.resolve()).lstrip("/")
+    encoded = "--" + resolved.replace("/", "-") + "--"
+    return SESSIONS_DIR / encoded
+
+
+def list_sessions_for_cwd(cwd: Path) -> list[Path]:
+    d = cwd_session_dir(cwd)
+    if not d.exists():
+        return []
+    return sorted((p for p in d.iterdir() if p.suffix == ".jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def list_all_sessions() -> list[Path]:
+    if not SESSIONS_DIR.exists():
+        return []
+    files: list[Path] = []
+    for d in SESSIONS_DIR.iterdir():
+        if d.is_dir():
+            for f in d.iterdir():
+                if f.suffix == ".jsonl":
+                    files.append(f)
+    return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+# ── reporting ──────────────────────────────────────────────────────────
+
+
+def fmt_k(n: int | float) -> str:
+    return f"{n/1000:.1f}k"
+
+
+def fmt_ts(ts: str | None) -> str:
+    if not ts:
+        return "?"
+    try:
+        # ISO timestamp; strip subsecond and zone for terseness
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        return dt.strftime("%m-%d %H:%M:%S")
+    except Exception:
+        return ts
+
+
+def format_session_header(path: Path, branch: list[Entry], turns: list[Turn]) -> str:
+    if not turns:
+        return f"{path}\n  (no assistant turns)"
+    last_model = "?"
+    for e in branch:
+        if e.type == "model_change":
+            last_model = f"{e.raw.get('provider', '?')}/{e.raw.get('modelId', '?')}"
+        elif e.type == "message" and e.role == "assistant":
+            m = e.message or {}
+            last_model = m.get("model") or last_model
+    peak = max(t.ctx_tokens for t in turns)
+    final = turns[-1].ctx_tokens
+    return (
+        f"{path}\n"
+        f"  model={last_model}  turns={len(turns)}  peak={fmt_k(peak)}  final={fmt_k(final)}"
+    )
+
+
+def print_session_report(path: Path, threshold: int, top: int) -> tuple[int, int]:
+    """Return (peak_ctx, num_jumps) for the session."""
+    entries = parse_jsonl(path)
+    branch = walk_active_branch(entries)
+    turns = compute_turns(branch)
+    jumps = compute_jumps(turns, path, threshold)
+
+    print(format_session_header(path, branch, turns))
+    if not turns:
+        print()
+        return (0, 0)
+
+    if not jumps:
+        print(f"  no jumps ≥ {threshold} tokens")
+        print()
+        return (max(t.ctx_tokens for t in turns), 0)
+
+    jumps_sorted = sorted(jumps, key=lambda j: j.delta, reverse=True)[:top]
+    print(f"  top {len(jumps_sorted)} jump(s) ≥ {threshold} tokens (sorted by size):")
+    for j in jumps_sorted:
+        before = j.from_turn.ctx_tokens if j.from_turn else 0
+        after = j.to_turn.ctx_tokens
+        ts = fmt_ts(j.to_turn.entry.timestamp)
+        print(
+            f"    +{fmt_k(j.delta):>6}  turn {j.to_turn.index:>3}  {ts}  "
+            f"ctx {fmt_k(before)} → {fmt_k(after)}"
+        )
+        prev_calls = j.from_turn.tool_calls if j.from_turn else []
+        if prev_calls:
+            print(f"          prev assistant called: {describe_tool_calls(prev_calls)}")
+        for line in describe_intervening(j.to_turn.intervening):
+            print(f"        {line}")
+    print()
+    return (max(t.ctx_tokens for t in turns), len(jumps))
+
+
+# ── main ───────────────────────────────────────────────────────────────
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Analyze pi session context-size growth.")
+    src = parser.add_mutually_exclusive_group()
+    src.add_argument("--session", type=Path, help="Specific session file to analyze")
+    src.add_argument("--cwd", type=Path, default=None, help="Analyze most-recent session for this cwd (default: $PWD)")
+    src.add_argument("--all", action="store_true", help="Analyze all sessions across all projects")
+    parser.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD, help=f"Minimum jump size in tokens (default {DEFAULT_THRESHOLD})")
+    parser.add_argument("--top", type=int, default=DEFAULT_TOP, help=f"Show top N jumps per session (default {DEFAULT_TOP})")
+    parser.add_argument("--limit-sessions", type=int, default=10, help="With --all, max sessions to print (default 10, sorted by recency)")
+    args = parser.parse_args(argv)
+
+    if args.session:
+        targets = [args.session]
+    elif args.all:
+        targets = list_all_sessions()[: args.limit_sessions]
+        if not targets:
+            print("no sessions found", file=sys.stderr)
+            return 1
+    else:
+        cwd = args.cwd or Path.cwd()
+        sessions = list_sessions_for_cwd(cwd)
+        if not sessions:
+            print(f"no sessions found for {cwd}", file=sys.stderr)
+            return 1
+        targets = [sessions[0]]
+
+    for path in targets:
+        if not path.exists():
+            print(f"session not found: {path}", file=sys.stderr)
+            continue
+        print_session_report(path, args.threshold, args.top)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
