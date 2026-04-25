@@ -1,5 +1,5 @@
 ---
-name: chrome-devtools-cli
+name: chrome-devtools
 description: >
   Browser automation and inspection via the chrome-devtools CLI.
 ---
