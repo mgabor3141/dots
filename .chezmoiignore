@@ -136,3 +136,6 @@ nix-darwin
 
 # Unmanaged
 **/.DS_Store
+
+# Contains personal email, lives on this machine only
+.config/.jira
