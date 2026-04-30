@@ -1,4 +1,4 @@
-# Global Agent Instructions
+# Global Instructions
 
 **Precedence:** Repo/project AGENTS.md > this file > system prompt. When instructions conflict, the more specific source wins.
 
@@ -15,6 +15,10 @@ Never modify test inputs, fixtures, or synthetic data to make assertions pass. I
 ## Types
 
 The type system is your friend. It helps you by flagging that your prior assumptions no longer hold true. Encode your assumptions in the type system. Never bypass the type system by using `any` or other means, if you feel you need to you are likely approaching the problem wrong. Step back and reassess.
+
+## Focused Solutions
+
+You might have heard that "defense in depth" or "belt and suspenders" approaches can be useful, but in practice most of the time these are just excuses for poor understanding of the problem. Is the additional fallback due to general uncertainty of the problem space, or just that you didn't feel like looking into the details enough to know what is actually useful to add?
 
 ## Writing Style
 
