@@ -2,3 +2,4 @@
 @devcontainers/cli
 @antfu/ni
 chrome-devtools-mcp
+prettier
