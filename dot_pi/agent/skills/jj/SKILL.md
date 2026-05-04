@@ -70,3 +70,18 @@ jj rebase -r <rev> -A <new-parent>
 Conflicts are a first class citizen in jj. Conflicted changesets can be moved around and edited like any other changeset. The conflict markers are similar to git's, but give a bit more information about each conflicted hunk.
 
 Resolve conflicts by selecting each conflicted commit with `jj edit` and fixing the conflicts in the working copy. Start from the oldest conflicts, as resolving earlier conflicts might resolve later ones too.
+
+**Stack-wide propagation shortcut.** When a single conflicted file propagates through every commit in a rebased stack, you don't need to walk each one. Resolve in `@`, then push the resolution back to the commit where the file was first introduced:
+
+```bash
+jj squash --from @ --into <ancestor> <path-to-file>
+```
+
+This auto-resolves every descendant in one operation.
+
+## Gotchas
+
+- **Untracked files persist across `jj new`.** Switching to a commit that doesn't track paths the previous commit had on disk leaves those files in place. They get re-snapshotted on the next `jj diff` and pollute the new commit. `rm -rf` the stale dirs explicitly when starting fresh.
+- **`git apply` silently no-ops in jj repos.** It reports `Skipped patch '...'` with exit 0 because the git index is stale relative to jj's working copy. Use `patch -p1 < file.patch` instead when replaying saved diffs.
+- Use `heads(::A & ::B)` for the merge base;.
+- **`jj describe` reads from stdin, not `-F`.** `jj describe --stdin < msg.txt`.
