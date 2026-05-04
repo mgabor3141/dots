@@ -3,7 +3,7 @@
 {
   /*#- includeTemplate "pick" (dict
     "stdin" .chezmoi.stdin
-    "jq" `{ lastChangelogVersion, enabledModels, defaultProvider, defaultModel, hideThinkingBlock, defaultThinkingLevel, compaction }`
+    "jq" `{ lastChangelogVersion, enabledModels, defaultProvider, defaultModel, hideThinkingBlock, defaultThinkingLevel, compaction, warnings }`
   ) */
   "packages": [
     /*# includeTemplate "indent" (dict "n" 4 "text"
@@ -28,6 +28,8 @@
     "enabled": true,
     "maxRetries": 16,
     "baseDelayMs": 2000,
-    "maxDelayMs": 0
+    "provider": {
+      "maxRetryDelayMs": 0
+    }
   }
 }
