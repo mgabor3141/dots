@@ -25,6 +25,7 @@ cachyos-nord-gtk-theme-git
 cachyos-packageinstaller
 cachyos-plymouth-bootanimation
 cachyos-rate-mirrors
+cachyos-settings
 cachyos-snapper-support
 cachyos-v3-mirrorlist
 cachyos-v4-mirrorlist
@@ -99,6 +100,7 @@ nvidia-container-toolkit
 nvidia-prime
 obs-studio
 octopi
+ollama-cuda
 openai-codex
 opendesktop-fonts
 os-prober
