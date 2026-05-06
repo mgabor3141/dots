@@ -13,7 +13,7 @@ backends.ssh.allowed-signers = "{{ .chezmoi.homeDir }}/.ssh/allowed_signers"
 [ui]
 editor = "true"  # no-op so agents/scripts don't hang; fish wrapper sets JJ_EDITOR for interactive use
 default-command = ["log", "--no-pager", "--reversed"]
-diff.tool = ["rtk", "diff", "$left", "$right"]
+diff-formatter = "rtk"
 merge-editor = "meld"
 pager = { command = [ "less", "-FR", "-j3" ] }
 revsets-use-glob-by-default=true
@@ -74,6 +74,11 @@ cleanup = ["abandon", "~immutable() & ~description(glob:'private: *') & ~root():
 
 [merge]
 hunk-level = "line"
+
+[merge-tools.rtk]
+program = "rtk"
+diff-args = ["diff", "$left", "$right"]
+diff-invocation-mode = "file-by-file"
 
 [merge-tools.difft]
 program = "difft"
