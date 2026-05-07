@@ -79,6 +79,22 @@ jj squash --from @ --into <ancestor> <path-to-file>
 
 This auto-resolves every descendant in one operation.
 
+## Bookmarks
+
+`jj abandon` and `jj rebase -r` on a bookmarked commit **delete the bookmark** instead of moving it to the parent. The next `jj git push` propagates the deletion, deleting the remote branch and auto-closing any open PR.
+
+Move the bookmark first:
+
+```bash
+jj bookmark set feat/x -r @-     # to a parent that survives the rewrite
+jj abandon <bad-commit>
+jj git push --bookmark feat/x
+```
+
+The hint `Deleted bookmarks can be pushed...` in any jj output means a bookmark just disappeared locally; `jj git push --dry-run` shows whether you're about to propagate that to the remote.
+
+GitHub will not reopen a PR whose branch was deleted-and-recreated, even at the same SHA.
+
 ## Gotchas
 
 - **Untracked files persist across `jj new`.** Switching to a commit that doesn't track paths the previous commit had on disk leaves those files in place. They get re-snapshotted on the next `jj diff` and pollute the new commit. `rm -rf` the stale dirs explicitly when starting fresh.
