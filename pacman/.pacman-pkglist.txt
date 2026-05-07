@@ -35,6 +35,7 @@ capitaine-cursors
 chezmoi
 chromium
 claude-code
+cloc
 coolercontrol
 cpupower
 difftastic
