@@ -24,6 +24,10 @@ You might have heard that "defense in depth" or "belt and suspenders" approaches
 
 Avoid using emdashes. They are an indicator of "AI slop" and undermine credibility. Prefer commas, semicolons, colons, or separate sentences.
 
+## Tool Gotchas
+
+The `Edit` and `Write` tools take `newText` as a JSON string. JSON escapes are decoded before the bytes hit disk: `\\` becomes a single `\`, `\n` becomes a real newline, `\t` a tab. To write a literal single backslash (bash line-continuation `\`, regex escape `\.`, Windows path), put `\\` in `newText`. To write two literal backslashes, put `\\\\`. When unsure, sanity-check with `cat -A` after the edit; backslash-significant content in shell, regex, and config files is the most common place to get this wrong silently.
+
 ## Maintaining AGENTS.md Files
 
 When editing AGENTS.md files: keep them brief, be proactive about adding critical learnings as you encounter them.
