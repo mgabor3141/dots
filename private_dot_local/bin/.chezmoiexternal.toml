@@ -14,6 +14,13 @@
     executable = true
     path = "dust-v1.2.4-x86_64-unknown-linux-musl/dust"
     checksum.sha256 = "4e313f9f854017e58a2ada4c0d1774677b8cf53d63ab55a991d5871d5f504452"
+
+["shellcheck"]
+    type = "archive-file"
+    url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.gz"
+    executable = true
+    path = "shellcheck-v0.11.0/shellcheck"
+    checksum.sha256 = "b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6"
 {{- end }}
 
 {{ if eq .chezmoi.os "linux" -}}

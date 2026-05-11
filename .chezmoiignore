@@ -49,6 +49,7 @@ AGENTS.md
 !.local/bin/persist
 !.local/bin/session-manager
 !.local/bin/rtk
+!.local/bin/shellcheck
 !.local/bin/yeet
 !.local/bin/gmux
 !.local/bin/gmuxd
