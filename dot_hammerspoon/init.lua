@@ -43,6 +43,24 @@ hs.hotkey.bind({"ctrl", "alt", "cmd"}, ".", function()
     hs.eventtap.keyStroke({"ctrl", "cmd"}, "space")
 end)
 
+-- Keep-awake toggle. Prevents system idle sleep on both AC and battery, but
+-- lets the display dim and turn off normally. Toggled via menubar click or
+-- Hyper+K.
+local keepAwake = hs.menubar.new()
+local function keepAwakeRender()
+    local on = hs.caffeinate.get("systemIdle")
+    keepAwake:setTitle(on and "☕" or "💤")
+    keepAwake:setTooltip(on and "Keep-awake: ON" or "Keep-awake: OFF")
+end
+local function keepAwakeToggle()
+    local on = not hs.caffeinate.get("systemIdle")
+    hs.caffeinate.set("systemIdle", on, true)
+    keepAwakeRender()
+end
+keepAwake:setClickCallback(keepAwakeToggle)
+keepAwakeRender()
+hs.hotkey.bind({"ctrl", "shift", "alt", "cmd"}, "k", keepAwakeToggle)
+
 -- Sleep trigger (Hyper+Y).
 -- Razer: physical Break key → kanata @sleep alias → Hyper+Y
 -- Go60: ZMK sends C_SLEEP (Linux) + Hyper+Y directly
