@@ -5,6 +5,15 @@
 # Make direnv work in non-interactive bash (editor/agent tool calls).
 export BASH_ENV="$HOME/.config/direnv/bash-env.sh"
 
+# Load secrets (API keys etc.) so SSH-invoked non-interactive shells
+# see them too. sshd-spawned bash sources ~/.bashrc but not ~/.profile,
+# so without this BRAVE_API_KEY and friends are missing in `ssh host 'cmd'`.
+if [ -f "$HOME/.env" ]; then
+  set -a
+  . "$HOME/.env"
+  set +a
+fi
+
 # If not running interactively, don't do anything
 [[ $- != *i* ]] && return
 
