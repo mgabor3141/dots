@@ -43,23 +43,59 @@ hs.hotkey.bind({"ctrl", "alt", "cmd"}, ".", function()
     hs.eventtap.keyStroke({"ctrl", "cmd"}, "space")
 end)
 
--- Keep-awake toggle. Prevents system idle sleep on both AC and battery, but
--- lets the display dim and turn off normally. Toggled via menubar click or
--- Hyper+K.
+-- Keep-awake: three-state cycle.
+--   off    💤 nothing held
+--   awake  ☕ system stays up, display can still dim/sleep
+--   bright 🔆 system + display both stay up
+-- Hyper+K cycles forward; menubar click opens a menu to pick directly.
+local keepAwakeModes = {
+    off    = { title = "💤", label = "Off",    system = false, display = false },
+    awake  = { title = "☕", label = "Awake (screen can sleep)", system = true,  display = false },
+    bright = { title = "🔆", label = "Bright (screen stays on)",  system = true,  display = true  },
+}
+local keepAwakeOrder = { "off", "awake", "bright" }
+local keepAwakeCurrent = "off"
 local keepAwake = hs.menubar.new()
-local function keepAwakeRender()
-    local on = hs.caffeinate.get("systemIdle")
-    keepAwake:setTitle(on and "☕" or "💤")
-    keepAwake:setTooltip(on and "Keep-awake: ON" or "Keep-awake: OFF")
+
+local function keepAwakeApply(mode)
+    local m = keepAwakeModes[mode]
+    hs.caffeinate.set("systemIdle",  m.system,  true)
+    hs.caffeinate.set("displayIdle", m.display, true)
+    keepAwakeCurrent = mode
+    keepAwake:setTitle(m.title)
+    keepAwake:setTooltip("Keep-awake: " .. m.label)
 end
-local function keepAwakeToggle()
-    local on = not hs.caffeinate.get("systemIdle")
-    hs.caffeinate.set("systemIdle", on, true)
-    keepAwakeRender()
+
+keepAwake:setMenu(function()
+    local items = {}
+    for _, mode in ipairs(keepAwakeOrder) do
+        local m = keepAwakeModes[mode]
+        table.insert(items, {
+            title = m.title .. "  " .. m.label,
+            checked = (mode == keepAwakeCurrent),
+            fn = function() keepAwakeApply(mode) end,
+        })
+    end
+    return items
+end)
+
+hs.hotkey.bind({"ctrl", "shift", "alt", "cmd"}, "k", function()
+    for i, mode in ipairs(keepAwakeOrder) do
+        if mode == keepAwakeCurrent then
+            keepAwakeApply(keepAwakeOrder[(i % #keepAwakeOrder) + 1])
+            return
+        end
+    end
+end)
+
+-- Initialize from existing assertion state so config reloads don't reset mode.
+local function keepAwakeDetect()
+    local sys, disp = hs.caffeinate.get("systemIdle"), hs.caffeinate.get("displayIdle")
+    if disp then return "bright" end
+    if sys  then return "awake"  end
+    return "off"
 end
-keepAwake:setClickCallback(keepAwakeToggle)
-keepAwakeRender()
-hs.hotkey.bind({"ctrl", "shift", "alt", "cmd"}, "k", keepAwakeToggle)
+keepAwakeApply(keepAwakeDetect())
 
 -- Sleep trigger (Hyper+Y).
 -- Razer: physical Break key → kanata @sleep alias → Hyper+Y
