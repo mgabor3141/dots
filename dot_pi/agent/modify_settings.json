@@ -15,8 +15,7 @@
     /*# end -*/
     "npm:pi-librarian",
     "npm:pi-brave-search",
-    "npm:pi-github",
-    "npm:pi-anycopy"
+    "npm:pi-github"
   ],
   "terminal": {
     "clearOnShrink": true

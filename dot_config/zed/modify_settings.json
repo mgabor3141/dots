@@ -18,6 +18,7 @@
       "stdin" .chezmoi.stdin
       "jq" `.agent | { default_model, favorite_models }`)
     ) */
+    "sidebar_side": "right",
     "dock": "right",
     "tool_permissions": {
       "default": "allow"
