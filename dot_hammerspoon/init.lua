@@ -47,7 +47,7 @@ end)
 --   off    💤 nothing held
 --   awake  ☕ system stays up, display can still dim/sleep
 --   bright 🔆 system + display both stay up
--- Hyper+K cycles forward; menubar click opens a menu to pick directly.
+-- Hyper+K or menubar click cycles forward.
 local keepAwakeModes = {
     off    = { title = "💤", label = "Off",    system = false, display = false },
     awake  = { title = "☕", label = "Awake (screen can sleep)", system = true,  display = false },
@@ -66,27 +66,16 @@ local function keepAwakeApply(mode)
     keepAwake:setTooltip("Keep-awake: " .. m.label)
 end
 
-keepAwake:setMenu(function()
-    local items = {}
-    for _, mode in ipairs(keepAwakeOrder) do
-        local m = keepAwakeModes[mode]
-        table.insert(items, {
-            title = m.title .. "  " .. m.label,
-            checked = (mode == keepAwakeCurrent),
-            fn = function() keepAwakeApply(mode) end,
-        })
-    end
-    return items
-end)
-
-hs.hotkey.bind({"ctrl", "shift", "alt", "cmd"}, "k", function()
+local function keepAwakeCycle()
     for i, mode in ipairs(keepAwakeOrder) do
         if mode == keepAwakeCurrent then
             keepAwakeApply(keepAwakeOrder[(i % #keepAwakeOrder) + 1])
             return
         end
     end
-end)
+end
+keepAwake:setClickCallback(keepAwakeCycle)
+hs.hotkey.bind({"ctrl", "shift", "alt", "cmd"}, "k", keepAwakeCycle)
 
 -- Initialize from existing assertion state so config reloads don't reset mode.
 local function keepAwakeDetect()
