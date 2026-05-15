@@ -49,9 +49,9 @@ end)
 --   bright 🔆 system + display both stay up
 -- Hyper+K or menubar click cycles forward.
 local keepAwakeModes = {
-    off    = { title = "💤", label = "Off",    system = false, display = false },
-    awake  = { title = "☕", label = "Awake (screen can sleep)", system = true,  display = false },
-    bright = { title = "🔆", label = "Bright (screen stays on)",  system = true,  display = true  },
+    off    = { title = "💤", system = false, display = false },
+    awake  = { title = "☕", system = true,  display = false },
+    bright = { title = "🔆", system = true,  display = true  },
 }
 local keepAwakeOrder = { "off", "awake", "bright" }
 local keepAwakeCurrent = "off"
@@ -63,7 +63,7 @@ local function keepAwakeApply(mode)
     hs.caffeinate.set("displayIdle", m.display, true)
     keepAwakeCurrent = mode
     keepAwake:setTitle(m.title)
-    keepAwake:setTooltip("Keep-awake: " .. m.label)
+    keepAwake:setTooltip("Keep-awake: " .. mode)
 end
 
 local function keepAwakeCycle()
