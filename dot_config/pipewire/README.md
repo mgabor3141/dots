@@ -12,6 +12,30 @@ Custom PipeWire config lives in `pipewire.conf.d/`:
   the loopback output to all apps; `handle-mute-events.sh` bypasses that by
   re-linking to the raw Scarlett directly via `pw-link`.
 
+## Recovering from a Scarlett restart
+
+If the Scarlett is power-cycled or its ALSA device disappears and reappears
+(e.g. after `alsactl` reload, USB renumeration), the virtual sinks survive but
+their playback sides stop being linked to the Scarlett. Apps still route to
+`system-audio`, but `system-audio-playback:output_FL/FR` have no `|->` line
+in `pw-link -lo` and you hear nothing.
+
+This is because `node.autoconnect` only re-evaluates at node creation; the
+loopback module instantiates its nodes once at pipewire startup and doesn't
+recreate them when `target.object` reappears. `node.dont-reconnect = true` is
+deliberate (keeps the virtual sinks visible to apps while the card is gone) and
+`node.dont-fallback = true` prevents audio from silently leaking to built-in
+audio.
+
+Fix:
+
+```fish
+systemctl --user restart pipewire
+```
+
+This is rare enough that automating it (udev-triggered restart) isn't worth
+the complexity. Promote to a udev rule if it starts happening regularly.
+
 ## Realtime scheduling gotcha
 
 PipeWire's `module-rt` wants `SCHED_FIFO:88` and `nice -11` on its data loop
