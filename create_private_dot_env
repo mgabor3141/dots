@@ -1,2 +1,7 @@
 BRAVE_API_KEY=your-key-here
 MGABOR_INFERENCE_API_KEY=your-key-here
+
+PI_LIBRARIAN_MODELS="mgabor/default,openai-codex/gpt-5.5,anthropic/claude-sonnet-4-6:high"
+
+SEARXNG_URL=http://localhost:8080/
+SEARXNG_TOKEN=your-key-here
