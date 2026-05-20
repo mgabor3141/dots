@@ -1,8 +1,24 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
-const BASE_URL = process.env.SEARXNG_URL || "http://localhost:8080";
-const TOKEN = process.env.SEARXNG_TOKEN ?? null;
+function loadEnvKey(key: string): string | null {
+  if (process.env[key]) return process.env[key];
+  const envPath = join(homedir(), ".env");
+  if (!existsSync(envPath)) return null;
+  for (const line of readFileSync(envPath, "utf-8").split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("#") || !trimmed.includes("=")) continue;
+    const [k, v] = trimmed.split("=", 2);
+    if (k === key) return v;
+  }
+  return null;
+}
+
+const BASE_URL = loadEnvKey("SEARXNG_URL") || "http://localhost:8080";
+const TOKEN = loadEnvKey("SEARXNG_TOKEN");
 
 async function fetchWithRetry(
   url: string,
@@ -59,18 +75,20 @@ export default function (pi: ExtensionAPI) {
       url.searchParams.set("format", "json");
       const n = Math.min(params.numberResults ?? 10, 20);
       url.searchParams.set("number_of_results", String(n));
+      url.searchParams.set("language", "en");
 
       const headers: Record<string, string> = {};
       if (TOKEN !== null) headers["Authorization"] = `Bearer ${TOKEN}`;
 
       const response = await fetchWithRetry(url.toString(), { signal, headers }, 3);
       if (!response.ok) {
-        throw new Error(`SearXNG error ${response.status}: ${response.statusText}`);
+        const text = await response.text();
+        throw new Error(`SearXNG error ${response.status}: ${text}`);
       }
 
       const data = await response.json();
       const results = ((data.results || []) as any[]).map((r: any, i: number) =>
-        `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet || ""}`
+        `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet || r.content || ""}`
       );
 
       return {
