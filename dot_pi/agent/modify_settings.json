@@ -14,7 +14,6 @@
     /*# joinPath .chezmoi.homeDir "dev/yapp/packages/jj" | printf `"%s",` */
     /*# end -*/
     "npm:pi-librarian",
-    "npm:pi-brave-search",
     "npm:pi-github"
   ],
   "terminal": {
