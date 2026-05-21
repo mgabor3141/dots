@@ -51,6 +51,7 @@ AGENTS.md
 !.local/bin/rtk
 !.local/bin/shellcheck
 !.local/bin/yeet
+!.local/bin/zed
 !.local/bin/gmux
 !.local/bin/gmuxd
 

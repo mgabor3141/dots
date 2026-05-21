@@ -2,11 +2,15 @@
 
 # Wrapper: prefer real 'zed' binary, fall back to 'zeditor'.
 # Since this script is named 'zed', skip our own directory to avoid recursion.
+# Also skip system sbin dirs because /usr/sbin/zed is the ZFS Event Daemon
+# on systems with OpenZFS (Unraid, FreeBSD, zfs-on-linux), not the editor.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 IFS=:
 for dir in $PATH; do
-    case "$dir" in "$SCRIPT_DIR") continue ;; esac
+    case "$dir" in
+        "$SCRIPT_DIR"|/sbin|/usr/sbin|/usr/local/sbin) continue ;;
+    esac
     if [ -x "$dir/zed" ]; then
         exec "$dir/zed" "$@"
     fi
