@@ -46,8 +46,20 @@ keymap:
     remap:
       C-d: C-l  # focus URL bar instead of bookmark
 
+  # Animal Well (Steam) -- app ID: steam_app_813230
+  - name: Animal Well
+    application:
+      only: [steam_app_813230]
+    remap:
+      Enter: Space
+      I: Up
+      J: Left
+      K: Down
+      L: Right
+
+
   # Default remaps for all other apps
   - name: Default
     application:
-      not: [Kitty, Zed, Firefox]
+      not: [Kitty, Zed, Firefox, steam_app_813230]
     remap: {}

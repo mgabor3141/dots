@@ -15,7 +15,7 @@ Wants=kanata.service
 [Service]
 Type=simple
 ExecStartPre=/bin/sleep 1
-ExecStart=/home/mg/.cargo/bin/xremap --watch=config --device kanata /home/mg/.config/xremap/config.yml
+ExecStart=/home/mg/.cargo/bin/xremap --watch=config --device kanata --device MoErgo /home/mg/.config/xremap/config.yml
 Restart=on-failure
 RestartSec=2
 Nice=-5
