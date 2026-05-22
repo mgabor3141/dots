@@ -1,17 +1,25 @@
 # xremap config
 #
-# Reads from Kanata's virtual output (Razer) and the Go60 directly.
+# Reads from Kanata (Razer) and MoErgo Go60.
 #
-# NOTE: Steam/Proton games bypass the compositor's input, so per-app
-# keymap matching doesn't work reliably for games. Use modmap for
-# global remaps that always apply.
+# Steam/Proton games can be remapped per-app, but you must:
+#   Steam → Library → right-click game → Properties → Controller
+#   → "Override default input type" → "Disable Steam Input"
+# Then restart the game.
 
-# --- Global modmap (always active) ---
+# Use modmap (not keymap) for per-app remapping so that hold-to-repeat works.
+# keymap fires a one-shot press+release on key-down, which breaks held-direction
+# input for games. modmap does true 1:1 substitution and tracks key-up.
 modmap:
-  - name: Global
+  # Animal Well
+  - name: Animal Well
+    application:
+      only: [steam_app_813230]
     remap:
-      Enter: Space
       I: Up
       J: Left
       K: Down
       L: Right
+      Enter: Space
+
+keymap: []
