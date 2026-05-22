@@ -1,65 +1,17 @@
 # xremap config
 #
-# Reads from Kanata's virtual output device, so it sits *after* Kanata in the
-# signal chain:  Physical keyboard -> Kanata -> xremap -> compositor
+# Reads from Kanata's virtual output (Razer) and the Go60 directly.
 #
-# Per-app remapping works because xremap with --features niri can query
-# Niri's toplevel management protocol for the currently focused app.
-#
-# Key names are evdev names (case-insensitive, strip the KEY_ prefix).
-#   See: https://github.com/emberian/evdev/blob/master/src/scancodes.rs
+# NOTE: Steam/Proton games bypass the compositor's input, so per-app
+# keymap matching doesn't work reliably for games. Use modmap for
+# global remaps that always apply.
 
-# xremap only reads from Kanata's virtual device (--device kanata in the service).
-# This means xremap sees the already-remapped output from Kanata,
-# and applies per-app rules on top.
-
-# --- Global modmap (always active, regardless of app) ---
+# --- Global modmap (always active) ---
 modmap:
   - name: Global
-    remap: {}
-
-# --- Per-app keymap ---
-keymap:
-  # Example: Emacs-style in terminal
-  - name: Terminal (Kitty)
-    application:
-      only: [Kitty]
-    remap:
-      C-a: home
-      C-e: end
-      C-f: right
-      C-b: left
-      C-k: [Shift-end, Backspace]
-      C-d: Delete
-      C-w: [C-Shift-left, Delete]
-
-  # Example: Editors (Zed)
-  - name: Editors (Zed)
-    application:
-      only: [Zed]
-    remap: {}
-
-  # Example: Browser
-  - name: Browser (Firefox)
-    application:
-      only: [Firefox]
-    remap:
-      C-d: C-l  # focus URL bar instead of bookmark
-
-  # Animal Well (Steam) -- app ID: steam_app_813230
-  - name: Animal Well
-    application:
-      only: [steam_app_813230]
     remap:
       Enter: Space
       I: Up
       J: Left
       K: Down
       L: Right
-
-
-  # Default remaps for all other apps
-  - name: Default
-    application:
-      not: [Kitty, Zed, Firefox, steam_app_813230]
-    remap: {}
