@@ -6,7 +6,6 @@ alsa-firmware
 alsa-scarlett-gui
 awesome-terminal-fonts
 base
-bazaar
 bitwarden
 blueman
 bluez-hid2hci
@@ -101,7 +100,6 @@ nvidia-container-toolkit
 nvidia-prime
 obs-studio
 octopi
-ollama-cuda
 openai-codex
 opendesktop-fonts
 os-prober
@@ -121,6 +119,7 @@ reflector
 satty
 sddm
 sg3_utils
+shelly
 sof-firmware
 speedtest-cli
 spoofdpi
