@@ -1,4 +1,5 @@
 blackwidow-macro-git
+bs-manager-bin
 customizepkg-git
 handy-bin
 it87-dkms-git

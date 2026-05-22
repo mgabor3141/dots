@@ -30,6 +30,15 @@ Kanata intercepts raw keyboard input on both platforms (`dot_config/kanata/`).
 
 ## Layer 2: OS-Level Translation
 
+### xremap (Linux only)
+
+xremap (`dot_config/xremap/`) sits after Kanata in the input chain, reading
+from Kanata's virtual uinput device. It applies per-application key remapping
+on Niri Wayland by querying the compositor's toplevel management protocol.
+
+Installed via `cargo install xremap --features niri`. Runs as a systemd user
+service that auto-restarts on config changes (`--watch=config`).
+
 ### Hammerspoon (macOS only)
 
 Hammerspoon (`exact_dot_hammerspoon/`) operates after Kanata via eventtaps and handles macOS-specific behavior:
@@ -88,7 +97,8 @@ All follow the same pattern with platform-aware chezmoi templates:
 ## Signal Chain
 
 ```
-Physical Key -> Kanata (HID) -> Hammerspoon/XKB (OS) -> App Keybinds
+macOS:  Physical Key -> Kanata -> Hammerspoon -> App Keybinds
+Linux:  Physical Key -> Kanata -> xremap (per-app) / XKB -> App Keybinds
 ```
 
 **macOS example** (Ctrl+C with Razer):
@@ -98,7 +108,7 @@ Physical Key -> Kanata (HID) -> Hammerspoon/XKB (OS) -> App Keybinds
 
 **Linux example** (same physical action):
 1. Kanata: Left Ctrl -> Ctrl (identity)
-2. XKB: passes Ctrl+C through
+2. xremap: passes Ctrl+C through (or applies per-app remap if configured)
 3. Zed: `ctrl+c` = copy
 
 The programmable keyboard (Razer BlackWidow) has its own Kanata config accounting for its different physical layout, but feeds into the same pipeline -- logical behavior stays identical regardless of keyboard or OS.

@@ -1,0 +1,26 @@
+# xremap systemd user service
+# Runs xremap as a regular user (no sudo needed, user is in 'input' group).
+#
+# Reads from Kanata's virtual uinput device, sits after Kanata in the chain:
+#   Physical keyboard -> Kanata -> xremap -> Niri
+#
+# --features niri is required for app-specific remapping to work with Niri.
+# Install with:  cargo install xremap --features niri
+
+[Unit]
+Description=xremap keyboard remapper (post-Kanata, Niri)
+After=kanata.service
+Wants=kanata.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 1
+ExecStart=/home/mg/.cargo/bin/xremap --watch=config --device kanata /home/mg/.config/xremap/config.yml
+Restart=on-failure
+RestartSec=2
+Nice=-5
+
+Environment=RUST_LOG=warn
+
+[Install]
+WantedBy=default.target

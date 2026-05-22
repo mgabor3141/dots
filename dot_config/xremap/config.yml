@@ -1,0 +1,53 @@
+# xremap config
+#
+# Reads from Kanata's virtual output device, so it sits *after* Kanata in the
+# signal chain:  Physical keyboard -> Kanata -> xremap -> compositor
+#
+# Per-app remapping works because xremap with --features niri can query
+# Niri's toplevel management protocol for the currently focused app.
+#
+# Key names are evdev names (case-insensitive, strip the KEY_ prefix).
+#   See: https://github.com/emberian/evdev/blob/master/src/scancodes.rs
+
+# xremap only reads from Kanata's virtual device (--device kanata in the service).
+# This means xremap sees the already-remapped output from Kanata,
+# and applies per-app rules on top.
+
+# --- Global modmap (always active, regardless of app) ---
+modmap:
+  - name: Global
+    remap: {}
+
+# --- Per-app keymap ---
+keymap:
+  # Example: Emacs-style in terminal
+  - name: Terminal (Kitty)
+    application:
+      only: [Kitty]
+    remap:
+      C-a: home
+      C-e: end
+      C-f: right
+      C-b: left
+      C-k: [Shift-end, Backspace]
+      C-d: Delete
+      C-w: [C-Shift-left, Delete]
+
+  # Example: Editors (Zed)
+  - name: Editors (Zed)
+    application:
+      only: [Zed]
+    remap: {}
+
+  # Example: Browser
+  - name: Browser (Firefox)
+    application:
+      only: [Firefox]
+    remap:
+      C-d: C-l  # focus URL bar instead of bookmark
+
+  # Default remaps for all other apps
+  - name: Default
+    application:
+      not: [Kitty, Zed, Firefox]
+    remap: {}
