@@ -122,7 +122,6 @@ sg3_utils
 shelly
 sof-firmware
 speedtest-cli
-spoofdpi
 spotify-launcher
 strace
 sunshine

@@ -18,9 +18,11 @@ kimageformats
 kio-admin
 kompare
 konsole
-lib32-gst-plugins-base-libs
+lib32-jack2
+lib32-v4l-utils
 liboggz
 libva-intel-driver
+llvm21
 noise-suppression-for-voice
 pigz
 pulse-native-provider
@@ -34,7 +36,6 @@ python-pycryptodome
 python-pyudev
 python-pyxattr
 python-secretstorage
-python-setuptools
 python-srt_equalizer
 python-truststore
 python-wxpython
@@ -43,7 +44,6 @@ qemu-user-static
 qt6-imageformats
 recordmydesktop
 rrdtool
-rustup
 speech-dispatcher
 ttf-nerd-fonts-symbols-mono
 wlsunset

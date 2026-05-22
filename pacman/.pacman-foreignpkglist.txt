@@ -7,6 +7,7 @@ nautilus-gnome-disks
 opencode-bin
 piper-tts-bin
 piper-voices-en-us
+spoofdpi
 systemd-manager-tui-bin
 systemd-numlockontty
 vesktop-git
