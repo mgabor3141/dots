@@ -16,16 +16,14 @@ modmap:
     application:
       only: [steam_app_813230]
     remap:
-      I: Up
-      J: Z
-      K: X
-      L: C
       Enter: Space
       E: Up
       S: Left
       D: Down
       F: Right
-      Space: Enter
+      J: Z
+      K: X
+      L: C
       Semicolon: V
 
 keymap: []
