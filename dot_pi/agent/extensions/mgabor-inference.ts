@@ -72,8 +72,8 @@ export default async function (pi: ExtensionAPI) {
       reasoning: true,
       input: ["text"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 252000,
-      maxTokens: 8192,
+      contextWindow: 262144,
+      maxTokens: 16384,
       compat: { thinkingFormat: "qwen-chat-template" },
     })),
   });
