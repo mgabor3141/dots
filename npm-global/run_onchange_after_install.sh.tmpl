@@ -39,7 +39,7 @@ done < "$PACKAGES_FILE"
 # Install/update each package globally
 for pkg in "${packages[@]}"; do
     echo ">>> Installing $pkg"
-    "$NPM" install -g "$pkg"
+    "$NPM" install -g --ignore-scripts "$pkg"
 done
 
 # fnm mode: create shims so globals are always available regardless of active fnm version
