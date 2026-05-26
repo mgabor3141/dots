@@ -58,6 +58,7 @@ export default async function (pi: ExtensionAPI) {
   }
 
   if (modelIds.length === 0) return;
+  const mgaborModelIds = new Set(modelIds);
 
   pi.registerProvider("mgabor", {
     name: "mgabor inference",
@@ -77,4 +78,78 @@ export default async function (pi: ExtensionAPI) {
       compat: { thinkingFormat: "qwen-chat-template" },
     })),
   });
+
+  // Rewrite the <available_skills> XML block in the developer/system
+  // message to a markdown bullet list before the request hits vLLM.
+  //
+  // Why: Qwen3.6 has a learned CodeAct/Cline attractor that fires when
+  // the system prompt contains XML-tag listings shaped like
+  // <available_skills><skill><name>...</name>...</skill>...</available_skills>.
+  // When the attractor wins, the model emits tool calls in the wrong
+  // grammar (`<bash>{"command":...}</bash>` instead of the
+  // `<tool_call><function=bash><parameter=command>...` format vLLM's
+  // qwen3_xml parser expects). Empirical garble rate on coding-shaped
+  // first-turn prompts: 48% before this rewrite, ~0% after.
+  // (Stack: vllm-overlay parser-fix + this rewrite combined.)
+  //
+  // We scope the hook to this provider by checking payload.model
+  // against the set of model ids we registered. Other providers in
+  // the user's config (e.g. anthropic) see their payloads unchanged.
+  pi.on("before_provider_request", (event) => {
+    const payload = event.payload as Record<string, unknown> | undefined;
+    if (!payload || typeof payload.model !== "string") return undefined;
+    if (!mgaborModelIds.has(payload.model)) return undefined;
+    const messages = payload.messages;
+    if (!Array.isArray(messages) || messages.length === 0) return undefined;
+    const sys = messages[0] as { role?: string; content?: unknown };
+    if (sys.role !== "developer" && sys.role !== "system") return undefined;
+
+    // Content may be a string or OpenAI v2 message-parts array; handle both.
+    let text: string;
+    let isArrayContent: boolean;
+    if (typeof sys.content === "string") {
+      text = sys.content;
+      isArrayContent = false;
+    } else if (Array.isArray(sys.content)) {
+      text = sys.content
+        .map((p: { text?: string }) => (p && typeof p.text === "string" ? p.text : ""))
+        .join("");
+      isArrayContent = true;
+    } else {
+      return undefined;
+    }
+
+    const rewritten = rewriteAvailableSkills(text);
+    if (rewritten === text) return undefined;
+
+    const newSys = {
+      ...sys,
+      content: isArrayContent ? [{ type: "text", text: rewritten }] : rewritten,
+    };
+    return { ...payload, messages: [newSys, ...messages.slice(1)] };
+  });
+}
+
+// Replace the <available_skills>...<skill>...</skill>...</available_skills>
+// block with an equivalent markdown bullet list. Preserves name,
+// description, and location for each skill. If the block is absent or
+// no <skill> entries are found, returns the input unchanged.
+function rewriteAvailableSkills(text: string): string {
+  const blockRe = /<available_skills>([\s\S]*?)<\/available_skills>/;
+  const block = blockRe.exec(text);
+  if (!block) return text;
+
+  const skillRe =
+    /<skill>\s*<name>([^<]+)<\/name>\s*<description>([\s\S]*?)<\/description>\s*<location>([^<]+)<\/location>\s*<\/skill>/g;
+  const skills: Array<{ name: string; description: string; location: string }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = skillRe.exec(block[1])) !== null) {
+    skills.push({ name: m[1].trim(), description: m[2].trim(), location: m[3].trim() });
+  }
+  if (skills.length === 0) return text;
+
+  const md =
+    "Available skills (load via `read` when a task matches):\n" +
+    skills.map((s) => `- **${s.name}**: ${s.description} (location: \`${s.location}\`)`).join("\n");
+  return text.replace(blockRe, md);
 }
