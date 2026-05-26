@@ -16,6 +16,7 @@
     "npm:pi-librarian",
     "npm:pi-github"
   ],
+  "treeFilterMode": "no-tools",
   "terminal": {
     "clearOnShrink": true
   },
