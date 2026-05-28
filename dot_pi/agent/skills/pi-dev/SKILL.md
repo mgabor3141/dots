@@ -1,7 +1,7 @@
 ---
-name: harness-dev
+name: pi-dev
 description: >
-  Use when working on your agent harness itself — its extensions, SDK, themes, skills, TUI, or configuration.
+  Use when working on your agent harness (called "pi") itself — its extensions, SDK, themes, skills, TUI, or configuration.
 ---
 
 You run inside pi, a coding agent harness. Pi is very extendable and allows for highly effective, customized workflows.
