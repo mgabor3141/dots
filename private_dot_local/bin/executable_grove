@@ -525,8 +525,12 @@ def create_workspace(project_root: Path, name: str,
     grove_dir = ensure_grove_dir(project_root)
     ws_dir = grove_dir / name
 
+    # main() validates the ws_dir / resume combination before we get here,
+    # but re-check defensively in case create_workspace is called directly.
     if ws_dir.exists() and not resume:
         die(f"workspace already exists: {ws_dir}")
+    if resume and not ws_dir.exists():
+        die(f"cannot resume: no workspace at {ws_dir}")
 
     ws_dir.mkdir(parents=True, exist_ok=True)
     is_single_repo = len(repos) == 1 and repos[0] == project_root
@@ -913,19 +917,36 @@ def clean_workspaces(project_root: Path, force: bool = False) -> None:
 
 def _collect_workspace_info(project_root: Path, repos: list[Path],
                            ws_name: str) -> dict:
-    """Collect aggregated info for a workspace across all repos."""
+    """Collect aggregated info for a workspace across all repos.
+
+    For multi-repo projects also reports how many per-repo jj workspaces
+    are present on disk under .grove/<ws_name>/, so partial/broken
+    workspaces (e.g. left over from a crashed `grove new`) surface in
+    status instead of being silently reported as 'clean'.
+    """
     is_single_repo = len(repos) == 1 and repos[0] == project_root
 
     if is_single_repo:
-        return jj_workspace_info(project_root, ws_name)
+        info = jj_workspace_info(project_root, ws_name)
+        info["present_repos"] = 1
+        info["total_repos"] = 1
+        return info
+
+    grove_dir = project_root / GROVE_DIR
+    ws_dir = grove_dir / ws_name
 
     total_commits = 0
     total_ins = 0
     total_dels = 0
     best_desc = ""
     best_desc_len = 0
+    present_repos = 0
 
     for repo_dir in repos:
+        dest = ws_dir / repo_dir.name
+        if not (dest / ".jj").is_dir():
+            continue
+        present_repos += 1
         jj_ws_name = f"{ws_name}-{repo_dir.name}"
         info = jj_workspace_info(repo_dir, jj_ws_name)
         total_commits += info["commits_ahead"]
@@ -940,6 +961,8 @@ def _collect_workspace_info(project_root: Path, repos: list[Path],
         "insertions": total_ins,
         "deletions": total_dels,
         "description": best_desc,
+        "present_repos": present_repos,
+        "total_repos": len(repos),
     }
 
 
@@ -973,6 +996,11 @@ def _print_workspace_line(name: str, info: dict,
         if dels > 0:
             diff_parts.append(f"-{dels}")
         parts.append(" ".join(diff_parts))
+
+    present = info.get("present_repos")
+    total = info.get("total_repos")
+    if present is not None and total is not None and present < total:
+        parts.insert(0, f"incomplete ({present}/{total} repos)")
 
     status = ", ".join(parts) if parts else "clean"
     desc = info.get("description", "")
@@ -1019,13 +1047,22 @@ def grove_status(project_root: Path | None) -> None:
 
     _print_repo_status(repos, project_root)
 
-    # Workspaces
+    # Workspaces. Each call is wrapped so a single broken workspace can't
+    # take down `grove status`; partial state is surfaced as 'incomplete'
+    # in the line itself.
     workspaces = find_workspaces(grove_dir) if grove_dir.exists() else []
     print(f"\nWorkspaces: {len(workspaces)}")
     if workspaces:
         cur = current_workspace_name(project_root)
         for ws in workspaces:
-            info = _collect_workspace_info(project_root, repos, ws.name)
+            try:
+                info = _collect_workspace_info(project_root, repos, ws.name)
+            except Exception as exc:
+                info = {
+                    "commits_ahead": 0, "insertions": 0, "deletions": 0,
+                    "description": f"error: {exc}",
+                    "present_repos": 0, "total_repos": len(repos),
+                }
             _print_workspace_line(ws.name, info, current=(ws.name == cur))
 
 
@@ -1137,6 +1174,9 @@ def parse_args() -> argparse.Namespace:
                               help="Don't open in editor")
     new_p.add_argument("--no-setup", action="store_true",
                        help="Skip setup commands")
+    new_p.add_argument("--resume", action="store_true",
+                       help="Resume an incomplete workspace at .grove/<name>/ "
+                            "(fills in any missing per-repo jj workspaces)")
     new_p.add_argument("-y", "--yes", action="store_true",
                        help="Skip confirmation when initializing .grove/")
 
@@ -1179,26 +1219,35 @@ def main() -> None:
             auto_confirm=args.yes,
         )
 
-        # Check for an incomplete workspace to resume
-        resume = False
+        # `grove new` is strictly creative. Resuming an incomplete
+        # workspace requires the explicit --resume flag so that a
+        # half-created .grove/<name>/ (e.g. from a crashed previous run)
+        # can never be silently extended.
+        resume = args.resume
         name = args.name
         if not name:
-            incomplete = find_incomplete_workspace(project_root)
-            if incomplete:
-                confirm = input(
-                    f"Incomplete workspace '{incomplete}' found. "
-                    f"Resume? [Y/n] "
-                ).strip()
-                if confirm.lower() != "n":
-                    name = incomplete
-                    resume = True
-            if not name:
+            if resume:
+                incomplete = find_incomplete_workspace(project_root)
+                if not incomplete:
+                    die("--resume given but no incomplete workspace found")
+                name = incomplete
+            else:
                 grove_dir = project_root / GROVE_DIR
                 name = pick_workspace_name(grove_dir)
 
         err = validate_name(name)
         if err:
             die(err)
+
+        ws_dir = project_root / GROVE_DIR / name
+        if resume and not ws_dir.exists():
+            die(f"--resume given but no workspace at {short_path(ws_dir)}")
+        if ws_dir.exists() and not resume:
+            die(
+                f"workspace already exists: {short_path(ws_dir)}\n"
+                f"  Use 'grove new {name} --resume' to fill in missing repos, "
+                f"or 'grove delete {name}' first."
+            )
         if args.no_editor:
             open_editor = False
         elif args.editor:
