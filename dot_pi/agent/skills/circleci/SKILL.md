@@ -103,10 +103,24 @@ curl -s --header "Circle-Token: $TOKEN" \
 
 `$VCS_TYPE` is `github` or `bitbucket` (not the `gh`/`bb` prefix used in v2).
 
+### My recent pipelines across a org
+```sh
+curl -s --header "Circle-Token: $TOKEN" \
+  "https://circleci.com/api/v2/pipeline?org-slug=gh/myorg&mine=true" | \
+  jq '.items[] | {id, number, state, created_at, project_slug}'
+```
+
+### Discover your orgs
+```sh
+curl -s --header "Circle-Token: $TOKEN" \
+  https://circleci.com/api/v2/me/collaborations | jq '.[] | {name, slug}'
+```
+
 ## Non-obvious
 
 - **Pagination:** responses include `next_page_token`; pass it as `?page-token=<value>` to get the next page. An empty or absent `next_page_token` means you're on the last page.
 - **Pipeline states:** `created`, `errored`, `setup-pending`, `setup`, `pending`. Workflow states: `success`, `failed`, `error`, `canceled`, `unauthorized`, `running`, `failing`, `on_hold`, `needs_setup`.
+- **`mine=true` requires `org-slug`:** `GET /pipeline?mine=true` errors without it. Use `GET /me/collaborations` to discover your org slugs first.
 - **`jq` selection tip:** pipe through `| jq -r` for plain strings, `| jq -c` for compact JSON lines.
 - **Finding the slug:** if you only know a pipeline ID, `GET /api/v2/pipeline/<id>` returns `project_slug`.
 - **GitHub App vs OAuth:** when in doubt, try both slug prefixes; one will 404.
