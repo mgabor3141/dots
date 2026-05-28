@@ -162,6 +162,7 @@ AGENTS.md
 .config/qt5ct
 .config/mute-indicator
 .config/xkb
+.config/xremap
 
 # Files
 .config/dolphinrc
