@@ -91,13 +91,15 @@ async function resolveAuxModel(ctx: ExtensionContext): Promise<{ model: Model<Ap
 }
 
 /**
- * Call the auxiliary LLM to summarize content.
+ * Call the auxiliary LLM to summarize content. When `query` is set, the
+ * summary is steered toward what the caller is looking for.
  */
 async function summarizeWithLlm(
   content: string,
   url: string,
   title: string,
   ctx: ExtensionContext,
+  query: string | undefined,
   signal?: AbortSignal,
 ): Promise<string | null> {
   const aux = await resolveAuxModel(ctx);
@@ -110,10 +112,16 @@ async function summarizeWithLlm(
   const contextInfo = [title && `Title: ${title}`, url && `Source: ${url}`]
     .filter(Boolean).join("\n");
 
+  const focus = query
+    ? `The reader is specifically looking for: "${query}". Lead with and prioritize ` +
+      `information relevant to that, but still capture other key facts. `
+    : "";
+
   const prompt =
     "Create a comprehensive yet concise markdown summary that preserves ALL important " +
     "information while dramatically reducing bulk. Include key excerpts (quotes, code snippets, " +
     "important facts) in their original format. Use headers, bullets, and emphasis for scannability. " +
+    focus +
     `Max ${MAX_OUTPUT} characters.\n\n${contextInfo}\n\nCONTENT:\n${content}`;
 
   const stream = provider.streamSimple(
@@ -147,6 +155,7 @@ async function processContent(
   url: string,
   title: string,
   ctx: ExtensionContext,
+  query: string | undefined,
   signal?: AbortSignal,
 ): Promise<string> {
   const len = content.length;
@@ -163,7 +172,7 @@ async function processContent(
   }
 
   // Try LLM summarization
-  const summarized = await summarizeWithLlm(content, url, title, ctx, signal);
+  const summarized = await summarizeWithLlm(content, url, title, ctx, query, signal);
   if (summarized) return summarized;
 
   // Fallback: return truncated raw content
@@ -172,6 +181,30 @@ async function processContent(
     return truncated + `\n\n[Content truncated — showing first ${MAX_OUTPUT.toLocaleString()} of ${len.toLocaleString()} chars. Summarization unavailable.]`;
   }
   return truncated;
+}
+
+/** Build the crawl4ai markdown content_filter config. */
+function buildContentFilter(query: string | undefined) {
+  // With a query: BM25 ranks query-relevant chunks (cheap, keyword-based,
+  // narrows content before it leaves the crawler). Without: prune boilerplate.
+  const content_filter = query
+    ? {
+        type: "BM25ContentFilter",
+        params: { user_query: query, bm25_threshold: 1.2 },
+      }
+    : {
+        type: "PruningContentFilter",
+        params: { threshold: 0.48, threshold_type: "dynamic", min_word_threshold: 5 },
+      };
+  return {
+    type: "CrawlerRunConfig",
+    params: {
+      markdown_generator: {
+        type: "DefaultMarkdownGenerator",
+        params: { content_filter },
+      },
+    },
+  };
 }
 
 export default function (pi: ExtensionAPI) {
@@ -223,15 +256,30 @@ export default function (pi: ExtensionAPI) {
     name: "web_view",
     label: "View Page",
     description:
-      "Fetch and return the text content of a URL. " +
-      "Use to read a specific page from search results. " +
-      "Pages under 5000 chars are returned as-is; larger pages are summarized automatically.",
+      "Fetch and return the readable content of one or more URLs (max 5). " +
+      "Boilerplate is stripped automatically; pages under 5000 chars are returned as-is, " +
+      "larger pages are summarized. Provide `query` to describe what you're looking for — " +
+      "it narrows the fetched content to relevant sections and steers the summary.",
     promptSnippet:
-      "Use to read the full content of a URL. Large pages are summarized to save context.",
+      "Use to read the content of URLs. Pass `query` to focus on what you need. Large pages are summarized.",
     parameters: Type.Object({
-      url: Type.String({ description: "URL to fetch" }),
+      urls: Type.Array(Type.String(), {
+        description: "URLs to fetch (max 5)",
+      }),
+      query: Type.Optional(
+        Type.String({
+          description:
+            "What you're looking for on the page(s). Narrows content to relevant " +
+            "sections and focuses the summary.",
+        })
+      ),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      const urls = params.urls.slice(0, 5);
+      if (urls.length === 0) {
+        throw new Error("web_view requires at least one URL");
+      }
+
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
@@ -242,25 +290,8 @@ export default function (pi: ExtensionAPI) {
         signal,
         headers,
         body: JSON.stringify({
-          urls: [params.url],
-          crawler_config: {
-            type: "CrawlerRunConfig",
-            params: {
-              markdown_generator: {
-                type: "DefaultMarkdownGenerator",
-                params: {
-                  content_filter: {
-                    type: "PruningContentFilter",
-                    params: {
-                      threshold: 0.48,
-                      threshold_type: "dynamic",
-                      min_word_threshold: 5,
-                    },
-                  },
-                },
-              },
-            },
-          },
+          urls,
+          crawler_config: buildContentFilter(params.query),
         }),
       }, 3);
 
@@ -269,18 +300,43 @@ export default function (pi: ExtensionAPI) {
         throw new Error(`Crawl error ${response.status}: ${text}`);
       }
 
-      const data = await response.json();
-      const rawContent = data.content || data.text || data.html || JSON.stringify(data);
-      const title = data.title || "";
-
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-      // Process with tiered summarization
-      const content = await processContent(rawContent, params.url, title, ctx, signal);
+      const data = await response.json();
+      const results = (data.results || []) as any[];
+
+      // Map results by URL so output order matches the request.
+      const byUrl = new Map<string, any>();
+      for (const r of results) byUrl.set(r.redirected_url || r.url, r);
+
+      const sections = await Promise.all(
+        urls.map(async (reqUrl) => {
+          const r = byUrl.get(reqUrl) ?? results.find((x) => x.url === reqUrl);
+          if (!r || r.success === false) {
+            const err = r?.error_message || "failed to fetch";
+            return { url: reqUrl, text: `[Error fetching ${reqUrl}: ${err}]`, size: 0 };
+          }
+          const md = r.markdown || {};
+          const raw =
+            md.fit_markdown || md.raw_markdown || r.cleaned_html || "";
+          const title = r.metadata?.title || "";
+          const text = await processContent(raw, reqUrl, title, ctx, params.query, signal);
+          return { url: reqUrl, text, size: raw.length };
+        })
+      );
+
+      const body =
+        urls.length === 1
+          ? sections[0].text
+          : sections.map((s) => `## ${s.url}\n\n${s.text}`).join("\n\n---\n\n");
 
       return {
-        content: [{ type: "text", text: content }],
-        details: { url: params.url, originalSize: rawContent.length, finalSize: content.length },
+        content: [{ type: "text", text: body || "No content found." }],
+        details: {
+          urls,
+          query: params.query,
+          sizes: sections.map((s) => s.size),
+        },
       };
     },
   });
