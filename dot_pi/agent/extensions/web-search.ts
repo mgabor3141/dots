@@ -121,6 +121,10 @@ async function summarizeWithLlm(
     "Create a comprehensive yet concise markdown summary that preserves ALL important " +
     "information while dramatically reducing bulk. Include key excerpts (quotes, code snippets, " +
     "important facts) in their original format. Use headers, bullets, and emphasis for scannability. " +
+    "CRITICAL: Use ONLY information present in the content below. Reproduce numbers, names, " +
+    "quotes, and figures exactly as they appear — never invent, round, estimate, extrapolate, or " +
+    "infer values that are not explicitly stated. Do not synthesize tables or stats from prose. " +
+    "If something is unclear or absent, omit it rather than guessing. " +
     focus +
     `Max ${MAX_OUTPUT} characters.\n\n${contextInfo}\n\nCONTENT:\n${content}`;
 
