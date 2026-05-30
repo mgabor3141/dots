@@ -17,6 +17,15 @@ fi
 # If not running interactively, don't do anything
 [[ $- != *i* ]] && return
 
+{{- if .container }}
+
+# In the devbox container, default interactive shells to fish (primary shell).
+# Bash still runs for explicit `bash -c '...'` invocations (agents, scripts)
+# because the non-interactive guard above returns before reaching this line.
+# `command -v` guard means this no-ops before `devbox global install` lands fish.
+command -v fish >/dev/null && exec -l fish
+{{- end }}
+
 # Ensure ~/.local/bin is in PATH
 [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && export PATH="$HOME/.local/bin:$PATH"
 
