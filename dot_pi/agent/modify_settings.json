@@ -14,7 +14,8 @@
     /*# joinPath .chezmoi.homeDir "dev/yapp/packages/jj" | printf `"%s",` */
     /*# end -*/
     "npm:pi-librarian",
-    "npm:pi-github"
+    "npm:pi-github",
+    "git:github.com/PurpleMyst/pi-goal@e9310d354342386b1f6bd34246b0bd31f37b339b"
   ],
   "treeFilterMode": "no-tools",
   "terminal": {
