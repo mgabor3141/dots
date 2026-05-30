@@ -17,6 +17,11 @@ fi
 # If not running interactively, don't do anything
 [[ $- != *i* ]] && return
 
+# Non-login interactive shells (docker exec -it, sshd remote cmd, etc.) skip
+# .profile. Source it explicitly so PATH (devbox global profile) and exports
+# are present. Login shells already sourced it via the .bash_profile chain.
+shopt -q login_shell || . "$HOME/.profile"
+
 {{- if .container }}
 
 # In the devbox container, default interactive shells to fish (primary shell).
