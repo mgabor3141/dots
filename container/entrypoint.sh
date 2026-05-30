@@ -20,9 +20,16 @@ if [ ! -e "$HOME/.bashrc" ] && [ -d /opt/home-skel ]; then
 fi
 
 # The entrypoint runs under tini, not a login shell, so .profile is never
-# sourced. Prepend the user-managed bin dirs so things installed by chezmoi
-# (gmuxd in ~/.local/bin) and bun (~/.bun/bin) are findable below.
+# sourced. Bootstrap PATH for the find-gmuxd check; once chezmoi has applied
+# .profile, source it so the gmuxd we start (and everything it spawns)
+# inherits the full user env (PATH with devbox/nix profile bins, $SHELL,
+# EDITOR, etc.).
 export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"
+if [ -f "$HOME/.profile" ]; then
+    set +u
+    . "$HOME/.profile"
+    set -u
+fi
 
 if command -v gmuxd >/dev/null; then
   gmuxd start || true
