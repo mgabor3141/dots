@@ -1,51 +1,66 @@
 # Universal headless dev container
 
 One mutable container for everything that doesn't need a GUI. The image is a
-thin, generic toolchain (nix + devbox + chezmoi); your actual environment is
-**applied inside the container at run time** by chezmoi and devbox. You
-install/update everything from within the running container — never by
-rebuilding the image.
+thin, generic toolchain (nix + devbox + chezmoi + tini); your actual
+environment is **applied inside the container, by you, at run time**.
+Identity (dotfiles repo, git name/email) is never baked into the image and
+never injected via env vars: you bootstrap once via `chezmoi init` inside the
+container, then everything is just normal dotfile editing from then on.
 
-## The one-liner
-
-Pull the image and apply your chezmoi config inside it:
+## Bootstrap (one time per container/volume)
 
 ```sh
-docker run -it --rm \
-  -e DOTFILES_REPO=https://github.com/<you>/dotfiles \
-  -e GIT_NAME="<you>" -e GIT_EMAIL="<you@example.com>" \
-  -v devbox-home:/home/devbox \
-  ghcr.io/<you>/devbox-env
+# 1. Bring the container up (compose / `docker run` / whatever).
+# 2. Shell in:
+docker exec -it devbox bash
+
+# 3. Inside the container, initialize chezmoi from your dotfiles repo:
+chezmoi init --apply https://github.com/<you>/dotfiles
+
+# 4. Install the declared package set:
+devbox global install
 ```
 
-On start the entrypoint runs `chezmoi init --apply` (clones the repo, applies
-dotfiles with `container=true`) and then `devbox global install` (installs the
-declared package set). Re-running just `chezmoi update --apply` + reconverges.
-The named volume keeps `$HOME` (and the chezmoi clone) warm across runs.
+That's it. On subsequent container restarts the entrypoint auto-starts
+`gmuxd` (if devbox installed it via `devbox.json`); your dotfiles stay
+exactly as last applied (no surprise `git pull` on restart).
 
-## How the two halves split
+## How the pieces split
 
 | Concern | Managed by | Where the source lives |
 |---|---|---|
 | Packages | **devbox** global profile | `private_dot_local/share/devbox/global/default/devbox.json` |
 | Dotfiles (shell, git, jj, gh, pi…) | **chezmoi** (`container` flag) | the rest of this repo |
-| Build recipe | docker | `container/` (Dockerfile, entrypoint, README) |
+| Build recipe | docker | `container/` (this dir: Dockerfile, entrypoint, README) |
+| Process supervision | **tini** as PID 1 | baked into the image |
 
 > **Why isn't `devbox.json` in this folder?** chezmoi's source path *is* the
 > target path, and devbox only reads its global config from
 > `~/.local/share/devbox/global/default/` (no override exists). So for chezmoi
-> to manage the file where devbox reads it, the source must live at the matching
-> path. This `container/` folder holds the build recipe; the managed dotfile
+> to manage the file where devbox reads it, the source must live at the
+> matching path. `container/` holds the build recipe; the managed dotfile
 > lives at its canonical location.
 
-## chezmoi flags
+## Process model
 
-The container has its **own** `container` flag with its own allowlist in
-`.chezmoiignore` — independent of `headless` (the unraid box, which may go
-away). On host/mac (`container=false`) the devbox profile is ignored, so nothing
-leaks onto those machines.
+```
+tini (PID 1)
+└── entrypoint.sh → exec sleep infinity   ← container's lifeline
+    [gmuxd reparents here after double-fork]
+└── gmuxd (background, if installed)
+    └── session shells (gmux, docker exec, etc.)
+```
 
-## Day-to-day: install / update from inside
+The container's lifetime is decoupled from gmuxd's. `gmuxd restart` (e.g. to
+upgrade the daemon) does not restart the container, so existing gmux sessions
+survive. tini reaps zombies and forwards SIGTERM for clean `docker stop`.
+
+The `container` chezmoi flag has its own allowlist in `.chezmoiignore` and is
+independent of `headless` (which is a different host). On a host where
+`container=false` the devbox profile is ignored, so nothing leaks onto
+non-container machines.
+
+## Day-to-day: edit and apply from inside
 
 **Author-first (declarative):**
 
@@ -63,26 +78,26 @@ chezmoi add ~/.local/share/devbox/global/default/devbox.json
 # commit + push from the chezmoi source dir to persist
 ```
 
-Update everything:
+Pull upstream dotfile changes when *you* want them, not on container restart:
 
 ```sh
-devbox global update    # bump locked package versions
-chezmoi update --apply  # pull + apply latest dotfiles
+chezmoi update --apply
 ```
 
-> `devbox.json` is *authored*, not a snapshot of system state — the profile only
-> ever contains exactly what you wrote down. Find names with
+> `devbox.json` is *authored*, not a snapshot of system state — the profile
+> only ever contains exactly what you wrote down. Find names with
 > `devbox search <name>` (nixpkgs attrs); pin with `name@x.y`.
 
-## Build & publish the image
+## Build the image
+
+This image is built and run locally (no registry round-trip):
 
 ```sh
-docker build -t ghcr.io/<you>/devbox-env container/
-docker push ghcr.io/<you>/devbox-env
+docker build -t devbox container/
 ```
 
-(The image bakes only the toolchain; `DOTFILES_REPO`/`GIT_*` are runtime env,
-so the same image works for anyone.)
+Or via the apps repo's compose stack (`stacks/devbox/compose.yaml`), which
+`build:` points at this directory.
 
 ## Alternative base: from-scratch Debian
 
@@ -92,7 +107,7 @@ and install the toolchain yourself (same FHS/glibc benefits, fully owned):
 ```dockerfile
 FROM debian:stable-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl git sudo xz-utils locales \
+      ca-certificates curl git sudo tini xz-utils locales \
  && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -s /bin/bash devbox \
  && echo "devbox ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/devbox
@@ -103,7 +118,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/
       | sh -s -- install linux --init none --no-confirm
 ENV PATH=/nix/var/nix/profiles/default/bin:/home/devbox/.local/bin:$PATH
 RUN curl -fsSL https://get.jetify.com/devbox | bash -s -- -f
-# ...then install chezmoi + the same entrypoint.sh.
+# ...then install chezmoi + the same entrypoint.sh, ENTRYPOINT via tini.
 ```
 
 The nix-in-container details (single-user vs daemon, `--init none`) are the
