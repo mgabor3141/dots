@@ -1,12 +1,6 @@
 **/README.md
 AGENTS.md
 
-# Fish mutates this file on every session (mouse settings, history flags, universal
-# vars). It's runtime state, not config; chezmoi's exact_fish dir would otherwise
-# perpetually flag it as out-of-sync. Broad pattern so all sections' allowlists
-# below also exclude it. (Re-denied inside container block as belt + suspenders.)
-**/fish_variables
-
 {{- if .container }}
 # Container: ignore everything, then whitelist the dev essentials.
 # Self-contained — does NOT depend on .headless (that's the unraid box).
@@ -20,9 +14,6 @@ AGENTS.md
 !.fish_profile
 !.config/fish
 !.config/fish/**
-# fish_variables is runtime state (re-denied here since !.config/fish/**
-# would otherwise allow it back in).
-**/fish_variables
 
 # Git
 !.gitconfig
