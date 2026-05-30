@@ -11,6 +11,7 @@ AGENTS.md
 !.bashrc
 !.bash_profile
 !.profile
+!.fish_profile
 !.config/fish
 !.config/fish/**
 
