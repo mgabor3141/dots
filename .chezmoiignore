@@ -60,6 +60,12 @@ AGENTS.md
 !.local/share
 !.local/share/devbox
 !.local/share/devbox/**
+
+# Chezmoi run_* scripts at the source root materialize as their stripped name
+# at $HOME root (e.g. run_onchange_after_apply-bun-globals.sh.tmpl runs as
+# ~/apply-bun-globals.sh). Whitelist them so the container's "ignore-all-then-
+# allowlist" rule doesn't strip out our bootstrap scripts.
+!apply-bun-globals.sh
 {{- end }}
 
 {{- if .headless }}
