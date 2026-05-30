@@ -88,4 +88,13 @@ if [ -d "$_dbx/bin" ]; then
     export XDG_DATA_DIRS
 fi
 unset _dbx
+
+# Set $SHELL to fish if available (gmux, tmux, etc. spawn $SHELL by default;
+# without this it falls back to /bin/sh). Resolved after PATH setup above so
+# fish-from-devbox is reachable. Fish gets its own native version via
+# .config/fish/conf.d/shell.fish.
+if command -v fish >/dev/null 2>&1; then
+    SHELL="$(command -v fish)"
+    export SHELL
+fi
 # fish-skip-end
