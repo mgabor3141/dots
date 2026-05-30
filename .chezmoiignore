@@ -3,9 +3,9 @@ AGENTS.md
 
 # Fish mutates this file on every session (mouse settings, history flags, universal
 # vars). It's runtime state, not config; chezmoi's exact_fish dir would otherwise
-# perpetually flag it as out-of-sync. (Re-denied inside the container block after
-# the broad fish allowlist there.)
-.config/fish/fish_variables
+# perpetually flag it as out-of-sync. Broad pattern so all sections' allowlists
+# below also exclude it. (Re-denied inside container block as belt + suspenders.)
+**/fish_variables
 
 {{- if .container }}
 # Container: ignore everything, then whitelist the dev essentials.
@@ -20,10 +20,9 @@ AGENTS.md
 !.fish_profile
 !.config/fish
 !.config/fish/**
-# Fish writes fish_variables on every session (mouse settings, etc.); it's
-# runtime state, not config. Re-deny here so the !.config/fish/** allowlist
-# above doesn't re-include it.
-.config/fish/fish_variables
+# fish_variables is runtime state (re-denied here since !.config/fish/**
+# would otherwise allow it back in).
+**/fish_variables
 
 # Git
 !.gitconfig
