@@ -28,6 +28,7 @@
     "gcc@latest",
     "pkg-config@latest",
     "python3@latest",
-    "nodejs@latest"
+    "nodejs@latest",
+    "bun@latest"
   ]
 }

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Declarative bun-managed global packages. Edit the PACKAGES list to add or
+# pin; chezmoi reruns this script whenever its content changes (run_onchange_).
+# Safe to run before bun is installed: skips cleanly with a hint.
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+PACKAGES=(
+    "@earendil-works/pi-coding-agent@latest"
+)
+
+if ! command -v bun >/dev/null 2>&1; then
+    echo "⚠️  bun not found, skipping global package installs"
+    echo "    (install bun via 'devbox global install', then re-run 'chezmoi apply')"
+    exit 0
+fi
+
+for pkg in "${PACKAGES[@]}"; do
+    echo ">>> bun install -g $pkg"
+    bun install -g "$pkg"
+done
+
+echo "✅ Done installing bun globals"
