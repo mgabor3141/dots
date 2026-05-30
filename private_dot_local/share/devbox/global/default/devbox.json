@@ -30,6 +30,7 @@
     "python3@latest",
     "nodejs@latest",
     "bun@latest",
-    "zig@latest"
+    "zig@latest",
+    "nano@latest"
   ]
 }
