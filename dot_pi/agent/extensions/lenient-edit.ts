@@ -10,15 +10,15 @@
  *
  * This wrapper does two things:
  *
- *   1. prepareArguments shim — runs before validation, applies the built-in
- *      normalization, then discards unknown keys so the call executes instead
- *      of failing. (Keeps the strict schema, so the model still sees the
- *      correct minimal shape in the system prompt.)
+ *   1. prepareArguments shim — runs before validation and discards unknown
+ *      keys so the call executes instead of failing. (Keeps the strict schema,
+ *      so the model still sees the correct minimal shape in the system
+ *      prompt.)
  *
  *   2. message_end rewrite — replaces the finalized assistant message so the
- *      *persisted* tool call (in the session jsonl) is the canonical, cleaned
- *      form. The model never sees its own malformed call in the history; it
- *      reads back as if it had called edit correctly the first time.
+ *      *persisted* tool call (in the session jsonl) has the unknown keys
+ *      stripped. The model never sees its own malformed call in the history;
+ *      it reads back as if it had called edit correctly the first time.
  *
  * Execution, file-mutation queueing, and diff rendering are delegated to the
  * genuine built-in implementation via the public `createEditToolDefinition`
@@ -73,13 +73,6 @@ export default function (pi: ExtensionAPI) {
     return;
   }
 
-  // Canonicalize raw edit arguments the same way for both execution and the
-  // persisted-history rewrite: built-in normalization, then strip unknowns.
-  const canonicalize = (raw: unknown): unknown => {
-    const normalized = reference.prepareArguments ? reference.prepareArguments(raw) : raw;
-    return stripUnknown(normalized);
-  };
-
   // execute() resolves relative paths against the closed-over cwd, so build a
   // per-cwd definition lazily and cache it.
   const byCwd = new Map<string, ReturnType<typeof createEditToolDefinition>>();
@@ -104,7 +97,7 @@ export default function (pi: ExtensionAPI) {
     renderShell: reference.renderShell,
 
     prepareArguments(args) {
-      return canonicalize(args) as ReturnType<NonNullable<typeof reference.prepareArguments>>;
+      return stripUnknown(args) as ReturnType<NonNullable<typeof reference.prepareArguments>>;
     },
 
     execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -136,8 +129,8 @@ export default function (pi: ExtensionAPI) {
       const call = block as ToolCall;
       if (call.name !== "edit") return block;
 
-      const cleaned = canonicalize(call.arguments);
-      // Only replace when the canonical form actually differs, to avoid
+      const cleaned = stripUnknown(call.arguments);
+      // Only replace when the stripped form actually differs, to avoid
       // needless message churn (and to leave well-formed calls byte-identical).
       if (JSON.stringify(cleaned) === JSON.stringify(call.arguments)) return block;
 
