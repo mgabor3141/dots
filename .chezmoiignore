@@ -40,16 +40,23 @@ AGENTS.md
 # Local bin (allowlist; subdir .chezmoiignore can't override */** + !)
 !.local
 !.local/bin
+!.local/bin/canopy
 !.local/bin/cols
 !.local/bin/cz
-!.local/bin/persist
-!.local/bin/session-manager
-!.local/bin/rtk
-!.local/bin/shellcheck
-!.local/bin/yeet
-!.local/bin/zed
+!.local/bin/grove
 !.local/bin/gmux
 !.local/bin/gmuxd
+!.local/bin/jira
+!.local/bin/persist
+!.local/bin/pi-context-growth
+!.local/bin/pr-status
+!.local/bin/pr_status
+!.local/bin/rtk
+!.local/bin/session-manager
+!.local/bin/shellcheck
+!.local/bin/yeet
+!.local/bin/yeet-model
+!.local/bin/zed
 
 # devbox global profile (declarative package list, managed here)
 !.local/share
