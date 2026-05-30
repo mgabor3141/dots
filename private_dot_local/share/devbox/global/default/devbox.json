@@ -1,10 +1,5 @@
 {
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/main/.schema/devbox.schema.json",
-  "//": "Declarative package set for the universal container env. nixpkgs attrs.",
-  "//1": "Managed by chezmoi at devbox's canonical global path so devbox uses it natively.",
-  "//2": "Edit-in-repo flow:  chezmoi edit this file -> chezmoi apply -> devbox global install.",
-  "//3": "Live flow inside container:  devbox global add foo  ->  chezmoi add ~/.local/share/devbox/global/default/devbox.json  to capture it back.",
-  "//4": "Find names with `devbox search <name>`; pin with name@x.y.",
   "packages": [
     "ripgrep@latest",
     "fd@latest",
