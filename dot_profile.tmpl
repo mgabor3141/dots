@@ -57,6 +57,11 @@ export NX_TUI="false"
 # shells (e.g. `bash -lc` from agent tool calls). These idempotent prepends are
 # safe to run in every shell. (TLS works via the base image's system certs, and
 # nix rpath-patches binaries, so no SSL/locale/LD_LIBRARY_PATH env is needed.)
+#
+# Markers below are stripped by dot_fish_profile.tmpl since the POSIX case/if
+# can't be regex-translated to fish. Fish gets the same logic natively via
+# .config/fish/conf.d/devbox.fish.
+# fish-skip-start
 _dbx="$HOME/.local/share/devbox/global/default/.devbox/nix/profile/default"
 if [ -d "$_dbx/bin" ]; then
     case ":$PATH:" in
@@ -72,3 +77,4 @@ if [ -d "$_dbx/bin" ]; then
     export XDG_DATA_DIRS
 fi
 unset _dbx
+# fish-skip-end
