@@ -50,3 +50,25 @@ export SSH_AUTH_SOCK=$HOME/Library/Containers/com.bitwarden.desktop/Data/.bitwar
 # Dev stuff
 export NX_DAEMON="false"
 export NX_TUI="false"
+
+# devbox global profile. We derive env from the stable profile path rather than
+# `eval "$(devbox global shellenv)"`: shellenv uses a stateful "path stack" that
+# clobbers PATH back to its pre-devbox state when re-sourced in nested login
+# shells (e.g. `bash -lc` from agent tool calls). These idempotent prepends are
+# safe to run in every shell. (TLS works via the base image's system certs, and
+# nix rpath-patches binaries, so no SSL/locale/LD_LIBRARY_PATH env is needed.)
+_dbx="$HOME/.local/share/devbox/global/default/.devbox/nix/profile/default"
+if [ -d "$_dbx/bin" ]; then
+    case ":$PATH:" in
+        *":$_dbx/bin:"*) ;;
+        *) PATH="$_dbx/bin:$PATH" ;;
+    esac
+    export PATH
+    # Shell completions, man pages, terminfo, etc.
+    case ":${XDG_DATA_DIRS:-}:" in
+        *":$_dbx/share:"*) ;;
+        *) XDG_DATA_DIRS="$_dbx/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" ;;
+    esac
+    export XDG_DATA_DIRS
+fi
+unset _dbx

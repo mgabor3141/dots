@@ -8,8 +8,16 @@ set -Eeuo pipefail
 
 PATCHES_DIR="{{ joinPath .chezmoi.homeDir ".pi/agent/patches" }}"
 
-# Resolve the global npm lib directory (works with fnm, nvm, or system node)
-NPM_ROOT="$(npm root -g 2>/dev/null)"
+# Resolve the global npm lib directory (works with fnm, nvm, or system node).
+# Guard explicitly: under `set -e`, a failing command substitution (npm absent,
+# e.g. a fresh container before packages are installed) aborts the script
+# before the emptiness check below ever runs.
+if ! command -v npm >/dev/null 2>&1; then
+    echo "⚠️  npm not found, skipping pi package patches"
+    exit 0
+fi
+
+NPM_ROOT="$(npm root -g 2>/dev/null || true)"
 
 if [[ -z "$NPM_ROOT" ]]; then
     echo "⚠️  npm not found, skipping pi package patches"

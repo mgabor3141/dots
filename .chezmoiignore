@@ -1,6 +1,61 @@
 **/README.md
 AGENTS.md
 
+{{- if .container }}
+# Container: ignore everything, then whitelist the dev essentials.
+# Self-contained — does NOT depend on .headless (that's the unraid box).
+*
+**/*
+
+# Shell
+!.bashrc
+!.bash_profile
+!.profile
+!.config/fish
+!.config/fish/**
+
+# Git
+!.gitconfig
+!.editorconfig
+
+# CLI tool configs
+!.config
+!.config/btop
+!.config/btop/**
+!.config/direnv
+!.config/direnv/**
+!.config/fastfetch
+!.config/fastfetch/**
+!.config/jj
+!.config/jj/**
+!.config/lesskey
+!.config/gh
+!.config/gh/**
+
+# Pi agent config
+!.pi
+!.pi/**
+
+# Local bin (allowlist; subdir .chezmoiignore can't override */** + !)
+!.local
+!.local/bin
+!.local/bin/cols
+!.local/bin/cz
+!.local/bin/persist
+!.local/bin/session-manager
+!.local/bin/rtk
+!.local/bin/shellcheck
+!.local/bin/yeet
+!.local/bin/zed
+!.local/bin/gmux
+!.local/bin/gmuxd
+
+# devbox global profile (declarative package list, managed here)
+!.local/share
+!.local/share/devbox
+!.local/share/devbox/**
+{{- end }}
+
 {{- if .headless }}
 # Headless: ignore everything, then whitelist essentials
 *
@@ -134,6 +189,15 @@ nix-darwin
 nix-darwin
 {{- else }}
 .config/fish/conf.d/fnm.fish
+{{- end }}
+
+# Container build context (Dockerfile, entrypoint, README) — repo tooling,
+# never applied to $HOME.
+container
+
+{{- if not .container }}
+# devbox global profile only belongs in the container env
+.local/share/devbox
 {{- end }}
 
 # Unmanaged

@@ -1,6 +1,7 @@
 [data]
 managed = {{ promptBoolOnce . "managed" "managed device" }}
 headless = {{ promptBoolOnce . "headless" "headless server" }}
+container = {{ promptBoolOnce . "container" "container env" }}
 
 [diff]
 command = "{{ .chezmoi.sourceDir }}/.helpers/chezmoi-diff"
