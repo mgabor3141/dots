@@ -48,8 +48,8 @@ async function detectJj(cwd: string): Promise<JjState> {
 
 const JJ_NOTE = [
 	"Use jj instead of git.",
-	"Every file change is automatically recorded in the working copy commit `@` — there is no staging or `jj add`.",
-	"`@` is your workspace, not your history: accumulate freely, `jj commit -m '...'` when a logical unit is done, `jj diff --stat` before starting new work.",
+	"Every file change is automatically recorded in the working copy commit `@`, there is no staging or `jj add`.",
+  "Run `jj commit -m '...'` when a logical unit is done, `jj diff --stat` before starting new work. Run `jj new` before editing files if you don't want to modify the current @ commit.",
 ].join(" ");
 
 function buildJjNote(state: JjState, cwd: string): string {
@@ -65,13 +65,13 @@ function buildJjNote(state: JjState, cwd: string): string {
 
 // ── prompt construction ──────────────────────────────────────────────────────
 
-const PREAMBLE = `You are running inside a coding agent harness.
+const PREAMBLE = `You are running inside an agent harness.
 
 Non-obvious tool notes:
-- Prefer relative paths over absolute paths. You can assume that all relative paths will be resolved from the current working directory.
+- Prefer using relative paths. All relative paths will be resolved from your current working directory.
 - Use read to examine files, not cat or sed.
-- edit oldText must match exactly — read first to verify.
-- brave_search / librarian: prefer over assumptions for external tools, libraries, or error messages.`;
+- edit oldText must match exactly. read first to verify.
+- Prefer using the web_search and librarian tools over assumptions.`;
 
 /**
  * Extract the dynamic tail from the built-in prompt.
@@ -112,11 +112,11 @@ export default function (pi: ExtensionAPI) {
 
 		let system: string;
 		if (process.platform === "darwin") {
-			system = "macOS (Work)";
+			system = "macOS";
 		} else if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) {
-			system = "Linux (Personal Desktop)";
+			system = "Linux desktop";
 		} else {
-			system = "Linux headless (Unraid Server)";
+			system = "Linux headless";
 		}
 
 		const notes: string[] = [
