@@ -1,9 +1,10 @@
 **/README.md
 AGENTS.md
 
-# Fish writes fish_variables on every session (mouse settings, history flags,
-# etc.). It's runtime state, not config; chezmoi's exact_fish dir would
-# otherwise perpetually flag it as out-of-sync.
+# Fish mutates this file on every session (mouse settings, history flags, universal
+# vars). It's runtime state, not config; chezmoi's exact_fish dir would otherwise
+# perpetually flag it as out-of-sync. (Re-denied inside the container block after
+# the broad fish allowlist there.)
 .config/fish/fish_variables
 
 {{- if .container }}
@@ -19,6 +20,10 @@ AGENTS.md
 !.fish_profile
 !.config/fish
 !.config/fish/**
+# Fish writes fish_variables on every session (mouse settings, etc.); it's
+# runtime state, not config. Re-deny here so the !.config/fish/** allowlist
+# above doesn't re-include it.
+.config/fish/fish_variables
 
 # Git
 !.gitconfig
