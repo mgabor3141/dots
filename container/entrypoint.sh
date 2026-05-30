@@ -19,6 +19,11 @@ if [ ! -e "$HOME/.bashrc" ] && [ -d /opt/home-skel ]; then
   cp -an /opt/home-skel/. "$HOME/"
 fi
 
+# The entrypoint runs under tini, not a login shell, so .profile is never
+# sourced. Prepend the user-managed bin dirs so things installed by chezmoi
+# (gmuxd in ~/.local/bin) and bun (~/.bun/bin) are findable below.
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"
+
 if command -v gmuxd >/dev/null; then
   gmuxd start || true
 fi
