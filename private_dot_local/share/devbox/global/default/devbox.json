@@ -29,6 +29,7 @@
     "pkg-config@latest",
     "python3@latest",
     "nodejs@latest",
-    "bun@latest"
+    "bun@latest",
+    "zig@latest"
   ]
 }
