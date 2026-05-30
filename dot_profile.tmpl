@@ -51,6 +51,17 @@ export SSH_AUTH_SOCK=$HOME/Library/Containers/com.bitwarden.desktop/Data/.bitwar
 export NX_DAEMON="false"
 export NX_TUI="false"
 
+# Bun's global bin (where 'bun install -g' lands its shims, e.g. pi).
+# fish-skip-start
+if [ -d "$HOME/.bun/bin" ]; then
+    case ":$PATH:" in
+        *":$HOME/.bun/bin:"*) ;;
+        *) PATH="$HOME/.bun/bin:$PATH" ;;
+    esac
+    export PATH
+fi
+# fish-skip-end
+
 # devbox global profile. We derive env from the stable profile path rather than
 # `eval "$(devbox global shellenv)"`: shellenv uses a stateful "path stack" that
 # clobbers PATH back to its pre-devbox state when re-sourced in nested login
