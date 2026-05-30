@@ -2,6 +2,12 @@
 # Declarative bun-managed global packages. Edit the PACKAGES list to add or
 # pin; chezmoi reruns this script whenever its content changes (run_onchange_).
 # Safe to run before bun is installed: skips cleanly with a hint.
+#
+# Embedding bun's version (or 'missing') in a template-evaluated hash comment
+# means this script also re-runs the moment bun goes from absent to present,
+# so the bootstrap order (devbox install bun -> chezmoi apply) works without
+# the user remembering to bust state.
+# Bun state hash: {{ output "bash" "-c" "command -v bun >/dev/null && bun --version || echo missing" | trim }}
 trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 set -Eeuo pipefail
 
