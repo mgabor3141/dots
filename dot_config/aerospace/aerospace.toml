@@ -116,7 +116,7 @@ run = "move-node-to-workspace 1A --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "com.google.Chrome"
-run = "move-node-to-workspace 2Q --focus-follows-window"
+run = "move-node-to-workspace 1A --focus-follows-window"
 
 [[on-window-detected]]
 if.app-id = "dev.zed.Zed"
