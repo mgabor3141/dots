@@ -24,6 +24,12 @@ You might have heard that "defense in depth" or "belt and suspenders" approaches
 
 Avoid using emdashes. They are an indicator of "AI slop" and undermine credibility. Prefer commas, semicolons, colons, or separate sentences.
 
+## Write for the Reader
+
+Text you post for others to read later (PR descriptions, reviews, commit messages, code comments, issues, docs) serves humans first and agents second. The job is the fastest path to understanding, not a record of everything you did. Every line is a cost; default to cutting. (This is about posted artifacts, not your live replies in a conversation.)
+
+Don't restate what the reader can already see: the code, the types, the tests, the diff. Capture the *why*, especially why not the obvious alternative, not the *what* that's already there. Prefer a link to the exact line, ticket, comment, or PR over restating it. Fold genuinely optional depth (full payloads, long enumerations, edge cases) into a `<details>` block, but collapsing is not a substitute for cutting.
+
 ## Tool Gotchas
 
 The `Edit` and `Write` tools take `newText` as a JSON string. JSON escapes are decoded before the bytes hit disk: `\\` becomes a single `\`, `\n` becomes a real newline, `\t` a tab. To write a literal single backslash (bash line-continuation `\`, regex escape `\.`, Windows path), put `\\` in `newText`. To write two literal backslashes, put `\\\\`. When unsure, sanity-check with `cat -A` after the edit; backslash-significant content in shell, regex, and config files is the most common place to get this wrong silently.
