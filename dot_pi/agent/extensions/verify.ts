@@ -42,6 +42,10 @@ const WIDGET_KEY = "verify";
 const MAX_PASSES = 10;
 const THINKING_LEVELS: ReadonlySet<string> = new Set(["minimal", "low", "medium", "high", "xhigh"]);
 const PROXY_GREETING = "I'm ready to help. What would you like me to work on?";
+// Tags injected turns so they are distinguishable from real user messages. The
+// proxy sees its own prior (prefixed) turns and may echo the prefix, so we
+// strip it on the way in and add exactly one on the way out (idempotent).
+const MESSAGE_PREFIX = "🔎 [verify] ";
 
 type ThemeLike = { fg: (color: string, text: string) => string };
 type AnyCtx = ExtensionContext | ExtensionCommandContext;
@@ -226,7 +230,10 @@ async function runProxy(ctx: AnyCtx): Promise<Reply | null> {
     .map((c) => c.text)
     .join("\n")
     .trim();
-  return parseReply(text);
+  // The proxy may have echoed the prefix from its prior turns; drop it before
+  // parsing so STOP detection works and we do not double-prefix on inject.
+  const cleaned = text.startsWith(MESSAGE_PREFIX) ? text.slice(MESSAGE_PREFIX.length).trimStart() : text;
+  return parseReply(cleaned);
 }
 
 /** One iteration: ask the proxy, then either stop or inject its next message. */
@@ -269,7 +276,8 @@ async function tick(pi: ExtensionAPI, ctx: AnyCtx): Promise<void> {
 
   passes += 1;
   updateWidget(ctx);
-  const message = reply.text || "Are you sure this is complete? Double-check anything you might have missed.";
+  const body = reply.text || "Are you sure this is complete? Double-check anything you might have missed.";
+  const message = body.startsWith(MESSAGE_PREFIX) ? body : `${MESSAGE_PREFIX}${body}`;
   pi.sendUserMessage(message, { deliverAs: "followUp" });
 }
 
@@ -296,6 +304,14 @@ export default function (pi: ExtensionAPI) {
       updateWidget(ctx);
       if (ctx.isIdle()) await tick(pi, ctx);
     },
+  });
+
+  // Reload/new/fork/quit tears down this instance. Stop the loop so a lingering
+  // old closure cannot keep injecting after a fresh instance is bound.
+  pi.on("session_shutdown", async (_event, ctx) => {
+    active = false;
+    running = false;
+    updateWidget(ctx);
   });
 
   // Make the loop interruptible: an aborted turn stops it.
