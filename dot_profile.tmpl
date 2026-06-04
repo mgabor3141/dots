@@ -38,6 +38,9 @@ export npm_config_prefix="$HOME/.local"
 
 {{- if .headless }}
 export npm_config_prefix="/mnt/user/appdata/node"
+# Redirect bun's global installs into the same prefix that npm uses, so its
+# shims land in /mnt/user/appdata/node/bin and get picked up by dotfiles_setup.
+export BUN_INSTALL="/mnt/user/appdata/node"
 export PATH="$HOME/.local/bin:/mnt/user/appdata/chezmoi/bin:/mnt/user/appdata/node/bin:$PATH"
 {{- end }}
 

@@ -132,6 +132,9 @@ AGENTS.md
 !.chezmoiscripts
 !.chezmoiscripts/headless
 !.chezmoiscripts/headless/**
+
+# Bun-managed global package script (materializes as ~/apply-bun-globals.sh)
+!apply-bun-globals.sh
 {{- end }}
 
 {{- if not .headless }}
