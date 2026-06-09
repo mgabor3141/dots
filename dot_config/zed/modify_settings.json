@@ -29,6 +29,7 @@
     "default_profile": "write",
     "model_parameters": []
   },
+  "cli_default_open_behavior": "new_window",
   "outline_panel": {
     "indent_size": 16.0
   },
