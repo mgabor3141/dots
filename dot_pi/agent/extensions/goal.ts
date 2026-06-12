@@ -1,31 +1,35 @@
 /**
- * verify.ts: an on-demand "diligent user" loop.
+ * goal.ts: a goal-directed "diligent user" loop.
  *
- * You drive the agent normally. When you want it pushed toward a thorough,
- * finished result, run `/verify` (run it again to turn it off). After the agent
+ * You drive the agent normally. When you want it pushed toward a finished
+ * result, run `/goal <what you want>` (the goal is optional). After the agent
  * next goes idle, a separate one-shot LLM call (the "proxy") stands in for you,
  * the user, and writes the next message a careful, slightly demanding user
- * would send: did you test it, did you handle the edge cases, are you sure it
- * is complete. That message is injected as the agent's next turn. This repeats
- * until the proxy decides the work is genuinely done (it replies STOP), or you
- * press Esc.
+ * would send. That message is injected as the agent's next turn. This repeats
+ * until the proxy decides the goal is met (it replies STOP), needs a decision
+ * from you (it replies HALT), or you run `goal-clear` (or press Esc).
+ *
+ * The goal is the proxy's north star. It supplies a terminus (when to stop),
+ * scope (which actions are in bounds), and direction (what to push toward).
+ * Crucially, the proxy must NOT steer the agent toward irreversible or external
+ * actions (merging, pushing, publishing, deleting, sending) unless the goal
+ * explicitly calls for them, and "prepare X" never means "do X". When a
+ * consequential decision arises that the goal does not settle, the proxy hands
+ * it back to you (HALT) instead of deciding. Without a goal, nothing
+ * consequential is authorized, so the loop just pushes for thoroughness.
  *
  * The proxy is NOT a verifier. It takes the agent at its word and does not see
- * tool calls, tool results, or the agent's internal reasoning. It only sees the
- * conversation: your messages and the agent's turn-ending replies. Its value is
- * making sure nothing is forgotten, not catching the agent in a lie; the agent
- * is capable enough to work out the specifics from a nudge.
+ * tool calls, tool results, or the agent's internal reasoning, only the
+ * conversation. We send it the conversation with roles SWAPPED: the agent's
+ * turns become `user` turns and the user side (your messages plus the proxy's
+ * own earlier nudges) becomes `assistant` turns, so the proxy is literally in
+ * the user's seat and its natural next `assistant` turn is the next message.
  *
- * Mechanically we send the proxy the conversation with roles SWAPPED: the
- * agent's turns become `user` turns and the user side (your messages plus the
- * proxy's own earlier nudges) becomes `assistant` turns. So the proxy is
- * literally sitting in the user's seat, and its natural next `assistant` turn
- * is the next user message. A synthetic leading `user` turn keeps the message
- * list starting with `user` for providers that require it.
+ * Commands: `/goal [text]` starts or updates the loop; `goal-clear` stops it
+ * (the current turn finishes; no further prompts are injected).
  *
  * Proxy model: the first available token in PI_LIBRARIAN_MODELS
- * ("provider/model:thinking", comma-separated), falling back to the current
- * model. A prototyping choice (cheap model), independent of the main agent.
+ * ("provider/model:thinking"), falling back to the current model.
  *
  * State is in-memory and single-session. Nothing is persisted.
  */
@@ -38,19 +42,19 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 
-const WIDGET_KEY = "verify";
+const WIDGET_KEY = "goal";
 const MAX_PASSES = 10;
 const THINKING_LEVELS: ReadonlySet<string> = new Set(["minimal", "low", "medium", "high", "xhigh"]);
 const PROXY_GREETING = "I'm ready to help. What would you like me to work on?";
 // Tags injected turns so they are distinguishable from real user messages. The
 // proxy sees its own prior (prefixed) turns and may echo the prefix, so we
 // strip it on the way in and add exactly one on the way out (idempotent).
-const MESSAGE_PREFIX = "🔎 [verify] ";
+const MESSAGE_PREFIX = "[goal] ";
 
 type ThemeLike = { fg: (color: string, text: string) => string };
 type AnyCtx = ExtensionContext | ExtensionCommandContext;
 type ProxyModel = { model: NonNullable<ExtensionContext["model"]>; thinking?: ThinkingLevel };
-type Reply = { stop: boolean; text: string };
+type Reply = { kind: "continue" | "stop" | "halt"; text: string };
 type SwapTurn = { role: "user" | "assistant"; text: string };
 
 // Loose views of the message shapes we read out of the session branch.
@@ -60,21 +64,43 @@ type Msg = { role?: string; content?: unknown };
 // --- module state (in-memory, single session) ----------------------------------
 
 let active = false;
+let goal: string | null = null;
 let passes = 0;
 let startedAt = 0;
 let running = false; // a proxy call is in flight; guards against reentrancy
 
 // --- prompt ---------------------------------------------------------------------
 
-const PROXY_SYSTEM = [
-  "You play the human user in a conversation with a capable coding agent. Mechanically, your own turns appear in the assistant role and the agent's turns appear in the user role; always answer as the human user writing the next message to the agent.",
-  "",
-  "You gave the agent a task and you are shepherding it to a thorough, complete result, the way a careful and slightly demanding user would. Take the agent at its word: you do not verify its claims and you do not need to see its tools or output. Your value is making sure nothing is forgotten. Nudge it to test what it built, to handle edge cases and error paths, to check assumptions against real sources, to look at any visible output, and to simplify or document where that helps.",
-  "",
-  "You do not need to know the exact right question; a short, natural nudge is enough, because the agent can work out the specifics. Keep each message brief and in a plain user voice. Do not invent requirements the original task never implied.",
-  "",
-  "When the agent has clearly finished the request and has said it cannot meaningfully improve the work further, reply with exactly STOP on its own line and nothing else.",
-].join("\n");
+function buildProxySystem(currentGoal: string | null): string {
+  const lines = [
+    "You play the human user in a conversation with a capable coding agent. Mechanically, your own turns appear in the assistant role and the agent's turns appear in the user role; always answer as the human user writing the next message to the agent.",
+    "",
+  ];
+  if (currentGoal) {
+    lines.push(
+      "Your goal for this work, in your own words, is:",
+      currentGoal,
+      "",
+      "Steer the agent toward exactly this goal and judge completion against it. Do only what the goal calls for. If the goal asks to prepare or get something ready, that does not authorize doing the final step. For example, a goal of \"a PR that is ready to merge\" means stop once it is ready and do NOT merge it.",
+      "",
+    );
+  } else {
+    lines.push(
+      "The user has not stated a specific goal. Push the agent to finish the work it has already taken on and to make it thorough and correct, and judge completion by whether that work is genuinely done.",
+      "",
+    );
+  }
+  lines.push(
+    "Take the agent at its word: you do not verify its claims and you do not need to see its tools or output. Your value is making sure nothing is forgotten. Nudge it to test what it built, to handle edge cases and error paths, to check assumptions against real sources, to look at any visible output, and to simplify or document where that helps. A short, natural nudge is enough; the agent can work out the specifics. Keep each message brief and in a plain user voice. Do not invent requirements beyond the goal or the work already underway.",
+    "",
+    "Never steer the agent toward actions with external, lasting, or hard-to-reverse consequences unless your goal explicitly calls for them. That includes merging, pushing to shared or protected branches, force-pushing, publishing or releasing, deploying, deleting data or branches, sending messages, opening or closing things that notify other people, and spending money. When in doubt, treat an action as consequential.",
+    "",
+    "End the loop with one of these instead of a normal message:",
+    "- Reply with exactly STOP on its own line when the goal is met (or the work is genuinely done) and there is nothing left to do safely.",
+    "- Reply with HALT: followed by a one-line question when reaching the goal would require a consequential action you are not authorized to take, or when a decision with lasting consequences comes up that the goal does not settle. Hand that decision back to the user rather than making it yourself.",
+  );
+  return lines.join("\n");
+}
 
 // --- conversation assembly ------------------------------------------------------
 
@@ -154,7 +180,8 @@ function updateWidget(ctx: AnyCtx): void {
   }
   const theme = ctx.ui.theme as ThemeLike;
   const state = running ? "thinking" : "active";
-  const line = `${theme.fg("accent", "🔎 verify")} ${theme.fg("dim", `(${state}, ${fmtElapsed(Date.now() - startedAt)})`)}`;
+  const label = goal ? (goal.length > 48 ? `${goal.slice(0, 47)}…` : goal) : "(general)";
+  const line = `${theme.fg("accent", "🎯 goal")} ${theme.fg("dim", `(${state}, ${fmtElapsed(Date.now() - startedAt)})`)} ${label}`;
   ctx.ui.setWidget(WIDGET_KEY, [line]);
 }
 
@@ -198,15 +225,21 @@ function pickProxyModel(ctx: AnyCtx): ProxyModel | null {
 function parseReply(text: string): Reply {
   const trimmed = text.trim();
   const firstLine = (trimmed.split("\n").find((l) => l.trim().length > 0) ?? "").trim();
-  if (/^stop[.!]?$/i.test(firstLine)) return { stop: true, text: trimmed };
-  return { stop: false, text: trimmed };
+  const halt = firstLine.match(/^halt\b[:.\-\s]*(.*)$/i);
+  if (halt) {
+    const rest = trimmed.slice(trimmed.indexOf(firstLine) + firstLine.length).trim();
+    const question = [halt[1].trim(), rest].filter(Boolean).join("\n").trim();
+    return { kind: "halt", text: question || "A decision is needed before continuing." };
+  }
+  if (/^stop\b/i.test(firstLine)) return { kind: "stop", text: trimmed };
+  return { kind: "continue", text: trimmed };
 }
 
 /** Run one proxy pass. Returns the reply, or null if the call could not run. */
 async function runProxy(ctx: AnyCtx): Promise<Reply | null> {
   const picked = pickProxyModel(ctx);
   if (!picked) {
-    note(ctx, "No model available for verification.", "error");
+    note(ctx, "No model available for the goal loop.", "error");
     return null;
   }
   const auth = await ctx.modelRegistry.getApiKeyAndHeaders(picked.model);
@@ -217,7 +250,7 @@ async function runProxy(ctx: AnyCtx): Promise<Reply | null> {
 
   const res = await complete(
     picked.model,
-    { systemPrompt: PROXY_SYSTEM, messages: buildSwappedMessages(ctx) },
+    { systemPrompt: buildProxySystem(goal), messages: buildSwappedMessages(ctx) },
     {
       apiKey: auth.apiKey,
       headers: auth.headers,
@@ -231,17 +264,17 @@ async function runProxy(ctx: AnyCtx): Promise<Reply | null> {
     .join("\n")
     .trim();
   // The proxy may have echoed the prefix from its prior turns; drop it before
-  // parsing so STOP detection works and we do not double-prefix on inject.
+  // parsing so STOP/HALT detection works and we do not double-prefix on inject.
   const cleaned = text.startsWith(MESSAGE_PREFIX) ? text.slice(MESSAGE_PREFIX.length).trimStart() : text;
   return parseReply(cleaned);
 }
 
-/** One iteration: ask the proxy, then either stop or inject its next message. */
+/** One iteration: ask the proxy, then either stop, halt, or inject its message. */
 async function tick(pi: ExtensionAPI, ctx: AnyCtx): Promise<void> {
   if (!active || running) return;
   if (passes >= MAX_PASSES) {
     active = false;
-    note(ctx, `Verification stopped after ${MAX_PASSES} passes.`, "warning");
+    note(ctx, `Goal loop stopped after ${MAX_PASSES} passes.`, "warning");
     updateWidget(ctx);
     return;
   }
@@ -254,22 +287,29 @@ async function tick(pi: ExtensionAPI, ctx: AnyCtx): Promise<void> {
   } catch (err) {
     active = false;
     running = false;
-    note(ctx, `Verification failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    note(ctx, `Goal loop failed: ${err instanceof Error ? err.message : String(err)}`, "error");
     updateWidget(ctx);
     return;
   }
   running = false;
 
-  if (!active) return; // toggled off or Esc while the proxy was running
+  if (!active) return; // cleared or Esc while the proxy was running
   if (!reply) {
     active = false; // error already surfaced
     updateWidget(ctx);
     return;
   }
 
-  if (reply.stop) {
+  if (reply.kind === "stop") {
     active = false;
-    note(ctx, "Verification complete: the work looks done.");
+    note(ctx, goal ? "Goal reached: the work looks done." : "The work looks done.");
+    updateWidget(ctx);
+    return;
+  }
+
+  if (reply.kind === "halt") {
+    active = false;
+    note(ctx, `Paused for your decision: ${reply.text}`, "warning");
     updateWidget(ctx);
     return;
   }
@@ -284,25 +324,34 @@ async function tick(pi: ExtensionAPI, ctx: AnyCtx): Promise<void> {
 // --- extension ------------------------------------------------------------------
 
 export default function (pi: ExtensionAPI) {
-  pi.registerCommand("verify", {
-    description: "Toggle the verification loop (a stand-in user pushes the agent until the work is done). Esc also stops it.",
-    handler: async (_args: string, ctx: ExtensionCommandContext) => {
-      if (active) {
-        active = false;
-        note(ctx, "Verification disabled.");
-        updateWidget(ctx);
-        return;
-      }
+  pi.registerCommand("goal", {
+    description: "Start or update the goal loop: a stand-in user pushes the agent toward your goal (optional) until done. Run goal-clear to stop.",
+    handler: async (args: string, ctx: ExtensionCommandContext) => {
       if (!hasWork(ctx)) {
-        note(ctx, "Nothing to verify yet. Let the agent do some work first.", "warning");
+        note(ctx, "Nothing to work on yet. Let the agent do something first.", "warning");
         return;
       }
+      goal = args.trim() || null;
       active = true;
       passes = 0;
       startedAt = Date.now();
-      note(ctx, "Verification enabled. Pushing the agent when it goes idle; /verify or Esc to stop.");
+      note(ctx, goal ? `Goal set: ${goal}` : "Goal loop started (no specific goal). Run goal-clear to stop.");
       updateWidget(ctx);
       if (ctx.isIdle()) await tick(pi, ctx);
+    },
+  });
+
+  pi.registerCommand("goal-clear", {
+    description: "Stop the goal loop. The current turn finishes; no further prompts are injected.",
+    handler: async (_args: string, ctx: ExtensionCommandContext) => {
+      if (!active) {
+        note(ctx, "No goal loop is active.");
+        return;
+      }
+      active = false;
+      goal = null;
+      note(ctx, "Goal loop cleared. The current turn will finish without re-prompting.");
+      updateWidget(ctx);
     },
   });
 
@@ -310,16 +359,17 @@ export default function (pi: ExtensionAPI) {
   // old closure cannot keep injecting after a fresh instance is bound.
   pi.on("session_shutdown", async (_event, ctx) => {
     active = false;
+    goal = null;
     running = false;
     updateWidget(ctx);
   });
 
-  // Make the loop interruptible: an aborted turn stops it.
+  // Make the loop interruptible: an aborted turn (Esc) stops it.
   // (ctx.signal.aborted is only set in turn-related events, not agent_end.)
   pi.on("turn_end", async (_event, ctx) => {
     if (ctx.signal?.aborted && active) {
       active = false;
-      note(ctx, "Verification stopped.", "warning");
+      note(ctx, "Goal loop stopped.", "warning");
       updateWidget(ctx);
     }
   });
