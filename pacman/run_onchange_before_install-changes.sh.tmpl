@@ -35,8 +35,15 @@ sudo pacman -S --needed --noconfirm $(available_only "$NEEDED")
 echo ">>> Installing optional deps (best-effort)"
 sudo pacman -S --needed --noconfirm $(available_only "$OPTDEPS") || true
 
-echo ">>> Installing foreign packages"
-paru -S --needed --noconfirm $(cat "$FOREIGN") || true
+echo ">>> Installing foreign (AUR) packages — review gate enforced"
+# Deliberately NO --noconfirm here. AUR build files are unsigned and are the
+# target of the active supply-chain attack, so each new/changed package must go
+# through paru's review step (which fires ~/.local/bin/aur-review-agent via the
+# FileManager hook) AND an explicit human "Proceed with installation?" prompt.
+# --noconfirm would auto-approve the build even if the agent flags an injected
+# payload, making the gate useless. --review forces the gate even on first
+# install. Best-effort: a declined or failed build must not abort the apply.
+paru -S --needed --review $(cat "$FOREIGN") || true
 
 echo ">>> Pruning removed packages"
 prune <(sudo pacman -Qqetn) "$NEEDED"
