@@ -7,6 +7,7 @@ ffmpegthumbs
 filelight
 flite
 glib2-devel
+graphviz
 inotify-tools
 intel-media-driver
 jdk-openjdk
@@ -24,14 +25,16 @@ liboggz
 libva-intel-driver
 llvm21
 noise-suppression-for-voice
+opencamlib
+openscad
 pigz
 pulse-native-provider
 python-brotli
 python-brotlicffi
 python-html5lib
+python-ladybug-core
 python-mutagen
 python-openai-whisper
-python-pip
 python-pycryptodome
 python-pyudev
 python-pyxattr

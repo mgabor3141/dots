@@ -52,6 +52,7 @@ ex-vi-compat
 ffmpegthumbnailer
 firefox
 font-manager
+freecad
 fsarchiver
 git-lfs
 glances
@@ -66,6 +67,7 @@ inetutils
 intel-ucode
 jfsutils
 jujutsu
+just
 kdenlive
 kitty
 kvantum-theme-nordic-git

@@ -1,0 +1,7 @@
+[bin]
+PreBuildCommand = customizepkg --modify
+# Launch an AI security review of AUR build files before building. paru opens
+# this "file manager" on the staged view dir during review and blocks until it
+# exits, giving us a pre-build gate against supply-chain attacks. See
+# ~/.local/bin/aur-review-agent.
+FileManager = {{ .chezmoi.homeDir }}/.local/bin/aur-review-agent

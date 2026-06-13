@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# aur-review-agent — paru FileManager hook that launches an AI security review
+# of AUR build files BEFORE building, focused on supply-chain attacks.
+#
+# Wire-up (paru.conf):
+#     [bin]
+#     FileManager = /home/<you>/.local/bin/aur-review-agent
+#
+# paru invokes this as:  aur-review-agent [fm_flags...] <view_dir>
+# with cwd == <view_dir>. The view dir contains, per changed package:
+#     <pkgbase>        symlink to the cloned build-file tree (PKGBUILD, .install, ...)
+#     <pkgbase>.diff   diff of build files since the last reviewed state (AUR_SEEN)
+# paru BLOCKS until this script exits, so it acts as a pre-build review gate.
+# Nothing is built yet when we run, so a malicious build()/prepare() has NOT
+# executed — this is the right moment to catch an injected payload.
+
+set -uo pipefail
+
+# paru passes the view dir as the final positional argument (cwd is the same).
+VIEW_DIR="$PWD"
+for a in "$@"; do VIEW_DIR="$a"; done
+[ -d "$VIEW_DIR" ] || VIEW_DIR="$PWD"
+cd "$VIEW_DIR" || exit 1
+
+# What did paru stage for review?
+mapfile -t diffs < <(find . -maxdepth 1 -type f -name '*.diff' -printf '%P\n' | sort)
+mapfile -t pkgs  < <(find . -maxdepth 1 -mindepth 1 \( -type d -o -type l \) -printf '%P\n' | sort)
+
+# Fallback: if the agent stack is unavailable, still let the human review.
+if ! command -v gmux >/dev/null 2>&1 || ! command -v pi >/dev/null 2>&1; then
+    echo "aur-review-agent: gmux/pi not found; falling back to a plain review." >&2
+    if [ "${#diffs[@]}" -gt 0 ]; then
+        cat "${diffs[@]}" | ${PAGER:-less}
+    else
+        find . -name PKGBUILD -exec ${PAGER:-less} {} +
+    fi
+    exit 0
+fi
+
+read -r -d '' PROMPT <<EOF
+You are gating an AUR (Arch User Repository) package build as a SECURITY
+REVIEWER. paru staged build files for review in the CURRENT DIRECTORY
+($VIEW_DIR) and is BLOCKED waiting for you. Nothing has been built yet, so any
+malicious build()/prepare() has NOT run. Your job: decide if it is safe to build.
+
+Layout of this directory:
+  *.diff       -> changes to a package's build files since I last reviewed it
+  <pkgbase>/   -> full current build-file tree (read PKGBUILD, .SRCINFO, *.install)
+
+Packages under review: ${pkgs[*]:-<none>}
+Diffs present:         ${diffs[*]:-<none — likely first-time installs; review full PKGBUILDs>}
+
+THREAT CONTEXT — there is an ACTIVE AUR supply-chain attack (June 2026):
+- The malware injects itself via ROGUE npm / node packages pulled in at BUILD
+  TIME. Scrutinise any npm/pnpm/yarn/bun usage in prepare()/build(): added or
+  changed dependencies in package.json, lockfile (package-lock.json / pnpm-lock /
+  yarn.lock / bun.lockb) changes, unfamiliar registries or scopes, typosquatted
+  names, and preinstall/postinstall/install lifecycle scripts.
+- Also flag the classic indicators: new or altered source= URLs, curl/wget piped
+  into a shell, base64 / hex / eval-obfuscated payloads, /dev/tcp or netcat
+  callbacks, writes to ~/.ssh, ~/.config, shell rc files, autostart entries,
+  systemd units or crontab, and any exfiltration to remote hosts.
+- Treat newly-added maintainers, sudden source-host changes, and brand-new
+  helper scripts fetched from outside the AUR git repo as HIGH RISK.
+
+DO THIS:
+1. Read every *.diff (or the full PKGBUILD + .install + .SRCINFO if there is no
+   diff, i.e. a first-time build).
+2. For any npm/node-based package, inspect package.json and lockfiles for
+   injected or suspicious dependencies and lifecycle scripts.
+3. Cross-check each pkgbase against the known-bad list at
+   https://md.archlinux.org/s/SxbqukK6IA/download and against \`pacman -Qm\`.
+4. Give a short per-package risk note, then end with ONE overall line:
+       VERDICT: SAFE TO BUILD     — or —     VERDICT: DO NOT BUILD (reason)
+
+Do NOT modify any files. When you are done, exit so paru can continue. If
+anything looks dangerous, tell me clearly to answer "n" at paru's build prompt.
+EOF
+
+# Interactive session the user watches in the browser; paru waits until it exits.
+gmux pi --thinking medium "$PROMPT"
+
+# pi's exit status is not a verdict — the human makes the build/abort decision at
+# paru's next prompt based on the agent's findings. Exit 0 so paru proceeds to ask.
+exit 0
