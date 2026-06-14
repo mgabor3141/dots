@@ -187,20 +187,32 @@ async function processContent(
   return truncated;
 }
 
-// Content types that are useful as raw text but that crawl4ai's headless
-// Chromium either refuses to navigate (served as a download) or renders
-// poorly. We GET these directly instead of routing through the browser.
-const DIRECT_TEXT_CTYPE =
-  /^(text\/(plain|markdown|x-markdown|csv)|application\/(json|ld\+json|xml|x-ndjson)|application\/rss\+xml|application\/atom\+xml)/i;
+// Content types the headless browser actually renders. Everything else
+// (scripts, json, yaml, octet-stream, archives, ...) Chromium tries to
+// *download*, and Playwright then aborts navigation with "Download is
+// starting". So the crawler is only useful for these.
+const BROWSER_RENDERS = /^(text\/html|application\/xhtml\+xml)/i;
+
+/** Heuristic: does this byte sample look like binary (vs decodable text)? */
+function looksBinary(bytes: Uint8Array): boolean {
+  const sample = bytes.subarray(0, 1024);
+  let suspicious = 0;
+  for (const b of sample) {
+    if (b === 0) return true; // NUL byte -> definitely binary
+    // Control chars outside tab/LF/CR/FF and the printable range.
+    if (b < 0x09 || (b > 0x0d && b < 0x20)) suspicious++;
+  }
+  return sample.length > 0 && suspicious / sample.length > 0.1;
+}
 
 /**
  * Probe a URL before crawling. crawl4ai drives Playwright, which aborts
  * navigation with "Download is starting" whenever the server responds
- * with `Content-Disposition: attachment` (e.g. HedgeDoc /download links,
- * raw .md files). For those — and for raw-text content types the browser
- * can't render — fetch the body directly. Returns null for normal pages
- * (HTML, or anything we can't cheaply classify), which fall through to
- * the crawler exactly as before.
+ * with `Content-Disposition: attachment` OR a non-renderable content type
+ * (e.g. application/x-sh for install.sh, raw .md served as text/markdown,
+ * application/octet-stream, json/yaml). For all of those we fetch the body
+ * directly. Returns null for HTML pages and for anything we can't classify,
+ * which fall through to the crawler exactly as before.
  */
 async function preflightDirectFetch(
   url: string,
@@ -226,24 +238,22 @@ async function preflightDirectFetch(
   if (!head.ok) return null;
 
   const disp = head.headers.get("content-disposition") || "";
-  const ctype = head.headers.get("content-type") || "";
+  const ctype = (head.headers.get("content-type") || "").toLowerCase();
   const isAttachment = /attachment/i.test(disp);
-  const isDirectText = DIRECT_TEXT_CTYPE.test(ctype);
 
-  // Normal navigable page: leave it to the crawler.
-  if (!isAttachment && !isDirectText) return null;
+  // Renderable HTML and not a forced download: let the crawler do its job.
+  if (BROWSER_RENDERS.test(ctype) && !isAttachment) return null;
+  // No content-type and no attachment hint: can't classify -> let the
+  // browser decide (it usually renders these as HTML).
+  if (!ctype && !isAttachment) return null;
 
   const fnMatch = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disp);
   const title = fnMatch?.[1] ? decodeURIComponent(fnMatch[1]) : "";
 
-  // Attachment with a non-text body (pdf, zip, image, ...): the browser
-  // can't extract it and neither can we usefully. Report instead of
-  // dumping bytes into context.
-  if (isAttachment && !isDirectText && !/^text\//i.test(ctype)) {
-    return {
-      text: `[${url} is a ${ctype || "binary"} download (${disp || "attachment"}); not fetched as text.]`,
-      title,
-    };
+  // Bail early on declared oversize bodies before downloading them.
+  const clen = Number(head.headers.get("content-length") || 0);
+  if (clen > MAX_CONTENT) {
+    return { text: `[${url} is a ${ctype || "binary"} resource of ${(clen / 1_000_000).toFixed(1)}MB; too large to fetch.]`, title };
   }
 
   let resp: Response;
@@ -253,7 +263,15 @@ async function preflightDirectFetch(
     return null;
   }
   if (!resp.ok) return null;
-  const text = await resp.text();
+
+  const buf = new Uint8Array(await resp.arrayBuffer());
+  if (looksBinary(buf)) {
+    return {
+      text: `[${url} is a ${ctype || "binary"} download (${(buf.length / 1_000_000).toFixed(2)}MB); not fetched as text.]`,
+      title,
+    };
+  }
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(buf);
   return { text, title };
 }
 
