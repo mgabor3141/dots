@@ -187,6 +187,76 @@ async function processContent(
   return truncated;
 }
 
+// Content types that are useful as raw text but that crawl4ai's headless
+// Chromium either refuses to navigate (served as a download) or renders
+// poorly. We GET these directly instead of routing through the browser.
+const DIRECT_TEXT_CTYPE =
+  /^(text\/(plain|markdown|x-markdown|csv)|application\/(json|ld\+json|xml|x-ndjson)|application\/rss\+xml|application\/atom\+xml)/i;
+
+/**
+ * Probe a URL before crawling. crawl4ai drives Playwright, which aborts
+ * navigation with "Download is starting" whenever the server responds
+ * with `Content-Disposition: attachment` (e.g. HedgeDoc /download links,
+ * raw .md files). For those — and for raw-text content types the browser
+ * can't render — fetch the body directly. Returns null for normal pages
+ * (HTML, or anything we can't cheaply classify), which fall through to
+ * the crawler exactly as before.
+ */
+async function preflightDirectFetch(
+  url: string,
+  signal: AbortSignal | undefined,
+): Promise<{ text: string; title: string } | null> {
+  // Clean headers: do NOT send the crawl service's bearer token or the
+  // application/json Content-Type to the *target* origin.
+  const probeHeaders: Record<string, string> = {
+    "User-Agent": "Mozilla/5.0 (compatible; pi-web-view/1.0)",
+  };
+
+  let head: Response;
+  try {
+    head = await fetch(url, {
+      method: "HEAD",
+      signal,
+      headers: probeHeaders,
+      redirect: "follow",
+    });
+  } catch {
+    return null; // HEAD unsupported/blocked -> let the crawler try.
+  }
+  if (!head.ok) return null;
+
+  const disp = head.headers.get("content-disposition") || "";
+  const ctype = head.headers.get("content-type") || "";
+  const isAttachment = /attachment/i.test(disp);
+  const isDirectText = DIRECT_TEXT_CTYPE.test(ctype);
+
+  // Normal navigable page: leave it to the crawler.
+  if (!isAttachment && !isDirectText) return null;
+
+  const fnMatch = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disp);
+  const title = fnMatch?.[1] ? decodeURIComponent(fnMatch[1]) : "";
+
+  // Attachment with a non-text body (pdf, zip, image, ...): the browser
+  // can't extract it and neither can we usefully. Report instead of
+  // dumping bytes into context.
+  if (isAttachment && !isDirectText && !/^text\//i.test(ctype)) {
+    return {
+      text: `[${url} is a ${ctype || "binary"} download (${disp || "attachment"}); not fetched as text.]`,
+      title,
+    };
+  }
+
+  let resp: Response;
+  try {
+    resp = await fetch(url, { signal, headers: probeHeaders, redirect: "follow" });
+  } catch {
+    return null;
+  }
+  if (!resp.ok) return null;
+  const text = await resp.text();
+  return { text, title };
+}
+
 /** Build the crawl4ai markdown content_filter config. */
 function buildContentFilter(query: string | undefined) {
   // With a query: BM25 ranks query-relevant chunks (cheap, keyword-based,
@@ -289,33 +359,56 @@ export default function (pi: ExtensionAPI) {
       };
       if (TOKEN !== null) headers["Authorization"] = `Bearer ${TOKEN}`;
 
-      const response = await fetchWithRetry(CRAWL_URL, {
-        method: "POST",
-        signal,
-        headers,
-        body: JSON.stringify({
-          urls,
-          crawler_config: buildContentFilter(params.query),
-        }),
-      }, 3);
+      // Pre-flight: peel off URLs that are downloads or raw-text resources
+      // the headless browser can't navigate (Playwright aborts with
+      // "Download is starting" on Content-Disposition: attachment). These
+      // are fetched directly; the rest go to crawl4ai in one batch.
+      const direct = new Map<string, { text: string; title: string }>();
+      await Promise.all(
+        urls.map(async (u) => {
+          const pf = await preflightDirectFetch(u, signal).catch(() => null);
+          if (pf) direct.set(u, pf);
+        })
+      );
+      const toCrawl = urls.filter((u) => !direct.has(u));
 
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Crawl error ${response.status}: ${text}`);
-      }
-
-      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-
-      const data = await response.json();
-      const results = (data.results || []) as any[];
-
-      // Map results by URL so output order matches the request.
       const byUrl = new Map<string, any>();
-      for (const r of results) byUrl.set(r.redirected_url || r.url, r);
+      if (toCrawl.length > 0) {
+        const response = await fetchWithRetry(CRAWL_URL, {
+          method: "POST",
+          signal,
+          headers,
+          body: JSON.stringify({
+            urls: toCrawl,
+            crawler_config: buildContentFilter(params.query),
+          }),
+        }, 3);
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`Crawl error ${response.status}: ${text}`);
+        }
+
+        if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+
+        const data = await response.json();
+        const results = (data.results || []) as any[];
+        // Map results by URL so output order matches the request. Key under
+        // both the original and redirected URL so either form resolves.
+        for (const r of results) {
+          if (r.url) byUrl.set(r.url, r);
+          if (r.redirected_url) byUrl.set(r.redirected_url, r);
+        }
+      }
 
       const sections = await Promise.all(
         urls.map(async (reqUrl) => {
-          const r = byUrl.get(reqUrl) ?? results.find((x) => x.url === reqUrl);
+          const pf = direct.get(reqUrl);
+          if (pf) {
+            const text = await processContent(pf.text, reqUrl, pf.title, ctx, params.query, signal);
+            return { url: reqUrl, text, size: pf.text.length };
+          }
+          const r = byUrl.get(reqUrl);
           if (!r || r.success === false) {
             const err = r?.error_message || "failed to fetch";
             return { url: reqUrl, text: `[Error fetching ${reqUrl}: ${err}]`, size: 0 };
