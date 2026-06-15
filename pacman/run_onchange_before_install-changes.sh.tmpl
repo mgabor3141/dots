@@ -29,8 +29,13 @@ prune() {
     fi
 }
 
-echo ">>> Installing needed packages"
-sudo pacman -S --needed --noconfirm $(available_only "$NEEDED")
+echo ">>> Refreshing databases, upgrading, and installing needed packages"
+# Use -Syu (not a bare -S) to refresh the sync DB and do a full upgrade in the
+# SAME transaction. A bare `pacman -S <subset>` is a PARTIAL UPGRADE: the local
+# DB drifts from the mirror pool, so .sig/package retrieval starts returning 404
+# (and partial upgrades can break the system). -Syu keeps everything consistent
+# and makes the -S --needed lines below safe.
+sudo pacman -Syu --needed --noconfirm $(available_only "$NEEDED")
 
 echo ">>> Installing optional deps (best-effort)"
 sudo pacman -S --needed --noconfirm $(available_only "$OPTDEPS") || true
