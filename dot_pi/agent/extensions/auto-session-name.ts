@@ -1,5 +1,6 @@
 /**
- * Auto-name sessions by asking Haiku to generate a title from the first user message.
+ * Auto-name sessions by asking a small model to generate a title from the first
+ * user message. The model is picked from $PI_LIBRARIAN_MODELS (see resolveModel).
  *
  * The LLM call is made in-process via pi-ai's completeSimple rather than shelling
  * out to the `pi` CLI. The previous version spawned `pi -p`, which never set a name:
@@ -7,11 +8,31 @@
  * pipe, so the spawned process blocked forever waiting for EOF and the callback that
  * called setSessionName never ran. The in-process call sidesteps that entirely.
  */
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import { completeSimple } from "@earendil-works/pi-ai";
 
-const PROVIDER = "anthropic";
-const MODEL_ID = "claude-haiku-4-5";
+// Reuse the librarian's model list (for now). Format is a comma-separated list
+// of "provider/model[:effort]" entries, e.g.
+//   mgabor/default:medium,openai-codex/gpt-5.5:medium,anthropic/claude-sonnet-4-6:high
+// We use the first entry that the model registry can resolve.
+const MODELS_ENV = "PI_LIBRARIAN_MODELS";
+const FALLBACK = "anthropic/claude-haiku-4-5";
+
+function resolveModel(registry: ModelRegistry) {
+	const entries = (process.env[MODELS_ENV] || "")
+		.split(",")
+		.map((e) => e.trim())
+		.filter(Boolean);
+	entries.push(FALLBACK);
+	for (const entry of entries) {
+		const spec = entry.split(":")[0]; // strip optional ":effort"
+		const slash = spec.indexOf("/");
+		if (slash < 0) continue;
+		const model = registry.find(spec.slice(0, slash), spec.slice(slash + 1));
+		if (model) return model;
+	}
+	return undefined;
+}
 
 export default function (pi: ExtensionAPI) {
 	let named = false;
@@ -41,7 +62,7 @@ export default function (pi: ExtensionAPI) {
 
 		void (async () => {
 			try {
-				const model = ctx.modelRegistry.find(PROVIDER, MODEL_ID);
+				const model = resolveModel(ctx.modelRegistry);
 				if (!model) return;
 				const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
 				if (!auth.ok || !auth.apiKey) return;
