@@ -1,6 +1,0 @@
-[Unit]
-Description=Restart xremap when Go60/kanata input devices change
-
-[Service]
-Type=oneshot
-ExecStart=%h/.config/xremap/restart-if-devices-changed.sh

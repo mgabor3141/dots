@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Shim: force gpu-screen-recorder's global hotkey daemon into --no-grab mode.
+#
+# gsr-ui launches `gsr-global-hotkeys --all`, which takes an *exclusive*
+# EVIOCGRAB on every keyboard. That blocks xremap (and anything else) from
+# grabbing those devices, breaking app-specific remapping (e.g. Animal Well).
+#
+# `--no-grab` makes gsr only *listen*, so its hotkeys still work while leaving
+# the devices free for xremap to grab. We rewrite --all -> --no-grab and exec
+# the real binary (which carries cap_setuid, preserved across exec).
+#
+# ~/.local/bin precedes /usr/bin in PATH, so gsr-ui's bare-name exec hits this.
+
+real=/usr/bin/gsr-global-hotkeys
+
+args=()
+for a in "$@"; do
+  if [[ "$a" == "--all" || "$a" == "--virtual" ]]; then
+    args+=(--no-grab)
+  else
+    args+=("$a")
+  fi
+done
+
+exec "$real" "${args[@]}"

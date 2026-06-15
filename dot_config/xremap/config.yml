@@ -1,6 +1,9 @@
 # xremap config
 #
-# Reads from Kanata (Razer) and MoErgo Go60.
+# Keyboard-independent: the service grabs ALL keyboards (no --device filter).
+# Every rule here is app-scoped (application.only: [...]), so typing in any
+# other app is passed through untouched. This is why a global, unscoped
+# remap must NEVER be added without a matching `application` filter.
 #
 # Steam/Proton games can be remapped per-app, but you must:
 #   Steam → Library → right-click game → Properties → Controller
@@ -25,5 +28,43 @@ modmap:
       K: X
       L: C
       Semicolon: V
+
+  # MECCHA CHAMELEON
+  # Whole hand shifted one column right: press ESDF for movement (WASD),
+  # and every key emits the key immediately to its left.
+  - name: MECCHA CHAMELEON
+    application:
+      only: [steam_app_4704690]
+    remap:
+      # Top row
+      W: Q
+      E: W
+      R: E
+      T: R
+      Y: T
+      U: Y
+      I: U
+      O: I
+      P: O
+      # Home row
+      S: A
+      D: S
+      F: D
+      G: F
+      H: G
+      J: H
+      K: J
+      L: K
+      Semicolon: L
+      # Bottom row
+      X: Z
+      C: X
+      V: C
+      B: V
+      N: B
+      M: N
+      Comma: M
+      Dot: Comma
+      Slash: Dot
 
 keymap: []

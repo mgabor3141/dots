@@ -1,21 +1,28 @@
 # xremap systemd user service
 # Runs xremap as a regular user (no sudo needed, user is in 'input' group).
 #
-# Reads from Kanata's virtual uinput device, sits after Kanata in the chain:
-#   Physical keyboard -> Kanata -> xremap -> Niri
+# Keyboard-independent: xremap grabs ALL keyboards (no --device filter) and
+# emits one virtual keyboard. Remapping is app-scoped (see config.yml), so
+# normal typing in every other app is untouched. This avoids the fragile
+# device-name/event-number matching that broke on every Bluetooth reconnect
+# (MoErgo/Go60 renames, renumbering) and on the kanata service dying.
+#
+# NOTE: requires that nothing else holds an exclusive EVIOCGRAB on the
+# keyboards. gpu-screen-recorder's hotkey daemon is shimmed to --no-grab
+# (see ~/.local/bin/gsr-global-hotkeys) precisely so xremap can grab.
 #
 # --features niri is required for app-specific remapping to work with Niri.
 # Install with:  cargo install xremap --features niri
 
 [Unit]
-Description=xremap keyboard remapper (post-Kanata, Niri)
-After=kanata.service
-Wants=kanata.service
+Description=xremap keyboard remapper (keyboard-independent, Niri)
+After=graphical-session.target
+PartOf=graphical-session.target
 
 [Service]
 Type=simple
 ExecStartPre=/bin/sleep 1
-ExecStart=/home/mg/.cargo/bin/xremap --watch --device kanata --device Go60 /home/mg/.config/xremap/config.yml
+ExecStart=/home/mg/.cargo/bin/xremap --watch /home/mg/.config/xremap/config.yml
 Restart=on-failure
 RestartSec=2
 Nice=-5
