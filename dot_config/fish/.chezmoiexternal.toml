@@ -1,8 +1,0 @@
-# Fish shell plugins managed via chezmoi external
-
-# done - Command duration notifications
-# https://github.com/franciscolourenco/done
-["conf.d/done.fish"]
-    type = "file"
-    url = "https://raw.githubusercontent.com/franciscolourenco/done/998ad4f5fc9cee36c09840a7e635b56428e554f9/conf.d/done.fish"
-    checksum.sha256 = "402a83d98d815ff3972cac136d205391a61d6175cc3f8aff15bda018259678ba"
