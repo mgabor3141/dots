@@ -1,11 +1,17 @@
 /**
  * Auto-name sessions by asking Haiku to generate a title from the first user message.
- * Runs in the background so it doesn't block the conversation.
+ *
+ * The LLM call is made in-process via pi-ai's completeSimple rather than shelling
+ * out to the `pi` CLI. The previous version spawned `pi -p`, which never set a name:
+ * `pi -p` reads from a non-TTY stdin, and execFile left the child's stdin as an open
+ * pipe, so the spawned process blocked forever waiting for EOF and the callback that
+ * called setSessionName never ran. The in-process call sidesteps that entirely.
  */
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { execFile } from "node:child_process";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { completeSimple } from "@earendil-works/pi-ai";
 
-const MODEL = "anthropic/claude-haiku-4-5";
+const PROVIDER = "anthropic";
+const MODEL_ID = "claude-haiku-4-5";
 
 export default function (pi: ExtensionAPI) {
 	let named = false;
@@ -14,7 +20,9 @@ export default function (pi: ExtensionAPI) {
 		named = !!pi.getSessionName();
 	});
 
-	pi.on("agent_end", async (event) => {
+	// Naming is best-effort, so kick it off detached and return immediately
+	// rather than making the agent loop await the extra LLM round-trip.
+	pi.on("agent_end", (event, ctx: ExtensionContext) => {
 		if (named) return;
 		named = true; // prevent retries on subsequent turns
 
@@ -29,27 +37,44 @@ export default function (pi: ExtensionAPI) {
 						.join(" ");
 		if (!text) return;
 
-		// Fire and forget — don't block the conversation
-		const prompt = text.slice(0, 500);
-		const child = execFile(
-			"pi",
-			[
-				"--model", MODEL,
-				"--no-tools",
-				"--no-extensions",
-				"--no-skills",
-				"--no-session",
-				"--thinking", "off",
-				"-p",
-				`Generate a brief session title (max 50 chars, no quotes) for this message:\n\n${prompt}`,
-			],
-			{ timeout: 10_000 },
-			(err, stdout) => {
-				if (err || !stdout.trim()) return;
-				const title = stdout.trim().slice(0, 50);
-				pi.setSessionName(title);
-			},
-		);
-		child.unref();
+		void (async () => {
+			try {
+				const model = ctx.modelRegistry.find(PROVIDER, MODEL_ID);
+				if (!model) return;
+				const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+				if (!auth.ok || !auth.apiKey) return;
+
+				const prompt = text.slice(0, 500);
+				const result = await completeSimple(
+					model,
+					{
+						messages: [
+							{
+								role: "user",
+								content: [
+									{
+										type: "text",
+										text: `Generate a brief session title (max 50 chars, no quotes) for this message:\n\n${prompt}`,
+									},
+								],
+								timestamp: Date.now(),
+							},
+						],
+					},
+					{ apiKey: auth.apiKey, headers: auth.headers, maxTokens: 64, temperature: 0 },
+				);
+
+				const title = result.content
+					.filter((b) => b.type === "text")
+					.map((b) => (b as { text: string }).text)
+					.join(" ")
+					.trim()
+					.replace(/^["']|["']$/g, "")
+					.slice(0, 50);
+				if (title) pi.setSessionName(title);
+			} catch {
+				// Naming is best-effort; ignore failures.
+			}
+		})();
 	});
 }
