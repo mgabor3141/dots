@@ -23,7 +23,9 @@ export default function (pi: ExtensionAPI) {
 	// Naming is best-effort, so kick it off detached and return immediately
 	// rather than making the agent loop await the extra LLM round-trip.
 	pi.on("agent_end", (event, ctx: ExtensionContext) => {
-		if (named) return;
+		// Skip if we've already named it, or if a name already exists (e.g. set
+		// manually, or carried over from a forked/resumed session).
+		if (named || pi.getSessionName()) return;
 		named = true; // prevent retries on subsequent turns
 
 		const userMsg = event.messages.find((m) => m.role === "user");
@@ -71,7 +73,8 @@ export default function (pi: ExtensionAPI) {
 					.trim()
 					.replace(/^["']|["']$/g, "")
 					.slice(0, 50);
-				if (title) pi.setSessionName(title);
+				// Re-check: the LLM call is async, so a name may have appeared meanwhile.
+				if (title && !pi.getSessionName()) pi.setSessionName(title);
 			} catch {
 				// Naming is best-effort; ignore failures.
 			}
