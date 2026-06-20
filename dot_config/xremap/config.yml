@@ -28,6 +28,8 @@ modmap:
       K: X
       L: C
       Semicolon: V
+      "2": "1"
+      "4": "3"
 
   # MECCHA CHAMELEON
   # Whole hand shifted one column right: press ESDF for movement (WASD),
