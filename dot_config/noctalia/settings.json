@@ -25,7 +25,9 @@
             "discord",
             "kitty",
             "parsecd",
-            "zen"
+            "zen",
+            "com.sindresorhus.Caprine",
+            "chromium"
         ],
         "position": "center",
         "screenshotAnnotationTool": "satty -f -",
