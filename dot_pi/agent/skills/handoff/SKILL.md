@@ -58,7 +58,7 @@ Reference relevant files, paths, issues, and prior conversations by path or URL.
 Use the `gmux` skill to launch a new pi session in the background, pointing it at the doc:
 
 ```bash
-gmux --no-attach pi "Read $PWD/.memory/handoff-fix-auth.md and proceed."
+gmux -d -- pi "Read $PWD/.memory/handoff-fix-auth.md and proceed."
 ```
 
 Use an absolute path so the spawned pi can find the doc regardless of where it ends up running from.
