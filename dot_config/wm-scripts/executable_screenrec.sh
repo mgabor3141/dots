@@ -62,22 +62,6 @@ else
     WH=$(echo "$REST" | cut -d' ' -f2)
     REGION="${WH}+${X}+${Y}"
 
-    W=$(echo "$WH" | cut -d'x' -f1)
-    H=$(echo "$WH" | cut -d'x' -f2)
-
-    # Downscale to 50% only if the result stays above NVENC minimum (256px per side)
-    MIN_DIM=256
-    SW=$(( W / 2 ))
-    SH=$(( H / 2 ))
-    # Ensure even dimensions (required by h264)
-    SW=$(( SW - SW % 2 ))
-    SH=$(( SH - SH % 2 ))
-
-    SCALE_ARGS=()
-    if (( SW >= MIN_DIM && SH >= MIN_DIM )); then
-        SCALE_ARGS=(-s "${SW}x${SH}")
-    fi
-
     FILENAME="$OUTDIR/$(date +%Y-%m-%d_%H-%M-%S).mp4"
 
     AUDIO_ARGS=()
@@ -91,7 +75,7 @@ else
     # -k h264: maximum compatibility (Discord, iOS, browsers all support it)
     # -q ultra: highest quality preset
     # -fm vfr: variable framerate (skip unchanged frames)
-    setsid gpu-screen-recorder -w "$REGION" "${SCALE_ARGS[@]}" -f 60 -k h264 -q ultra -fm vfr "${AUDIO_ARGS[@]}" -o "$FILENAME" </dev/null &>"$LOGFILE" &
+    setsid gpu-screen-recorder -w "$REGION" -f 60 -k h264 -q ultra -fm vfr "${AUDIO_ARGS[@]}" -o "$FILENAME" </dev/null &>"$LOGFILE" &
     RECORDER_PID=$!
 
     # Give the recorder a moment to start (or fail)
