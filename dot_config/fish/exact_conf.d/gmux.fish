@@ -10,5 +10,5 @@ if not command -q gmux
 end
 
 function pi --wraps pi --description 'Run pi in a gmux session'
-    gmux pi $argv
+    gmux -- pi $argv
 end

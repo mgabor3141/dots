@@ -78,7 +78,7 @@ anything looks dangerous, tell me clearly to answer "n" at paru's build prompt.
 EOF
 
 # Interactive session the user watches in the browser; paru waits until it exits.
-gmux pi --thinking medium "$PROMPT"
+gmux -- pi --thinking medium "$PROMPT"
 
 # pi's exit status is not a verdict — the human makes the build/abort decision at
 # paru's next prompt based on the agent's findings. Exit 0 so paru proceeds to ask.

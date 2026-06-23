@@ -36,7 +36,7 @@ command -v fish >/dev/null && exec -l fish
 
 alias ls='ls --color=auto'
 alias grep='grep --color=auto'
-alias pi='gmux pi'
+alias pi='gmux -- pi'
 PS1='[\u@\h \W]\$ '
 
 command -v direnv >/dev/null && eval "$(direnv hook bash)"
