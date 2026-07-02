@@ -3,3 +3,4 @@
 .ralph
 private_dot_local/bin/__pycache__/
 private_dot_local/bin/pr_status/__pycache__/
+*.local*
