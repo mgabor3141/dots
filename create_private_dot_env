@@ -1,6 +1,6 @@
 MGABOR_INFERENCE_API_KEY=your-key-here
 
-PI_LIBRARIAN_MODELS=mgabor/default:medium,openai-codex/gpt-5.5:medium,anthropic/claude-sonnet-4-6:high
+PI_LIBRARIAN_MODELS=mgabor/default:medium,openai-codex/gpt-5.6-terra:medium,anthropic/claude-sonnet-4-6:high
 
 SEARXNG_URL=http://localhost:8080/
 SEARXNG_TOKEN=your-key-here
