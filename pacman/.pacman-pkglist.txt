@@ -72,6 +72,7 @@ kdenlive
 kitty
 kvantum-theme-nordic-git
 lazygit
+lftp
 libva-nvidia-driver
 libva-utils
 libwnck3
@@ -102,7 +103,6 @@ nvidia-container-toolkit
 nvidia-prime
 obs-studio
 octopi
-openai-codex
 opendesktop-fonts
 os-prober
 pamixer
