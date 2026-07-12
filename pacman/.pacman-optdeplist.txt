@@ -29,7 +29,6 @@ opencamlib
 openscad
 pigz
 pulse-native-provider
-python-brotli
 python-brotlicffi
 python-html5lib
 python-ladybug-core
@@ -48,6 +47,5 @@ qt6-imageformats
 recordmydesktop
 rrdtool
 speech-dispatcher
-ttf-nerd-fonts-symbols-mono
 wlsunset
 xorg-xset

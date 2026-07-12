@@ -4,4 +4,5 @@ handy-bin
 it87-dkms-git
 kanata-bin
 nautilus-gnome-disks
+t3code-bin
 wl-screenrec-git

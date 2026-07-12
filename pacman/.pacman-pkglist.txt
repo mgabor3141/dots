@@ -85,6 +85,7 @@ localsend
 logrotate
 lsscsi
 man-pages
+mariadb
 meld
 mold
 mpv
