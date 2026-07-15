@@ -47,6 +47,24 @@ Sessions are **local by default** — a bare id never matches another host. To
 address a peer session, suffix it: `gmux tail <id>@<peer>` (`gmux ls --all`
 lists peers).
 
+## Delegate to an interactive agent and wait
+
+Keep delegated agents interactive for monitoring and follow-ups. Detach the process, then wait for its current turn:
+
+```bash
+id=$(gmux -d -- pi --name investigate-foo "Read $PWD/.memory/handoff-foo.md and proceed.")
+gmux wait "$id" --timeout 1800
+# Read the requested artifact and continue automatically.
+```
+
+`wait` detects idle while leaving Pi alive.
+
+For another turn:
+
+```bash
+gmux send --wait --timeout 1800 --follow-up "$id" "Investigate the failing case and update the report."
+```
+
 ## Drive an interactive session
 
 ```bash

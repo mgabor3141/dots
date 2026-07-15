@@ -53,14 +53,21 @@ What the doc should address depends on the flavor:
 
 Reference relevant files, paths, issues, and prior conversations by path or URL. Don't restate what's already written somewhere else.
 
-### 3. Spawn it via gmux
+### 3. Spawn it via gmux and wait for the turn
 
-Use the `gmux` skill to launch a new pi session in the background, pointing it at the doc:
+Launch an interactive pi session, then wait for its current turn:
 
 ```bash
-gmux -d -- pi "Read $PWD/.memory/handoff-fix-auth.md and proceed."
+id=$(gmux -d -- pi --name fix-auth "Read $PWD/.memory/handoff-fix-auth.md and proceed.")
+gmux wait "$id" --timeout 1800
 ```
 
-Use an absolute path so the spawned pi can find the doc regardless of where it ends up running from.
+After a successful wait, read the requested artifact and continue automatically. The child remains alive for monitoring and follow-ups.
 
-Tell the user the gmux session id and the doc path so they can attach later.
+For follow-ups:
+
+```bash
+gmux send --wait --timeout 1800 --follow-up "$id" "Investigate the failed migration test and update the report."
+```
+
+Set tool and gmux timeouts appropriate to the task.
