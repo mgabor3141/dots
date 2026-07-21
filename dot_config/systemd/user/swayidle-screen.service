@@ -21,4 +21,7 @@ Restart=on-failure
 RestartSec=2
 
 [Install]
-WantedBy=default.target
+# Activated via niri.service.wants/ (chezmoi-managed symlink). Declaring
+# niri.service here keeps `systemctl --user enable` idempotent with that
+# wiring and ties startup to the niri session rather than early default.target.
+WantedBy=niri.service

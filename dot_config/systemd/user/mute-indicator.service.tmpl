@@ -9,4 +9,5 @@ ExecStart={{ .chezmoi.destDir }}/.config/mute-indicator/mute-indicator.py
 Restart=on-failure
 
 [Install]
-WantedBy=graphical-session.target
+# Activated via niri.service.wants/ (chezmoi-managed symlink).
+WantedBy=niri.service

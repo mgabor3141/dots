@@ -15,4 +15,6 @@ Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=default.target
+# Activated via niri.service.wants/ (chezmoi-managed symlink); see
+# swayidle-screen.service for rationale.
+WantedBy=niri.service

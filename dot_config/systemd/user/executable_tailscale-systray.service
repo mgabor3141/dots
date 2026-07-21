@@ -1,10 +1,14 @@
 [Unit]
 Description=Tailscale System Tray
-After=graphical.target
+# graphical.target is a system target; user tray needs the user graphical
+# session (niri) to be up before the tray host exists.
+After=graphical-session.target
+PartOf=graphical-session.target
 
 [Service]
 Type=simple
 ExecStart=/usr/bin/tailscale systray
 
 [Install]
-WantedBy=default.target
+# Activated via niri.service.wants/ (chezmoi-managed symlink).
+WantedBy=niri.service

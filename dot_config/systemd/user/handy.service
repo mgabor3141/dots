@@ -2,6 +2,7 @@
 Description=Handy speech-to-text
 Documentation=https://github.com/cjpais/handy
 After=graphical-session.target pipewire.service
+PartOf=graphical-session.target
 Wants=pipewire.service
 
 [Service]
@@ -14,4 +15,5 @@ StandardOutput=journal
 StandardError=journal
 
 [Install]
-WantedBy=default.target
+# Activated via niri.service.wants/ (chezmoi-managed symlink).
+WantedBy=niri.service
