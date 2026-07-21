@@ -3,11 +3,13 @@ media_minimum_duration = 5
 idle_inhibitor = "wayland"
 sink_whitelist = []
 
-# Blacklist PipeWire loopback streams (system-audio and comms sink routing)
-# and speech-dispatcher. These are always connected and un-corked, which
-# makes the idle inhibitor think audio is always playing.
+# Blacklist the virtual-sink → Scarlett bridge streams (system-audio-playback,
+# comms-playback) and speech-dispatcher. The bridge streams are loopback
+# module outputs that stay permanently connected and un-corked, which would
+# otherwise make the idle inhibitor think audio is always playing.
+# Our bridges follow the "<sink>-playback" naming convention.
 [[node_blacklist]]
-name = ".*loopback.*"
+name = ".*-playback"
 
 [[node_blacklist]]
 name = "speech-dispatcher.*"

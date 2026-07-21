@@ -13,9 +13,11 @@ set -Eeuo pipefail
 #   idle-inhibitor-monitor --check  Exit 0 if inhibitors active, 1 otherwise
 #   idle-inhibitor-monitor --toast  Show current inhibitors as a noctalia toast
 
-# Patterns matching wayland-pipewire-idle-inhibit blacklist
+# Patterns matching wayland-pipewire-idle-inhibit blacklist.
+# The "<sink>-playback" bridges (system-audio-playback, comms-playback) are
+# always-on loopback outputs to the Scarlett, so they must not count as audio.
 STREAM_BLACKLIST_PATTERNS=(
-    '.*loopback.*'
+    '.*-playback'
     'speech-dispatcher.*'
 )
 
