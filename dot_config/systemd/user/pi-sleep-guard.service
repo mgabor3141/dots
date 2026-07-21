@@ -1,0 +1,18 @@
+[Unit]
+Description=pi sleep guard — hold an idle inhibitor for a grace period after pi runs
+Documentation=file://%h/.local/bin/pi-sleep-guard
+# Watches systemd's inhibitor list for pi agent inhibitors ("AI agent running")
+# and holds its own idle inhibitor while any are present, plus a grace period
+# after the last one disappears. This keeps the machine awake long enough to
+# queue follow-up messages remotely once an agent run finishes.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/pi-sleep-guard
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

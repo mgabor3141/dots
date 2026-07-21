@@ -15,13 +15,18 @@ fi
 
 # --- logind sleep/power button config ---
 mkdir -p /etc/systemd/logind.conf.d
+# IdleActionSec is measured from when the session becomes idle, which
+# swayidle-screen.service signals via `idlehint 900` (15 min of no input).
+# 15 min (idlehint) + 75 min (IdleActionSec) => suspend after ~90 min idle.
+# During a pi agent run the IdleHint still trips at 15 min, but the suspend
+# action is blocked by the pi idle inhibitor + pi-sleep-guard.service grace.
 cat << EOF > /etc/systemd/logind.conf.d/50-sleep.conf
 [Login]
 SleepOperation=suspend
 HandlePowerKey=ignore
 HandlePowerKeyLongPress=poweroff
 IdleAction=suspend
-IdleActionSec=35min
+IdleActionSec=75min
 EOF
 
 # --- Beep on shutdown/reboot ---

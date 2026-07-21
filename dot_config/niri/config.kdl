@@ -231,6 +231,9 @@ binds {
     CTRL+SHIFT+4                       hotkey-overlay-title="Toggle Screen Recording" { spawn-sh "~/.config/wm-scripts/screenrec.sh"; }
     CTRL+SHIFT+5                       hotkey-overlay-title="Toggle Screen Recording (with audio)" { spawn-sh "~/.config/wm-scripts/screenrec.sh --audio"; }
 
+    // ─── Noctalia screen lock ───
+    Mod+L                              { command qs -c noctalia-shell ipc call lockScreen lock }
+
     // ─── Emergency Escape Key ───
     // Use this when a fullscreen app blocks your keybinds.
     // It disables any active keyboard shortcut inhibitor, restoring control.
@@ -252,12 +255,10 @@ binds {
 
     spawn-at-startup    "playerctld" "daemon"
     spawn-at-startup    "bing-wallpaper.sh"
-    spawn-at-startup    "swayidle" "-w" \
-        "timeout" "290" "notify-send --urgency=low --expire-time=10000 \"Screen is powering off soon...\"" \
-        "timeout" "302" "niri msg action power-off-monitors" \
-        "idlehint" "310"
-        // Signal IdleHint to systemd, it can take over from there and account for cloudgaming
-        // See: /etc/systemd/logind.conf
+    // Idle handling is split across two systemd user services:
+    //   - swayidle-screen.service: screen DPMS off/on + sets logind IdleHint
+    //   - logind IdleAction (see /etc/systemd/logind.conf): system suspend
+    //   - pi-sleep-guard.service: holds an idle inhibitor during/after pi runs
 
     // Zed workspace manager daemon — assigns Zed windows to dynamic numbered
     // workspaces and renames them to project labels

@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# pi sleep guard
+#
+# Prevents the machine from auto-suspending while a pi agent is running, and
+# for a grace period afterwards, so follow-up messages can be queued remotely
+# once a run finishes.
+#
+# Mechanism: the pi idle-inhibit extension holds a systemd idle inhibitor
+# (--who=pi --why="AI agent running") for the duration of each agent run. This
+# guard polls the inhibitor list on a slow clock; while it sees at least one
+# such inhibitor — or has seen one within GRACE_SECONDS — it holds its own
+# idle inhibitor. Once no pi inhibitor has been seen for GRACE_SECONDS, it
+# releases. logind's IdleAction (see logind.conf) then takes over normally.
+#
+# This deliberately does not track individual pi PIDs or lockfiles: it only
+# cares whether *any* pi inhibitor currently exists. Detection need not be
+# precise — agent runs last well over the poll interval, and the release is
+# intentionally fuzzy (grace period).
+
+POLL_SECONDS="${PI_SLEEP_GUARD_POLL_SECONDS:-60}"
+GRACE_SECONDS="${PI_SLEEP_GUARD_GRACE_SECONDS:-900}" # 15 minutes
+PI_INHIBITOR_MARKER='AI agent running'
+
+guard_pid=""
+
+# Start our own idle inhibitor if not already held.
+hold() {
+    if [[ -n "$guard_pid" ]] && kill -0 "$guard_pid" 2>/dev/null; then
+        return
+    fi
+    systemd-inhibit \
+        --what=idle \
+        --who=pi-sleep-guard \
+        --why="pi agent grace period" \
+        --mode=block \
+        sleep infinity &
+    guard_pid=$!
+}
+
+# Release our idle inhibitor if held.
+release() {
+    if [[ -n "$guard_pid" ]]; then
+        kill "$guard_pid" 2>/dev/null || true
+        wait "$guard_pid" 2>/dev/null || true
+        guard_pid=""
+    fi
+}
+
+cleanup() {
+    release
+    exit 0
+}
+trap cleanup EXIT INT TERM
+
+# Count active pi agent inhibitors (excludes our own — different --who/--why).
+count_pi_inhibitors() {
+    systemd-inhibit --list --no-legend 2>/dev/null \
+        | grep -c -F "$PI_INHIBITOR_MARKER" || true
+}
+
+# Seconds since the epoch when a pi inhibitor was last observed. Initialised so
+# that, with no pi inhibitor ever seen, the grace check immediately elapses.
+last_seen=0
+
+while true; do
+    now=$(date +%s)
+    count=$(count_pi_inhibitors)
+
+    if [[ "$count" -gt 0 ]]; then
+        last_seen=$now
+        hold
+    elif (( now - last_seen >= GRACE_SECONDS )); then
+        release
+    fi
+
+    sleep "$POLL_SECONDS"
+done

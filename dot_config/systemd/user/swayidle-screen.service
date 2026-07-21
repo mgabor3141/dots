@@ -1,0 +1,24 @@
+[Unit]
+Description=swayidle — screen power management (DPMS)
+Documentation=man:swayidle(1)
+# Screen-only idle handling. Suspend is handled separately by logind
+# (IdleAction, fed by the `idlehint` below) and gated by pi-sleep-guard.
+# This service is never touched by the agent idle-inhibit logic, so screen
+# blanking is fully independent of pi.
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+# Wait for the Wayland socket before starting (niri may still be coming up).
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do ls /run/user/$(id -u)/wayland-* >/dev/null 2>&1 && exit 0; sleep 0.5; done; echo "Warning: Wayland socket not found after 15s"'
+ExecStart=/usr/bin/swayidle -w \
+    timeout 870 'notify-send --urgency=low --expire-time=10000 "Screen powering off soon..."' \
+    timeout 900 'niri msg action power-off-monitors' \
+    resume 'niri msg action power-on-monitors' \
+    idlehint 900
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
