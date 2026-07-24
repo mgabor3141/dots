@@ -104,7 +104,7 @@ workspace "T" {
 
 binds {
     // ─── Applications ───
-    Mod+G                              hotkey-overlay-title="Open Launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
+    Mod+B                              hotkey-overlay-title="Open Launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
     Mod+SPACE                          hotkey-overlay-title="Open Launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
     Mod+Period                         hotkey-overlay-title="Emoji Picker" { spawn-sh "qs -c noctalia-shell ipc call launcher emoji"; }
     Ctrl+Shift+Alt+V                   hotkey-overlay-title="Clipboard History" { spawn-sh "qs -c noctalia-shell ipc call launcher clipboard"; }
@@ -130,24 +130,30 @@ binds {
     XF86MonBrightnessDown               allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call brightness decrease"; }
 
     // ─── Window Movement and Focus ───
-    Mod+X                             repeat=false { close-window; }
+    Mod+X                              repeat=false { close-window; }
 
     Mod+LEFT                           { focus-column-left; }
-    Mod+RIGHT                          { focus-column-right; }
-    Mod+Alt+LEFT                       { focus-monitor-left; }
-    Mod+Alt+RIGHT                      { focus-monitor-right; }
     Mod+S                              { focus-column-left; }
+
+    Mod+RIGHT                          { focus-column-right; }
     Mod+F                              { focus-column-right; }
+
+    Mod+Alt+LEFT                       { focus-monitor-left; }
     Mod+Alt+S                          { focus-monitor-left; }
+
+    Mod+Alt+RIGHT                      { focus-monitor-right; }
     Mod+Alt+F                          { focus-monitor-right; }
 
     Mod+Shift+LEFT                     { move-column-left; }
-    Mod+Shift+RIGHT                    { move-column-right; }
-    Mod+Alt+Shift+LEFT                 { move-column-to-monitor-left; }
-    Mod+Alt+Shift+RIGHT                { move-column-to-monitor-right; }
     Mod+Shift+S                        { move-column-left; }
+
+    Mod+Shift+RIGHT                    { move-column-right; }
     Mod+Shift+F                        { move-column-right; }
+
+    Mod+Alt+Shift+LEFT                 { move-column-to-monitor-left; }
     Mod+Alt+Shift+S                    { move-column-to-monitor-left; }
+
+    Mod+Alt+Shift+RIGHT                { move-column-to-monitor-right; }
     Mod+Alt+Shift+F                    { move-column-to-monitor-right; }
 
     Mod+UP                             { focus-window-or-workspace-up; }
@@ -218,7 +224,6 @@ binds {
 
     // ─── Modes ───
     Mod+Z                              { toggle-window-floating; }
-    Mod+B                              { toggle-column-tabbed-display; }
     Mod+Escape                         repeat=false { toggle-overview; }
 
     // ─── Screenshots ───
