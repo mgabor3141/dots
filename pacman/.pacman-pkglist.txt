@@ -89,7 +89,6 @@ mariadb
 meld
 mold
 mpv
-mtools
 musl
 namcap
 nano-syntax-highlighting
