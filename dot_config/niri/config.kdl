@@ -231,8 +231,9 @@ binds {
     CTRL+SHIFT+4                       hotkey-overlay-title="Toggle Screen Recording" { spawn-sh "~/.config/wm-scripts/screenrec.sh"; }
     CTRL+SHIFT+5                       hotkey-overlay-title="Toggle Screen Recording (with audio)" { spawn-sh "~/.config/wm-scripts/screenrec.sh --audio"; }
 
-    // ─── Noctalia screen lock ───
-    Mod+L                              { command qs -c noctalia-shell ipc call lockScreen lock }
+    // ─── Lock / Sleep ───
+    Mod+L                              { spawn-sh "command qs -c noctalia-shell ipc call lockScreen lock"; }
+    Mod+O                              { power-off-monitors; }
 
     // ─── Emergency Escape Key ───
     // Use this when a fullscreen app blocks your keybinds.
