@@ -136,6 +136,41 @@
                     ]
                 },
                 {
+                    "colorizeSystemIcon": "none",
+                    "colorizeSystemText": "none",
+                    "generalTooltipText": "Idle inhibitors",
+                    "hideMode": "alwaysExpanded",
+                    "icon": "eye-exclamation",
+                    "iconPosition": "left",
+                    "id": "CustomButton",
+                    "ipcIdentifier": "",
+                    "leftClickExec": "idle-inhibitor-monitor --toast",
+                    "leftClickUpdateText": false,
+                    "maxTextLength": {
+                        "horizontal": 10,
+                        "vertical": 10
+                    },
+                    "middleClickExec": "",
+                    "middleClickUpdateText": false,
+                    "parseJson": true,
+                    "rightClickExec": "",
+                    "rightClickUpdateText": false,
+                    "showExecTooltip": true,
+                    "showIcon": true,
+                    "showTextTooltip": true,
+                    "textCollapse": "",
+                    "textCommand": "idle-inhibitor-monitor --noctalia-icon",
+                    "textIntervalMs": 5000,
+                    "textStream": false,
+                    "wheelDownExec": "",
+                    "wheelDownUpdateText": false,
+                    "wheelExec": "",
+                    "wheelMode": "unified",
+                    "wheelUpExec": "",
+                    "wheelUpUpdateText": false,
+                    "wheelUpdateText": false
+                },
+                {
                     "hideWhenZero": true,
                     "hideWhenZeroUnread": true,
                     "iconColor": "none",
@@ -238,17 +273,6 @@
         "shortcuts": {
             "left": [
                 {
-                    "enableOnStateLogic": true,
-                    "generalTooltipText": "Idle inhibitors",
-                    "icon": "eye",
-                    "id": "CustomButton",
-                    "onClicked": "idle-inhibitor-monitor --toast",
-                    "onMiddleClicked": "",
-                    "onRightClicked": "",
-                    "showExecTooltip": false,
-                    "stateChecksJson": "[{\"command\":\"idle-inhibitor-monitor --check\",\"icon\":\"eye\"}]"
-                },
-                {
                     "id": "KeepAwake"
                 },
                 {
@@ -304,7 +328,7 @@
         "deadOpacity": 0.6,
         "displayMode": "auto_hide",
         "dockType": "floating",
-        "enabled": true,
+        "enabled": false,
         "floatingRatio": 0.5,
         "groupApps": false,
         "groupClickAction": "cycle",

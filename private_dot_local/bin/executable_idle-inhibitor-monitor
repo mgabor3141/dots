@@ -10,8 +10,9 @@ set -Eeuo pipefail
 # Uses the same blacklist patterns as wayland-pipewire-idle-inhibit config.
 #
 # Usage:
-#   idle-inhibitor-monitor --check  Exit 0 if inhibitors active, 1 otherwise
-#   idle-inhibitor-monitor --toast  Show current inhibitors as a noctalia toast
+#   idle-inhibitor-monitor --check          Exit 0 if inhibitors active, 1 otherwise
+#   idle-inhibitor-monitor --toast          Show current inhibitors as a noctalia toast
+#   idle-inhibitor-monitor --noctalia-icon  Print CustomButton JSON with count and icon
 
 # Patterns matching wayland-pipewire-idle-inhibit blacklist.
 # The "<sink>-playback" bridges (system-audio-playback, comms-playback) are
@@ -107,6 +108,20 @@ cmd_check() {
     [[ ${#inhibitor_lines[@]} -gt 0 ]]
 }
 
+# --- --noctalia-icon ---
+# Print JSON for a Noctalia CustomButton. Hide the count and use a closed eye
+# when there are no active inhibitors.
+cmd_noctalia_icon() {
+    collect_inhibitors
+
+    local count=${#inhibitor_lines[@]}
+    if [[ $count -eq 0 ]]; then
+        printf '{"text":"","icon":"eye-closed"}\n'
+    else
+        printf '{"text":"%d","icon":"eye"}\n' "$count"
+    fi
+}
+
 # --- --toast ---
 # Show current inhibitors as a noctalia toast notification.
 cmd_toast() {
@@ -133,7 +148,8 @@ cmd_toast() {
 }
 
 case "${1:-}" in
-    --toast)  cmd_toast ;;
-    --check)  cmd_check ;;
-    *)        echo "Usage: idle-inhibitor-monitor [--check|--toast]" >&2; exit 1 ;;
+    --toast)          cmd_toast ;;
+    --check)          cmd_check ;;
+    --noctalia-icon)  cmd_noctalia_icon ;;
+    *)                echo "Usage: idle-inhibitor-monitor [--check|--toast|--noctalia-icon]" >&2; exit 1 ;;
 esac
