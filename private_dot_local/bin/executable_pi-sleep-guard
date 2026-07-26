@@ -8,12 +8,13 @@ set -Eeuo pipefail
 # for a grace period afterwards, so follow-up messages can be queued remotely
 # once a run finishes.
 #
-# Mechanism: the pi idle-inhibit extension holds a systemd idle inhibitor
+# Mechanism: the pi idle-inhibit extension holds a systemd sleep inhibitor
 # (--who=pi --why="AI agent running") for the duration of each agent run. This
 # guard polls the inhibitor list on a slow clock; while it sees at least one
 # such inhibitor — or has seen one within GRACE_SECONDS — it holds its own
-# idle inhibitor. Once no pi inhibitor has been seen for GRACE_SECONDS, it
-# releases. logind's IdleAction (see logind.conf) then takes over normally.
+# sleep inhibitor. Unlike an idle inhibitor, this does not pause swayidle's
+# screen-blanking timer. Once no pi inhibitor has been seen for GRACE_SECONDS,
+# it releases and logind's IdleAction takes over normally.
 #
 # This deliberately does not track individual pi PIDs or lockfiles: it only
 # cares whether *any* pi inhibitor currently exists. Detection need not be
@@ -26,13 +27,13 @@ PI_INHIBITOR_MARKER='AI agent running'
 
 guard_pid=""
 
-# Start our own idle inhibitor if not already held.
+# Start our own sleep inhibitor if not already held.
 hold() {
     if [[ -n "$guard_pid" ]] && kill -0 "$guard_pid" 2>/dev/null; then
         return
     fi
     systemd-inhibit \
-        --what=idle \
+        --what=sleep \
         --who=pi-sleep-guard \
         --why="pi agent grace period" \
         --mode=block \
@@ -40,7 +41,7 @@ hold() {
     guard_pid=$!
 }
 
-# Release our idle inhibitor if held.
+# Release our sleep inhibitor if held.
 release() {
     if [[ -n "$guard_pid" ]]; then
         kill "$guard_pid" 2>/dev/null || true

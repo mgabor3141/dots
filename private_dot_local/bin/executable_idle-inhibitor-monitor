@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 # Idle inhibitor monitor for noctalia control center.
 # Detects:
-#   1. systemd idle block inhibitors (systemd-inhibit --list)
+#   1. systemd idle/sleep block inhibitors (systemd-inhibit --list)
 #   2. Active PipeWire audio streams that trigger wayland-pipewire-idle-inhibit
 #
 # Uses the same blacklist patterns as wayland-pipewire-idle-inhibit config.
@@ -71,7 +71,7 @@ get_active_audio_streams() {
 
 get_systemd_idle_inhibitors() {
     systemd-inhibit --list --no-legend 2>/dev/null | while IFS= read -r line; do
-        if [[ "$line" =~ idle ]] && [[ "$line" =~ block ]]; then
+        if [[ "$line" =~ (idle|sleep) ]] && [[ "$line" =~ block ]]; then
             local who comm why
             who=$(echo "$line" | awk '{print $1}')
             comm=$(echo "$line" | awk '{print $5}')

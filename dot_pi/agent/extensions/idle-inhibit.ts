@@ -1,6 +1,6 @@
 /**
- * Idle Inhibitor — prevents system idle (screen lock, suspend) while an agent is running.
- * Uses systemd-inhibit to hold an idle lock for the duration of each agent invocation.
+ * Sleep Inhibitor — prevents suspend while an agent is running without affecting
+ * screen blanking. Uses systemd-inhibit to hold a sleep lock for each invocation.
  *
  * The inhibitor is held by a `systemd-inhibit ... cat` child whose stdin is a pipe
  * owned by this pi process. systemd-inhibit holds the logind lock for as long as the
@@ -32,7 +32,7 @@ export default function (pi: ExtensionAPI) {
 		// exits, and systemd-inhibit drops the lock. See file header.
 		inhibitor = spawn(
 			"systemd-inhibit",
-			["--what=idle", "--who=pi", "--why=AI agent running", "--mode=block", "cat"],
+			["--what=sleep", "--who=pi", "--why=AI agent running", "--mode=block", "cat"],
 			{ stdio: ["pipe", "ignore", "ignore"], detached: false },
 		);
 
