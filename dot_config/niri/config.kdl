@@ -144,6 +144,8 @@ binds {
     Mod+Alt+RIGHT                      { focus-monitor-right; }
     Mod+Alt+F                          { focus-monitor-right; }
 
+    Mod+G                              { focus-monitor-next; }
+
     Mod+Shift+LEFT                     { move-column-left; }
     Mod+Shift+S                        { move-column-left; }
 
@@ -155,6 +157,8 @@ binds {
 
     Mod+Alt+Shift+RIGHT                { move-column-to-monitor-right; }
     Mod+Alt+Shift+F                    { move-column-to-monitor-right; }
+
+    Mod+Shift+G                        { move-column-to-monitor-next; }
 
     Mod+UP                             { focus-window-or-workspace-up; }
     Mod+DOWN                           { focus-window-or-workspace-down; }
