@@ -6,7 +6,7 @@
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { execFile } from "node:child_process";
-import { access, readdir } from "node:fs/promises";
+import { access, readdir, statfs } from "node:fs/promises";
 import { promisify } from "node:util";
 import * as path from "node:path";
 
@@ -65,6 +65,15 @@ function buildJjNote(state: JjState, cwd: string): string {
 
 // ── prompt construction ──────────────────────────────────────────────────────
 
+async function isLargeRootFilesystem(): Promise<boolean> {
+	try {
+		const stats = await statfs("/");
+		return stats.blocks * stats.bsize > 100 * 1024 ** 3;
+	} catch {
+		return false;
+	}
+}
+
 const PREAMBLE = `You are running inside an agent harness.
 
 Non-obvious tool notes:
@@ -122,6 +131,10 @@ export default function (pi: ExtensionAPI) {
 		const notes: string[] = [
 			`System: ${system}.`,
 		];
+
+		if (await isLargeRootFilesystem()) {
+			notes.push("This is not a container. Do not run `find /`; searching the entire host filesystem will hang.");
+		}
 
 		const jjNote = buildJjNote(await detectJj(ctx.cwd), ctx.cwd);
 		if (jjNote) notes.push(jjNote);
