@@ -222,7 +222,7 @@ binds {
     // Mod+Alt+MINUS                       { set-window-height "-10%"; }
     // Mod+Alt+EQUAL                       { set-window-height "+10%"; }
     Mod+C                               { switch-preset-column-width-back; }
-    Mod+Shift+C                         { expand-column-to-available-width; }
+    Mod+Shift+C                         { switch-focus-between-floating-and-tiling; }
     Mod+V                               { switch-preset-column-width; }
     Mod+Shift+V                         { fullscreen-window; }
 
@@ -290,7 +290,6 @@ binds {
             proportion 0.33333
             proportion 0.5
             proportion 0.75
-            proportion 1.0
         }
 
         default-column-width {}
