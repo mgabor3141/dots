@@ -11,7 +11,7 @@
 {
   /*#- includeTemplate "pick" (dict
     "stdin" .chezmoi.stdin
-    "jq" `.agent | { ssh_connections, agent_servers }`
+    "jq" `. | { language_models }`
   ) */
   "agent": {
     /*#- indent 2 (includeTemplate "pick" (dict
