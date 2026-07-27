@@ -358,7 +358,7 @@
     "general": {
         "allowPanelsOnScreenWithoutBar": true,
         "allowPasswordWithFprintd": false,
-        "animationDisabled": false,
+        "animationDisabled": true,
         "animationSpeed": 1.25,
         "autoStartAuth": false,
         "avatarImage": "/home/mg/.face",
