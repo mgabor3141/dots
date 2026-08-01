@@ -32,11 +32,12 @@ hold() {
     if [[ -n "$guard_pid" ]] && kill -0 "$guard_pid" 2>/dev/null; then
         return
     fi
+    # Automatic sleep stays blocked, but the owning user may suspend explicitly.
     systemd-inhibit \
         --what=sleep \
         --who=pi-sleep-guard \
         --why="pi agent grace period" \
-        --mode=block \
+        --mode=block-weak \
         sleep infinity &
     guard_pid=$!
 }
