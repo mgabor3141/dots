@@ -13,3 +13,9 @@ name = ".*-playback"
 
 [[node_blacklist]]
 name = "speech-dispatcher.*"
+
+# Zen can leave muted/background tabs (notably X) uncorked even when no media
+# is audibly playing. PipeWire state is therefore not a reliable playback
+# signal for the browser; use its MPRIS PlayerStatus instead.
+[[node_blacklist]]
+app_name = "^Zen$"

@@ -21,6 +21,9 @@ STREAM_BLACKLIST_PATTERNS=(
     '.*-playback'
     'speech-dispatcher.*'
 )
+APP_BLACKLIST_PATTERNS=(
+    'Zen'
+)
 
 is_blacklisted() {
     local name="$1"
@@ -32,20 +35,34 @@ is_blacklisted() {
     return 1
 }
 
+is_app_blacklisted() {
+    local name="$1"
+    for pattern in "${APP_BLACKLIST_PATTERNS[@]}"; do
+        if [[ "$name" =~ ^${pattern}$ ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 get_active_audio_streams() {
     # Find running (not corked/paused) PipeWire output streams that aren't blacklisted.
     # Blacklist is checked against both node.name and media.name.
     local streams=()
-    local current_media_name="" current_node_name="" current_corked="" current_class=""
+    local current_media_name="" current_node_name="" current_app_name=""
+    local current_corked="" current_class=""
 
     process_entry() {
         if [[ -n "$current_node_name" && "$current_corked" == "no" && "$current_class" == *"Output/Audio"* ]]; then
-            if ! is_blacklisted "$current_node_name" && ! is_blacklisted "$current_media_name"; then
+            if ! is_blacklisted "$current_node_name" \
+                    && ! is_blacklisted "$current_media_name" \
+                    && ! is_app_blacklisted "$current_app_name"; then
                 local display_name="${current_media_name:-$current_node_name}"
                 streams+=("$display_name")
             fi
         fi
-        current_media_name="" current_node_name="" current_corked="" current_class=""
+        current_media_name="" current_node_name="" current_app_name=""
+        current_corked="" current_class=""
     }
 
     while IFS= read -r line; do
@@ -53,6 +70,8 @@ get_active_audio_streams() {
             current_media_name="${BASH_REMATCH[1]}"
         elif [[ "$line" =~ node\.name\ =\ \"(.+)\" ]]; then
             current_node_name="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ application\.name\ =\ \"(.+)\" ]]; then
+            current_app_name="${BASH_REMATCH[1]}"
         elif [[ "$line" =~ Corked:\ (.+) ]]; then
             current_corked="${BASH_REMATCH[1]}"
         elif [[ "$line" =~ media\.class\ =\ \"(.+)\" ]]; then
