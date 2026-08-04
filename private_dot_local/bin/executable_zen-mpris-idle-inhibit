@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+# Zen exposes media sessions through Firefox-compatible MPRIS player names.
+# Its PipeWire streams are not trustworthy playback signals (muted X tabs can
+# remain uncorked), so inhibit idle only while MPRIS reports actual playback.
+
+POLL_SECONDS="${ZEN_MPRIS_INHIBIT_POLL_SECONDS:-2}"
+inhibitor_pid=""
+
+zen_is_playing() {
+    local player status
+    while IFS= read -r player; do
+        [[ "$player" == firefox.* ]] || continue
+        status=$(playerctl --player="$player" status 2>/dev/null || true)
+        [[ "$status" == "Playing" ]] && return 0
+    done < <(playerctl --list-all 2>/dev/null || true)
+    return 1
+}
+
+hold() {
+    if [[ -n "$inhibitor_pid" ]] && kill -0 "$inhibitor_pid" 2>/dev/null; then
+        return
+    fi
+    systemd-inhibit \
+        --what=idle \
+        --who=zen-mpris \
+        --why="Zen media playing" \
+        --mode=block \
+        sleep infinity &
+    inhibitor_pid=$!
+}
+
+release() {
+    if [[ -n "$inhibitor_pid" ]]; then
+        kill "$inhibitor_pid" 2>/dev/null || true
+        wait "$inhibitor_pid" 2>/dev/null || true
+        inhibitor_pid=""
+    fi
+}
+
+cleanup() {
+    release
+    exit 0
+}
+trap cleanup EXIT INT TERM
+
+while true; do
+    if zen_is_playing; then
+        hold
+    else
+        release
+    fi
+    sleep "$POLL_SECONDS"
+done

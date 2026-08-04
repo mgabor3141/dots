@@ -1,0 +1,14 @@
+[Unit]
+Description=Inhibit idle while Zen MPRIS media is playing
+Documentation=file://%h/.local/bin/zen-mpris-idle-inhibit
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/zen-mpris-idle-inhibit
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
