@@ -25,4 +25,4 @@ grove clean               # delete workspaces with no commits or changes
 
 ## Gotcha
 
-Untracked files (gitignored, including `.memory/` and `*.local.md`) live only in the workspace that created them. If you write per-workspace docs, write them inside the workspace.
+Untracked (gitignored) files live only in the workspace that created them. These are usually ephemeral, so it's not an issue if they are lost when the workspace is cleaned up.

@@ -5,11 +5,11 @@ description: Orchestrate adversarial code review via parallel subagents — one 
 
 # Adversarial review orchestration
 
-Spawn reviewers as fresh sessions per the `handoff` skill. Untracked docs don't travel between grove workspaces — copy ADRs/reports the reviewers need into the workspace's `.memory/`.
+Spawn reviewers as fresh sessions using the /gmux-agent skill.
 
 ## Principles
 
-- **Reviewers must reproduce, not argue.** Reviewers reasoning only from source approve real bugs; reviewers writing throwaway probes (schedule fakes, differential fuzzers, SQL probes) find them. Every handoff must license: "you may run tests and write throwaway probe tests, but delete them; `jj diff` must stay clean outside `.memory/`." Demand deterministic reproduction of concurrency claims.
+- **Reviewers must reproduce, not argue.** Reviewers reasoning only from source approve real bugs; reviewers writing throwaway probes (schedule fakes, differential fuzzers, SQL probes) find them. Every handoff must license: "you may run tests and write throwaway probe tests, but delete them; `jj diff` must stay clean." Demand deterministic reproduction of concurrency claims.
 - **No prior stake.** Reviewers get the design docs and the code — not the implementer's chat context or other reviews. Comments and doc-strings are claims, not evidence; say "do not accept comments as proof" in the handoff.
 - **A clean verdict with no probes is unreliable, not reassuring.**
 - **Withdrawn findings are re-litigable.** Reviewers have both wrongly withdrawn real bugs and wrongly approved real races.
@@ -27,8 +27,6 @@ Spawn reviewers as fresh sessions per the `handoff` skill. Untracked docs don't 
 
 ## Round mechanics
 
-- `gmux wait` breaks when the daemon restarts (dev rebuild loops); poll for report files instead.
 - Deliverable per reviewer: findings by severity with `file:line` evidence, verdict integrate/amend/reject — per commit, not per round.
 - Amend: each fix lands in the commit that introduced the defect (`jj new <commit>` → edit → `jj squash`); every stack commit stays individually green. A reviewer-suggested fix that fights the code means stop and report, not improvise.
 - Delta re-review by the original finding's reviewer (existing session), demanding a dominance argument: "what did the removed/changed mechanism actually protect that the replacement does not?"
-- Run the validation gate yourself before integrating; don't take the implementer's word.
