@@ -325,11 +325,11 @@ export default function (pi: ExtensionAPI) {
     label: "View Page",
     description:
       "Fetch and return the readable content of one or more URLs (max 5). " +
-      "Boilerplate is stripped centrally by the extraction service; pages under 5000 chars " +
-      "are returned as-is, while larger pages are summarized. Provide `query` to steer that " +
-      "summary toward what you need without lossy pre-filtering.",
+      "Boilerplate and query focusing are handled centrally by the extraction service. " +
+      "Provide `query` to select complete relevant sections without lossy BM25 filtering. " +
+      "Non-HTML resources fetched directly by this client may be summarized when large.",
     promptSnippet:
-      "Use to read the content of URLs. Pass `query` to focus on what you need. Large pages are summarized.",
+      "Use to read URLs. Pass `query` to select complete relevant sections server-side.",
     parameters: Type.Object({
       urls: Type.Array(Type.String(), {
         description: "URLs to fetch (max 5)",
@@ -337,8 +337,8 @@ export default function (pi: ExtensionAPI) {
       query: Type.Optional(
         Type.String({
           description:
-            "What you're looking for on the page(s). Focuses summaries of larger pages; " +
-            "short pages remain complete.",
+            "What you're looking for on the page(s). Selects complete relevant sections " +
+            "server-side; short pages remain complete.",
         })
       ),
     }),
@@ -372,7 +372,7 @@ export default function (pi: ExtensionAPI) {
           method: "POST",
           signal,
           headers,
-          body: JSON.stringify({ urls: toCrawl }),
+          body: JSON.stringify({ urls: toCrawl, query: params.query }),
         }, 3);
 
         if (!response.ok) {
@@ -407,9 +407,12 @@ export default function (pi: ExtensionAPI) {
           const md = r.markdown || {};
           const raw =
             md.fit_markdown || md.raw_markdown || r.cleaned_html || "";
-          const title = r.metadata?.title || "";
-          const text = await processContent(raw, reqUrl, title, ctx, params.query, signal);
-          return { url: reqUrl, text, size: raw.length };
+          // The gateway owns HTML cleanup, loss-aware query focusing, and
+          // inference fallback. Do not run a second client-side summarizer:
+          // it duplicates latency and can hang independently when local
+          // inference is unavailable. Direct-fetched non-HTML resources still
+          // use processContent above because they bypass the gateway.
+          return { url: reqUrl, text: raw, size: raw.length };
         })
       );
 
