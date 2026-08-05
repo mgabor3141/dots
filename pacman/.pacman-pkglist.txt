@@ -104,6 +104,7 @@ nvidia-prime
 obs-studio
 octopi
 openai-codex
+openblas
 opendesktop-fonts
 os-prober
 pamixer
@@ -122,7 +123,6 @@ reflector
 satty
 sddm
 sg3_utils
-shelly
 sof-firmware
 speedtest-cli
 spotify-launcher
