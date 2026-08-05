@@ -103,6 +103,7 @@ nvidia-container-toolkit
 nvidia-prime
 obs-studio
 octopi
+openai-codex
 opendesktop-fonts
 os-prober
 pamixer
