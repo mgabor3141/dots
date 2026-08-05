@@ -275,30 +275,6 @@ async function preflightDirectFetch(
   return { text, title };
 }
 
-/** Build the crawl4ai markdown content_filter config. */
-function buildContentFilter(query: string | undefined) {
-  // With a query: BM25 ranks query-relevant chunks (cheap, keyword-based,
-  // narrows content before it leaves the crawler). Without: prune boilerplate.
-  const content_filter = query
-    ? {
-        type: "BM25ContentFilter",
-        params: { user_query: query, bm25_threshold: 1.2 },
-      }
-    : {
-        type: "PruningContentFilter",
-        params: { threshold: 0.48, threshold_type: "dynamic", min_word_threshold: 5 },
-      };
-  return {
-    type: "CrawlerRunConfig",
-    params: {
-      markdown_generator: {
-        type: "DefaultMarkdownGenerator",
-        params: { content_filter },
-      },
-    },
-  };
-}
-
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "web_search",
@@ -349,9 +325,9 @@ export default function (pi: ExtensionAPI) {
     label: "View Page",
     description:
       "Fetch and return the readable content of one or more URLs (max 5). " +
-      "Boilerplate is stripped automatically; pages under 5000 chars are returned as-is, " +
-      "larger pages are summarized. Provide `query` to describe what you're looking for — " +
-      "it narrows the fetched content to relevant sections and steers the summary.",
+      "Boilerplate is stripped centrally by the extraction service; pages under 5000 chars " +
+      "are returned as-is, while larger pages are summarized. Provide `query` to steer that " +
+      "summary toward what you need without lossy pre-filtering.",
     promptSnippet:
       "Use to read the content of URLs. Pass `query` to focus on what you need. Large pages are summarized.",
     parameters: Type.Object({
@@ -361,8 +337,8 @@ export default function (pi: ExtensionAPI) {
       query: Type.Optional(
         Type.String({
           description:
-            "What you're looking for on the page(s). Narrows content to relevant " +
-            "sections and focuses the summary.",
+            "What you're looking for on the page(s). Focuses summaries of larger pages; " +
+            "short pages remain complete.",
         })
       ),
     }),
@@ -396,10 +372,7 @@ export default function (pi: ExtensionAPI) {
           method: "POST",
           signal,
           headers,
-          body: JSON.stringify({
-            urls: toCrawl,
-            crawler_config: buildContentFilter(params.query),
-          }),
+          body: JSON.stringify({ urls: toCrawl }),
         }, 3);
 
         if (!response.ok) {
