@@ -7,9 +7,10 @@ sink_whitelist = []
 # comms-playback) and speech-dispatcher. The bridge streams are loopback
 # module outputs that stay permanently connected and un-corked, which would
 # otherwise make the idle inhibitor think audio is always playing.
-# Our bridges follow the "<sink>-playback" naming convention.
+# The helper matches a node's description before its node.name. These are the
+# descriptions of the always-running virtual-sink → Scarlett bridge streams.
 [[node_blacklist]]
-name = ".*-playback"
+name = "^(System Audio|Comms) → Scarlett$"
 
 [[node_blacklist]]
 name = "speech-dispatcher.*"
