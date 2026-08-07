@@ -145,6 +145,7 @@ binds {
     Mod+Alt+F                          { focus-monitor-right; }
 
     Mod+G                              { focus-monitor-next; }
+    Mod+Shift+G                        { move-column-to-monitor-next; }
 
     Mod+Shift+LEFT                     { move-column-left; }
     Mod+Shift+S                        { move-column-left; }
@@ -157,8 +158,6 @@ binds {
 
     Mod+Alt+Shift+RIGHT                { move-column-to-monitor-right; }
     Mod+Alt+Shift+F                    { move-column-to-monitor-right; }
-
-    Mod+Shift+G                        { move-column-to-monitor-next; }
 
     Mod+UP                             { focus-window-or-workspace-up; }
     Mod+DOWN                           { focus-window-or-workspace-down; }
@@ -222,9 +221,9 @@ binds {
     // Mod+Alt+MINUS                       { set-window-height "-10%"; }
     // Mod+Alt+EQUAL                       { set-window-height "+10%"; }
     Mod+C                               { switch-preset-column-width-back; }
-    Mod+Shift+C                         { switch-focus-between-floating-and-tiling; }
+    Mod+Shift+C                         { fullscreen-window; }
     Mod+V                               { switch-preset-column-width; }
-    Mod+Shift+V                         { fullscreen-window; }
+    Mod+Shift+V                         { maximize-column; }
 
     // ─── Modes ───
     Mod+Z                              { toggle-window-floating; }
