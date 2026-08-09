@@ -1,4 +1,5 @@
 main.config_file_version 2
+main.exclude_metadata false
 main.hotkeys_enable_option enable_hotkeys
 main.joystick_hotkeys_enable_option disable_hotkeys
 main.language 
@@ -66,7 +67,7 @@ replay.record_options.framerate_mode auto
 replay.record_options.low_power_mode false
 replay.record_options.overclock false
 replay.record_options.record_area_height 1080
-replay.record_options.record_area_option DP-1
+replay.record_options.record_area_option DP-3
 replay.record_options.record_area_width 1920
 replay.record_options.record_cursor true
 replay.record_options.restore_portal_session true
