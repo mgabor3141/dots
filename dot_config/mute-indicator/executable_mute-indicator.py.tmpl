@@ -10,6 +10,7 @@ Signals:
 """
 
 import signal
+import subprocess
 import gi
 
 gi.require_version("Gtk", "4.0")
@@ -24,6 +25,23 @@ class MuteIndicator(Gtk.Application):
     def __init__(self):
         super().__init__(application_id="com.local.mute-indicator")
         self.windows = []
+        self.muted = self._get_mute_state()
+        self.monitors = None
+
+    @staticmethod
+    def _get_mute_state():
+        """Read the initial state; later changes arrive through signals."""
+        try:
+            result = subprocess.run(
+                ["pactl", "get-source-mute", "mic"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            return result.returncode == 0 and "Mute: yes" in result.stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return False
 
     def _create_window_for_monitor(self, monitor):
         window = Gtk.ApplicationWindow(application=self)
@@ -59,23 +77,49 @@ class MuteIndicator(Gtk.Application):
             display, css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
-        # Create a window on each monitor
-        monitors = display.get_monitors()
-        for i in range(monitors.get_n_items()):
-            monitor = monitors.get_item(i)
-            self.windows.append(self._create_window_for_monitor(monitor))
+        # Gdk's monitor list is live. Keep one layer-shell window per monitor,
+        # including monitors connected after the application started.
+        self.monitors = display.get_monitors()
+        self.monitors.connect("items-changed", self._sync_monitors)
+        self._sync_monitors()
 
         # Signal handlers
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, self._show)
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR2, self._hide)
 
+    def _sync_monitors(self, *_args):
+        current = [
+            self.monitors.get_item(i)
+            for i in range(self.monitors.get_n_items())
+        ]
+
+        # Remove windows whose output disappeared.
+        kept = []
+        for monitor, window in self.windows:
+            if monitor in current:
+                kept.append((monitor, window))
+            else:
+                window.close()
+        self.windows = kept
+
+        # New windows inherit the current mute state rather than always being
+        # hidden until the next audio event.
+        known = [monitor for monitor, _window in self.windows]
+        for monitor in current:
+            if monitor not in known:
+                window = self._create_window_for_monitor(monitor)
+                self.windows.append((monitor, window))
+                window.set_visible(self.muted)
+
     def _show(self):
-        for window in self.windows:
+        self.muted = True
+        for _monitor, window in self.windows:
             window.set_visible(True)
         return GLib.SOURCE_CONTINUE
 
     def _hide(self):
-        for window in self.windows:
+        self.muted = False
+        for _monitor, window in self.windows:
             window.set_visible(False)
         return GLib.SOURCE_CONTINUE
 

@@ -1,7 +1,6 @@
 [Unit]
 Description=Mic mute event handler (pactl subscribe → mute indicator)
 After=pipewire-pulse.service
-BindsTo=pipewire-pulse.service
 
 [Service]
 ExecStart=/bin/bash -c 'set -o pipefail; pactl subscribe | %h/.config/mute-indicator/handle-mute-events.sh'
