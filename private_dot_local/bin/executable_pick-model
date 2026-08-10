@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Resolve a model role to the newest available matching Pi model."""
+
+from __future__ import annotations
+
+import argparse
+import fnmatch
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+from typing import Any
+
+
+def natural_key(value: str) -> tuple[tuple[int, Any], ...]:
+    parts = re.split(r"(\d+)", value.lower())
+    return tuple((0, int(part)) if part.isdigit() else (1, part) for part in parts)
+
+
+def available_models() -> list[str]:
+    try:
+        result = subprocess.run(
+            ["pi", "--list-models"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except FileNotFoundError:
+        raise SystemExit("pick-model: pi is not installed or not on PATH")
+    except subprocess.CalledProcessError as error:
+        detail = error.stderr.strip() or f"pi exited with status {error.returncode}"
+        raise SystemExit(f"pick-model: could not list available models: {detail}")
+
+    models: list[str] = []
+    for line in result.stdout.splitlines()[1:]:
+        columns = line.split()
+        if len(columns) >= 2:
+            models.append(f"{columns[0]}/{columns[1]}")
+    if not models:
+        raise SystemExit("pick-model: pi reported no available models")
+    return models
+
+
+def load_config(path: Path) -> dict[str, list[dict[str, str]]]:
+    try:
+        data = json.loads(path.read_text())
+    except FileNotFoundError:
+        raise SystemExit(f"pick-model: config not found: {path}")
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(f"pick-model: could not read {path}: {error}")
+
+    if not isinstance(data, dict):
+        raise SystemExit(f"pick-model: config root must be an object: {path}")
+    for alias, candidates in data.items():
+        if not isinstance(alias, str) or not isinstance(candidates, list):
+            raise SystemExit(f"pick-model: invalid alias entry in {path}")
+        for candidate in candidates:
+            if not isinstance(candidate, dict) or not isinstance(candidate.get("model"), str):
+                raise SystemExit(f"pick-model: invalid candidate for alias {alias!r}")
+            thinking = candidate.get("thinking")
+            if thinking is not None and not isinstance(thinking, str):
+                raise SystemExit(f"pick-model: invalid thinking level for alias {alias!r}")
+    return data
+
+
+def resolve(
+    candidates: list[dict[str, str]], models: list[str], excluded: set[str]
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    selected: list[dict[str, str]] = []
+    explanations: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    for candidate in candidates:
+        pattern = candidate["model"]
+        matches = [
+            model
+            for model in models
+            if model.split("/", 1)[0] not in excluded
+            and fnmatch.fnmatchcase(model.lower(), pattern.lower())
+        ]
+        if not matches:
+            explanations.append({"pattern": pattern, "status": "unavailable"})
+            continue
+        model = max(matches, key=natural_key)
+        spec = model + (f":{candidate['thinking']}" if candidate.get("thinking") else "")
+        explanations.append({"pattern": pattern, "status": "selected", "model": spec})
+        if spec not in seen:
+            selected.append({"model": model, "thinking": candidate.get("thinking", ""), "spec": spec})
+            seen.add(spec)
+    return selected, explanations
+
+
+def main() -> int:
+    default_config = Path(
+        os.environ.get(
+            "PICK_MODEL_CONFIG",
+            str(Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi/agent")).expanduser() / "model-aliases.json"),
+        )
+    ).expanduser()
+
+    parser = argparse.ArgumentParser(
+        description="Resolve a model role to the newest available matching Pi model."
+    )
+    parser.add_argument("alias", nargs="?", help="role alias to resolve")
+    parser.add_argument("--all", action="store_true", help="print every viable fallback")
+    parser.add_argument("--json", action="store_true", help="emit JSON")
+    parser.add_argument("--explain", action="store_true", help="show matched and unavailable patterns")
+    parser.add_argument("--list", action="store_true", help="list configured aliases")
+    parser.add_argument("--config", type=Path, default=default_config, help="alias policy file")
+    parser.add_argument(
+        "--exclude-provider",
+        action="append",
+        default=[],
+        metavar="PROVIDER",
+        help="skip a provider; repeatable",
+    )
+    args = parser.parse_args()
+
+    config = load_config(args.config)
+    if args.list:
+        print("\n".join(config))
+        return 0
+    if not args.alias:
+        parser.error("an alias is required unless --list is used")
+    if args.alias not in config:
+        choices = ", ".join(config)
+        raise SystemExit(f"pick-model: unknown alias {args.alias!r}; configured aliases: {choices}")
+
+    selected, explanations = resolve(
+        config[args.alias], available_models(), set(args.exclude_provider)
+    )
+    if not selected:
+        if args.json:
+            print(json.dumps({"alias": args.alias, "candidates": [], "explanations": explanations}))
+        raise SystemExit(f"pick-model: no available model for alias {args.alias!r}")
+
+    output = selected if args.all else selected[:1]
+    if args.json:
+        payload: dict[str, Any] = {"alias": args.alias, "candidates": output}
+        if args.explain:
+            payload["explanations"] = explanations
+        print(json.dumps(payload, indent=2))
+    else:
+        for item in output:
+            print(item["spec"])
+        if args.explain:
+            for item in explanations:
+                suffix = f" -> {item['model']}" if "model" in item else ""
+                print(f"{item['status']}: {item['pattern']}{suffix}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

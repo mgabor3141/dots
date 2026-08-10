@@ -1,0 +1,30 @@
+{
+  "implement": [
+    { "model": "openai-codex/gpt-*-sol", "thinking": "low" },
+    { "model": "anthropic/claude-opus-*", "thinking": "low" }
+  ],
+  "investigate": [
+    { "model": "openai-codex/gpt-*-sol", "thinking": "low" },
+    { "model": "openai-codex/gpt-*-terra", "thinking": "medium" },
+    { "model": "anthropic/claude-opus-*", "thinking": "low" }
+  ],
+  "review": [
+    { "model": "anthropic/claude-opus-*", "thinking": "medium" },
+    { "model": "openai-codex/gpt-*-sol", "thinking": "medium" },
+    { "model": "openai-codex/gpt-*-luna", "thinking": "high" }
+  ],
+  "focused-review": [
+    { "model": "openai-codex/gpt-*-luna", "thinking": "medium" },
+    { "model": "openai-codex/gpt-*-sol", "thinking": "low" },
+    { "model": "anthropic/claude-sonnet-*", "thinking": "high" }
+  ],
+  "design": [
+    { "model": "anthropic/claude-fable-*", "thinking": "medium" },
+    { "model": "anthropic/claude-opus-*", "thinking": "medium" },
+    { "model": "openai-codex/gpt-*-sol", "thinking": "medium" }
+  ],
+  "spot-check": [
+    { "model": "mgabor/default", "thinking": "medium" },
+    { "model": "openai-codex/gpt-*-luna", "thinking": "low" }
+  ]
+}
