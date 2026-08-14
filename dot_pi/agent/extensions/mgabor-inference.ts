@@ -130,11 +130,12 @@ export default async function (pi: ExtensionAPI) {
       changed = true;
     }
 
-    // Do not replay hidden reasoning into later turns unless a caller opts in.
+    // Preserve reasoning across agent turns and tool calls, matching Qwen3.8's
+    // recommended default. Explicit caller overrides still win.
     if (!("preserve_thinking" in templateArgs)) {
       nextPayload = {
         ...nextPayload,
-        chat_template_kwargs: { ...templateArgs, preserve_thinking: false },
+        chat_template_kwargs: { ...templateArgs, preserve_thinking: true },
       };
       changed = true;
     }
