@@ -84,7 +84,7 @@
     "default_width": 300.0,
     "dock": "left",
     "tree_view": true,
-    "sort_by_path": true,
+    "sort_by": "path",
     "scrollbar": {
       "show": "never"
     }
@@ -275,23 +275,18 @@
     "make": true,
     "docker-compose": true,
     "csv": true,
-    "astro": true
+    "astro": true,
+    "biome": true
   },
   "languages": {
     "JavaScript": {
       "code_actions_on_format": {
         "source.fixAll.eslint": true
-      },
-      "prettier": {
-        "allowed": true
       }
     },
     "TypeScript": {
       "code_actions_on_format": {
         "source.fixAll.eslint": true
-      },
-      "prettier": {
-        "allowed": true
       }
     }
   },
@@ -318,20 +313,6 @@
           "rulesCustomizations": [
             // set all eslint errors/warnings to show as warnings
             { "rule": "*", "severity": "warn" }
-          ]
-        }
-      }
-    },
-    "json-language-server": {
-      "settings": {
-        "json": {
-          "schemas": [
-            {
-              "fileMatch": ["**/zed/*settings.json*"],
-              "schema": {
-                "allowComments": true
-              }
-            }
           ]
         }
       }

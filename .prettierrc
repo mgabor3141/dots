@@ -1,0 +1,10 @@
+{
+  "overrides": [
+    {
+      "files": ["**/zed/*.json"],
+      "options": {
+        "trailingComma": "none"
+      }
+    }
+  ]
+}

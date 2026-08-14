@@ -1,14 +1,9 @@
 {
   "file_types": {
     "JSON": ["**/*.json.tmpl"],
-    "JSONC": ["**/*.jsonc.tmpl"],
+    "JSONC": ["**/*.jsonc.tmpl", "**/zed/*.json"],
     "TOML": ["**/*.toml.tmpl", "dot_gitconfig.tmpl"],
-    "Shell Script": [
-      "**/dot_*profile.tmpl",
-      "**/*.sh.tmpl",
-      "**/modify_*.plist",
-      "**/environment.d/*.conf",
-    ],
+    "Shell Script": ["**/dot_*profile.tmpl", "**/*.sh.tmpl", "**/modify_*.plist", "**/environment.d/*.conf"],
     "XML": ["**/*.plist.tmpl"],
   },
   "languages": {
@@ -20,16 +15,28 @@
     "json-language-server": {
       "settings": {
         "json": {
+          // Defaults need to be re-specified due to
+          // https://github.com/zed-industries/zed/issues/62572
           "schemas": [
             {
-              "fileMatch": [
-                "**/modify_*.json",
-                "**/zed/*settings.json*",
-                "**/zed/*keymap.json*",
-              ],
-              "schema": {
-                "allowComments": true,
-              },
+              "fileMatch": ["zed/*settings.json*"], // modified
+              "url": "zed://schemas/settings",
+            },
+            {
+              "fileMatch": [".zed/settings.json"],
+              "url": "zed://schemas/project_settings",
+            },
+            {
+              "fileMatch": ["zed/*keymap.json*"], // modified
+              "url": "zed://schemas/keymap",
+            },
+            {
+              "fileMatch": ["zed/tasks.json", ".zed/tasks.json"],
+              "url": "zed://schemas/tasks",
+            },
+            {
+              "fileMatch": ["zed/debug.json", ".zed/debug.json"],
+              "url": "zed://schemas/debug_tasks",
             },
           ],
         },
