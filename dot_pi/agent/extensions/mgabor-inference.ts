@@ -68,17 +68,26 @@ export default async function (pi: ExtensionAPI) {
     // as a legacy reference and triggers a deprecation warning.
     apiKey: key,
     api: "openai-completions",
-    // Server hosts Qwen3 via vLLM (plus proxy aliases like "best" that route
-    // to the same backend), so apply Qwen chat-template thinking to everything.
+    // The aliases and literal model ID all route to the same Qwen3.8 backend.
     models: modelIds.map((id) => ({
       id,
       name: id,
       reasoning: true,
-      input: ["text"],
+      input: ["text", "image"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: 262144,
-      maxTokens: 16384,
-      compat: { thinkingFormat: "qwen-chat-template" },
+      maxTokens: 131072,
+      compat: {
+        thinkingFormat: "openai",
+        supportsReasoningEffort: true,
+        reasoningEffortMap: {
+          minimal: "low",
+          low: "low",
+          medium: "medium",
+          high: "xhigh",
+          xhigh: "xhigh",
+        },
+      },
     })),
   });
 
@@ -102,35 +111,72 @@ export default async function (pi: ExtensionAPI) {
     const payload = event.payload as Record<string, unknown> | undefined;
     if (!payload || typeof payload.model !== "string") return undefined;
     if (!mgaborModelIds.has(payload.model)) return undefined;
-    const messages = payload.messages;
-    if (!Array.isArray(messages) || messages.length === 0) return undefined;
-    const sys = messages[0] as { role?: string; content?: unknown };
-    if (sys.role !== "developer" && sys.role !== "system") return undefined;
 
-    // Content may be a string or OpenAI v2 message-parts array; handle both.
-    let text: string;
-    let isArrayContent: boolean;
-    if (typeof sys.content === "string") {
-      text = sys.content;
-      isArrayContent = false;
-    } else if (Array.isArray(sys.content)) {
-      text = sys.content
-        .map((p: { text?: string }) => (p && typeof p.text === "string" ? p.text : ""))
-        .join("");
-      isArrayContent = true;
-    } else {
-      return undefined;
+    let changed = false;
+    let nextPayload = payload;
+    const templateArgs = isRecord(payload.chat_template_kwargs)
+      ? payload.chat_template_kwargs
+      : {};
+
+    // Qwen3.8 defaults to xhigh thinking when no control is sent. Pi represents
+    // thinking-off by omitting reasoning_effort, so make that state explicit.
+    // Preserve an explicit low-level enable_thinking override for callers that
+    // intentionally use the Qwen chat-template API directly.
+    if (
+      typeof payload.reasoning_effort !== "string" &&
+      !("enable_thinking" in templateArgs)
+    ) {
+      nextPayload = { ...nextPayload, reasoning_effort: "none" };
+      changed = true;
     }
 
-    const rewritten = rewriteAvailableSkills(text);
-    if (rewritten === text) return undefined;
+    // Do not replay hidden reasoning into later turns unless a caller opts in.
+    if (!("preserve_thinking" in templateArgs)) {
+      nextPayload = {
+        ...nextPayload,
+        chat_template_kwargs: { ...templateArgs, preserve_thinking: false },
+      };
+      changed = true;
+    }
 
-    const newSys = {
-      ...sys,
-      content: isArrayContent ? [{ type: "text", text: rewritten }] : rewritten,
-    };
-    return { ...payload, messages: [newSys, ...messages.slice(1)] };
+    const messages = payload.messages;
+    if (Array.isArray(messages) && messages.length > 0) {
+      const sys = messages[0] as { role?: string; content?: unknown };
+      if (sys.role === "developer" || sys.role === "system") {
+        // Content may be a string or OpenAI v2 message-parts array.
+        let text: string | undefined;
+        let isArrayContent = false;
+        if (typeof sys.content === "string") {
+          text = sys.content;
+        } else if (Array.isArray(sys.content)) {
+          text = sys.content
+            .map((part: { text?: string }) =>
+              part && typeof part.text === "string" ? part.text : "",
+            )
+            .join("");
+          isArrayContent = true;
+        }
+
+        if (text !== undefined) {
+          const rewritten = rewriteAvailableSkills(text);
+          if (rewritten !== text) {
+            const newSys = {
+              ...sys,
+              content: isArrayContent ? [{ type: "text", text: rewritten }] : rewritten,
+            };
+            nextPayload = { ...nextPayload, messages: [newSys, ...messages.slice(1)] };
+            changed = true;
+          }
+        }
+      }
+    }
+
+    return changed ? nextPayload : undefined;
   });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // Replace the <available_skills>...<skill>...</skill>...</available_skills>
