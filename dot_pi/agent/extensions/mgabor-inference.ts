@@ -82,108 +82,94 @@ export default async function (pi: ExtensionAPI) {
         supportsReasoningEffort: true,
         reasoningEffortMap: {
           minimal: "low",
-          low: "low",
-          medium: "medium",
+          medium: "xhigh",
           high: "xhigh",
-          xhigh: "xhigh",
         },
       },
     })),
   });
 
-  // Rewrite the <available_skills> XML block in the developer/system
-  // message to a markdown bullet list before the request hits vLLM.
-  //
-  // Why: Qwen3.6 has a learned CodeAct/Cline attractor that fires when
-  // the system prompt contains XML-tag listings shaped like
-  // <available_skills><skill><name>...</name>...</skill>...</available_skills>.
-  // When the attractor wins, the model emits tool calls in the wrong
-  // grammar (`<bash>{"command":...}</bash>` instead of the
-  // `<tool_call><function=bash><parameter=command>...` format vLLM's
-  // qwen3_xml parser expects). Empirical garble rate on coding-shaped
-  // first-turn prompts: 48% before this rewrite, ~0% after.
-  // (Stack: vllm-overlay parser-fix + this rewrite combined.)
-  //
-  // We scope the hook to this provider by checking payload.model
-  // against the set of model ids we registered. Other providers in
-  // the user's config (e.g. anthropic) see their payloads unchanged.
+  // This event lacks a provider ID, so scope it to the model IDs registered
+  // above. A same-named model from another provider could still collide.
   pi.on("before_provider_request", (event) => {
     const payload = event.payload as Record<string, unknown> | undefined;
     if (!payload || typeof payload.model !== "string") return undefined;
     if (!mgaborModelIds.has(payload.model)) return undefined;
 
-    let changed = false;
-    let nextPayload = payload;
-    const templateArgs = isRecord(payload.chat_template_kwargs)
-      ? payload.chat_template_kwargs
-      : {};
-
-    // Qwen3.8 defaults to xhigh thinking when no control is sent. Pi represents
-    // thinking-off by omitting reasoning_effort, so make that state explicit.
-    // Preserve an explicit low-level enable_thinking override for callers that
-    // intentionally use the Qwen chat-template API directly.
-    if (
-      typeof payload.reasoning_effort !== "string" &&
-      !("enable_thinking" in templateArgs)
-    ) {
-      nextPayload = { ...nextPayload, reasoning_effort: "none" };
-      changed = true;
-    }
-
-    // Preserve reasoning across agent turns and tool calls, matching Qwen3.8's
-    // recommended default. Explicit caller overrides still win.
-    if (!("preserve_thinking" in templateArgs)) {
-      nextPayload = {
-        ...nextPayload,
-        chat_template_kwargs: { ...templateArgs, preserve_thinking: true },
-      };
-      changed = true;
-    }
-
-    const messages = payload.messages;
-    if (Array.isArray(messages) && messages.length > 0) {
-      const sys = messages[0] as { role?: string; content?: unknown };
-      if (sys.role === "developer" || sys.role === "system") {
-        // Content may be a string or OpenAI v2 message-parts array.
-        let text: string | undefined;
-        let isArrayContent = false;
-        if (typeof sys.content === "string") {
-          text = sys.content;
-        } else if (Array.isArray(sys.content)) {
-          text = sys.content
-            .map((part: { text?: string }) =>
-              part && typeof part.text === "string" ? part.text : "",
-            )
-            .join("");
-          isArrayContent = true;
-        }
-
-        if (text !== undefined) {
-          const rewritten = rewriteAvailableSkills(text);
-          if (rewritten !== text) {
-            const newSys = {
-              ...sys,
-              content: isArrayContent ? [{ type: "text", text: rewritten }] : rewritten,
-            };
-            nextPayload = { ...nextPayload, messages: [newSys, ...messages.slice(1)] };
-            changed = true;
-          }
-        }
-      }
-    }
-
-    return changed ? nextPayload : undefined;
+    let nextPayload = applyQwenRequestPolicy(payload);
+    nextPayload = rewriteSkillsInPayload(nextPayload);
+    return nextPayload === payload ? undefined : nextPayload;
   });
+}
+
+function applyQwenRequestPolicy(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const templateArgs = isRecord(payload.chat_template_kwargs)
+    ? payload.chat_template_kwargs
+    : {};
+  let nextPayload = payload;
+
+  // Pi represents thinking-off by omitting reasoning_effort, while Qwen3.8
+  // treats omission as xhigh. Preserve explicit chat-template overrides.
+  if (
+    typeof payload.reasoning_effort !== "string" &&
+    !("enable_thinking" in templateArgs)
+  ) {
+    nextPayload = { ...nextPayload, reasoning_effort: "none" };
+  }
+
+  // Keep reasoning available across agent turns unless the caller opts out.
+  if (!("preserve_thinking" in templateArgs)) {
+    nextPayload = {
+      ...nextPayload,
+      chat_template_kwargs: { ...templateArgs, preserve_thinking: true },
+    };
+  }
+
+  return nextPayload;
+}
+
+function rewriteSkillsInPayload(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const messages = payload.messages;
+  if (!Array.isArray(messages) || messages.length === 0) return payload;
+
+  const sys = messages[0] as { role?: string; content?: unknown };
+  if (sys.role !== "developer" && sys.role !== "system") return payload;
+
+  let text: string | undefined;
+  let isArrayContent = false;
+  if (typeof sys.content === "string") {
+    text = sys.content;
+  } else if (Array.isArray(sys.content)) {
+    text = sys.content
+      .map((part: { text?: string }) =>
+        part && typeof part.text === "string" ? part.text : "",
+      )
+      .join("");
+    isArrayContent = true;
+  }
+  if (text === undefined) return payload;
+
+  const rewritten = rewriteAvailableSkills(text);
+  if (rewritten === text) return payload;
+
+  const newSys = {
+    ...sys,
+    content: isArrayContent ? [{ type: "text", text: rewritten }] : rewritten,
+  };
+  return { ...payload, messages: [newSys, ...messages.slice(1)] };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// Replace the <available_skills>...<skill>...</skill>...</available_skills>
-// block with an equivalent markdown bullet list. Preserves name,
-// description, and location for each skill. If the block is absent or
-// no <skill> entries are found, returns the input unchanged.
+// Qwen3.6 sometimes mistook Pi's skills XML for tool-call syntax. Replace
+// that block with equivalent markdown pending a Qwen3.8 removal A/B test.
+// If the block is absent or malformed, leave the prompt unchanged.
 function rewriteAvailableSkills(text: string): string {
   const blockRe = /<available_skills>([\s\S]*?)<\/available_skills>/;
   const block = blockRe.exec(text);
@@ -191,15 +177,25 @@ function rewriteAvailableSkills(text: string): string {
 
   const skillRe =
     /<skill>\s*<name>([^<]+)<\/name>\s*<description>([\s\S]*?)<\/description>\s*<location>([^<]+)<\/location>\s*<\/skill>/g;
-  const skills: Array<{ name: string; description: string; location: string }> = [];
+  const skills: Array<{ name: string; description: string; location: string }> =
+    [];
   let m: RegExpExecArray | null;
   while ((m = skillRe.exec(block[1])) !== null) {
-    skills.push({ name: m[1].trim(), description: m[2].trim(), location: m[3].trim() });
+    skills.push({
+      name: m[1].trim(),
+      description: m[2].trim(),
+      location: m[3].trim(),
+    });
   }
   if (skills.length === 0) return text;
 
   const md =
     "Available skills (load via `read` when a task matches):\n" +
-    skills.map((s) => `- **${s.name}**: ${s.description} (location: \`${s.location}\`)`).join("\n");
+    skills
+      .map(
+        (s) =>
+          `- **${s.name}**: ${s.description} (location: \`${s.location}\`)`,
+      )
+      .join("\n");
   return text.replace(blockRe, md);
 }
