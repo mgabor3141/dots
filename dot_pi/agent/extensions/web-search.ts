@@ -193,10 +193,8 @@ export default function (pi: ExtensionAPI) {
     name: "web_view",
     label: "View Page",
     description:
-      "Fetch and return the readable content of one or more URLs (max 5). " +
-      "Boilerplate and query focusing are handled centrally by the extraction service. " +
-      "Provide `query` to select complete relevant sections without lossy BM25 filtering. " +
-      "Short pages and directly fetched text resources remain complete.",
+      "Fetch and return the readable content of one or more URLs. " +
+      "Provide `query` to summarize relevant information.",
     promptSnippet:
       "Use to read URLs. Pass `query` to select complete relevant sections server-side.",
     parameters: Type.Object({
@@ -206,8 +204,7 @@ export default function (pi: ExtensionAPI) {
       query: Type.Optional(
         Type.String({
           description:
-            "What you're looking for on the page(s). Selects complete relevant sections " +
-            "server-side; short pages remain complete.",
+            "What you're looking for",
         })
       ),
     }),
