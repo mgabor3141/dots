@@ -1,6 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Model, Api } from "@earendil-works/pi-ai";
-import { getApiProvider } from "@earendil-works/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -23,10 +21,7 @@ const BASE_URL = loadEnvKey("SEARXNG_URL") || "http://localhost:8080";
 const CRAWL_URL = loadEnvKey("CRAWL_URL") || "https://crawl.mgabor.hu/crawl";
 const TOKEN = loadEnvKey("SEARXNG_TOKEN");
 
-// Thresholds
-const MIN_SUMMARY = 5_000;  // under this: return as-is
-const MAX_CONTENT = 2_000_000; // above this: refuse
-const MAX_OUTPUT = 5_000;   // hard cap on final output
+const MAX_CONTENT = 2_000_000; // direct non-HTML fetch safety limit
 
 async function fetchWithRetry(
   url: string,
@@ -59,132 +54,6 @@ async function fetchWithRetry(
     }
   }
   throw lastError ?? new Error("fetch failed");
-}
-
-/**
- * Resolve an auxiliary model from PI_LIBRARIAN_MODELS.
- * Returns { model, apiKey } or null if none available.
- */
-async function resolveAuxModel(ctx: ExtensionContext): Promise<{ model: Model<Api>; apiKey: string } | null> {
-  const modelsStr = process.env.PI_LIBRARIAN_MODELS;
-  if (!modelsStr) return null;
-
-  // Parse: "provider/model:thinking,provider2/model2:thinking2"
-  const candidates = modelsStr.replace(/"/g, "").split(",").map(s => s.trim()).filter(Boolean);
-  for (const spec of candidates) {
-    // Split on last colon to handle thinking level
-    const colonIdx = spec.lastIndexOf(":");
-    const modelPart = colonIdx > 0 ? spec.slice(0, colonIdx) : spec;
-    const slashIdx = modelPart.indexOf("/");
-    if (slashIdx < 0) continue;
-    const provider = modelPart.slice(0, slashIdx);
-    const modelId = modelPart.slice(slashIdx + 1);
-
-    const model = ctx.modelRegistry.find(provider, modelId);
-    if (!model) continue;
-    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-    if (auth.ok && auth.apiKey) {
-      return { model, apiKey: auth.apiKey };
-    }
-  }
-  return null;
-}
-
-/**
- * Call the auxiliary LLM to summarize content. When `query` is set, the
- * summary is steered toward what the caller is looking for.
- */
-async function summarizeWithLlm(
-  content: string,
-  url: string,
-  title: string,
-  ctx: ExtensionContext,
-  query: string | undefined,
-  signal?: AbortSignal,
-): Promise<string | null> {
-  const aux = await resolveAuxModel(ctx);
-  if (!aux) return null;
-
-  const { model, apiKey } = aux;
-  const provider = getApiProvider(model.api);
-  if (!provider) return null;
-
-  const contextInfo = [title && `Title: ${title}`, url && `Source: ${url}`]
-    .filter(Boolean).join("\n");
-
-  const focus = query
-    ? `The reader is specifically looking for: "${query}". Lead with and prioritize ` +
-      `information relevant to that, but still capture other key facts. `
-    : "";
-
-  const prompt =
-    "Create a comprehensive yet concise markdown summary that preserves ALL important " +
-    "information while dramatically reducing bulk. Include key excerpts (quotes, code snippets, " +
-    "important facts) in their original format. Use headers, bullets, and emphasis for scannability. " +
-    "CRITICAL: Use ONLY information present in the content below. Reproduce numbers, names, " +
-    "quotes, and figures exactly as they appear — never invent, round, estimate, extrapolate, or " +
-    "infer values that are not explicitly stated. Do not synthesize tables or stats from prose. " +
-    "If something is unclear or absent, omit it rather than guessing. " +
-    focus +
-    `Max ${MAX_OUTPUT} characters.\n\n${contextInfo}\n\nCONTENT:\n${content}`;
-
-  const stream = provider.streamSimple(
-    model,
-    { messages: [{ role: "user", content: prompt, timestamp: Date.now() }] },
-    { apiKey, signal, maxTokens: 8000, temperature: 0.1 },
-  );
-
-  let result = "";
-  for await (const event of stream) {
-    if (event.type === "text_delta") {
-      result += event.delta;
-    } else if (event.type === "error") {
-      return null;
-    }
-  }
-
-  // Enforce output cap
-  if (result.length > MAX_OUTPUT) {
-    result = result.slice(0, MAX_OUTPUT) + "\n\n[... summary truncated ...]";
-  }
-
-  return result || null;
-}
-
-/**
- * Process content with LLM summarization (Hermes-style tiered approach).
- */
-async function processContent(
-  content: string,
-  url: string,
-  title: string,
-  ctx: ExtensionContext,
-  query: string | undefined,
-  signal?: AbortSignal,
-): Promise<string> {
-  const len = content.length;
-
-  // Refuse if absurdly large
-  if (len > MAX_CONTENT) {
-    const mb = (len / 1_000_000).toFixed(1);
-    return `[Content too large (${mb}MB > 2MB limit). Try a more focused source or use web_search for an overview.]`;
-  }
-
-  // Under threshold: return as-is
-  if (len < MIN_SUMMARY) {
-    return content;
-  }
-
-  // Try LLM summarization
-  const summarized = await summarizeWithLlm(content, url, title, ctx, query, signal);
-  if (summarized) return summarized;
-
-  // Fallback: return truncated raw content
-  const truncated = content.slice(0, MAX_OUTPUT);
-  if (len > MAX_OUTPUT) {
-    return truncated + `\n\n[Content truncated — showing first ${MAX_OUTPUT.toLocaleString()} of ${len.toLocaleString()} chars. Summarization unavailable.]`;
-  }
-  return truncated;
 }
 
 // Content types the headless browser actually renders. Everything else
@@ -327,7 +196,7 @@ export default function (pi: ExtensionAPI) {
       "Fetch and return the readable content of one or more URLs (max 5). " +
       "Boilerplate and query focusing are handled centrally by the extraction service. " +
       "Provide `query` to select complete relevant sections without lossy BM25 filtering. " +
-      "Non-HTML resources fetched directly by this client may be summarized when large.",
+      "Short pages and directly fetched text resources remain complete.",
     promptSnippet:
       "Use to read URLs. Pass `query` to select complete relevant sections server-side.",
     parameters: Type.Object({
@@ -342,7 +211,7 @@ export default function (pi: ExtensionAPI) {
         })
       ),
     }),
-    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal) {
       const urls = params.urls.slice(0, 5);
       if (urls.length === 0) {
         throw new Error("web_view requires at least one URL");
@@ -396,8 +265,7 @@ export default function (pi: ExtensionAPI) {
         urls.map(async (reqUrl) => {
           const pf = direct.get(reqUrl);
           if (pf) {
-            const text = await processContent(pf.text, reqUrl, pf.title, ctx, params.query, signal);
-            return { url: reqUrl, text, size: pf.text.length };
+            return { url: reqUrl, text: pf.text, size: pf.text.length };
           }
           const r = byUrl.get(reqUrl);
           if (!r || r.success === false) {
@@ -408,10 +276,7 @@ export default function (pi: ExtensionAPI) {
           const raw =
             md.fit_markdown || md.raw_markdown || r.cleaned_html || "";
           // The gateway owns HTML cleanup, loss-aware query focusing, and
-          // inference fallback. Do not run a second client-side summarizer:
-          // it duplicates latency and can hang independently when local
-          // inference is unavailable. Direct-fetched non-HTML resources still
-          // use processContent above because they bypass the gateway.
+          // inference fallback. This client never summarizes or truncates.
           return { url: reqUrl, text: raw, size: raw.length };
         })
       );
