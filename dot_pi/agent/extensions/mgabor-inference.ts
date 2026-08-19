@@ -80,11 +80,11 @@ export default async function (pi: ExtensionAPI) {
       compat: {
         thinkingFormat: "openai",
         supportsReasoningEffort: true,
-        reasoningEffortMap: {
-          minimal: "low",
-          medium: "xhigh",
-          high: "xhigh",
-        },
+        // No reasoningEffortMap on purpose. Pi speaks standard OpenAI effort
+        // names and the proxy translates them to whatever the current model
+        // accepts, so a model swap is a proxy config change rather than an
+        // edit here. Sending the raw level also keeps medium meaningful: it
+        // is the served model's adaptive mode today.
       },
     })),
   });
@@ -110,8 +110,12 @@ function applyQwenRequestPolicy(
     : {};
   let nextPayload = payload;
 
-  // Pi represents thinking-off by omitting reasoning_effort, while Qwen3.8
-  // treats omission as xhigh. Preserve explicit chat-template overrides.
+  // Pi represents thinking-off by omitting reasoning_effort, but on the wire
+  // omission means "no preference", which the service fills with its own
+  // default. Only the client knows the difference, so say it explicitly.
+  // none is standard OpenAI vocabulary, so this states intent rather than
+  // encoding anything about the model behind the endpoint. Preserve explicit
+  // chat-template overrides.
   if (
     typeof payload.reasoning_effort !== "string" &&
     !("enable_thinking" in templateArgs)
