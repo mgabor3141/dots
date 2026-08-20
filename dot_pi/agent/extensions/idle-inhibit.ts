@@ -30,20 +30,22 @@ export default function (pi: ExtensionAPI) {
 		// stdin is a pipe held by this process; stdout/stderr discarded. When pi
 		// dies for any reason, the pipe's write end closes, `cat` hits EOF and
 		// exits, and systemd-inhibit drops the lock. See file header.
-		inhibitor = spawn(
+		const child = spawn(
 			"systemd-inhibit",
 			["--what=sleep", "--who=pi", "--why=AI agent running", "--mode=block", "cat"],
 			{ stdio: ["pipe", "ignore", "ignore"], detached: false },
 		);
+		inhibitor = child;
 
 		// Swallow errors on the stdin pipe (e.g. EPIPE if the child is already gone)
-		// so they never crash the host process.
-		inhibitor.stdin?.on("error", () => {});
-		inhibitor.on("error", () => {
-			inhibitor = null;
+		// so they never crash the host process. An older child's asynchronous exit
+		// must not clear a newer inhibitor acquired by a rapid follow-up turn.
+		child.stdin?.on("error", () => {});
+		child.on("error", () => {
+			if (inhibitor === child) inhibitor = null;
 		});
-		inhibitor.on("exit", () => {
-			inhibitor = null;
+		child.on("exit", () => {
+			if (inhibitor === child) inhibitor = null;
 		});
 	}
 
