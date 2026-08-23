@@ -104,7 +104,6 @@ nvidia-prime
 obs-studio
 octopi
 openai-codex
-openblas
 opendesktop-fonts
 os-prober
 pamixer

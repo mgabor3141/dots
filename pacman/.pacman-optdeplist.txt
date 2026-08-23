@@ -7,6 +7,7 @@ ffmpegthumbs
 filelight
 flite
 glib2-devel
+glusterfs
 graphviz
 inotify-tools
 intel-media-driver
@@ -20,7 +21,7 @@ kio-admin
 kompare
 konsole
 lib32-jack2
-lib32-v4l-utils
+lib32-speexdsp
 liboggz
 libva-intel-driver
 llvm21
