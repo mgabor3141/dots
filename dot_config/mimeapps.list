@@ -30,6 +30,8 @@ text/x-patch=dev.zed.Zed.desktop;
 application/octet-stream=dev.zed.Zed.desktop;
 image/svg+xml=zen.desktop;
 application/toml=dev.zed.Zed.desktop;
+text/markdown=dev.zed.Zed.desktop;
+text/plain=dev.zed.Zed.desktop;
 
 [Default Applications]
 application/json=dev.zed.Zed.desktop
@@ -64,3 +66,5 @@ font/woff2=com.github.FontManager.FontViewer.desktop
 text/x-patch=dev.zed.Zed.desktop
 image/svg+xml=zen.desktop
 application/toml=dev.zed.Zed.desktop
+text/markdown=dev.zed.Zed.desktop
+text/plain=dev.zed.Zed.desktop;
