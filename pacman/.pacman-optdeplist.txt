@@ -2,6 +2,7 @@ aria2
 atomicparsley
 cliphist
 ddcutil
+debuginfod
 docker-buildx
 ffmpegthumbs
 filelight

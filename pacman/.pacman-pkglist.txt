@@ -54,6 +54,7 @@ firefox
 font-manager
 freecad
 fsarchiver
+geekbench
 git-lfs
 glances
 gpu-screen-recorder-ui
@@ -109,6 +110,7 @@ os-prober
 pamixer
 parsec-bin
 partclone
+perl-image-exiftool
 protonup-qt
 pv
 pwvucontrol
@@ -126,9 +128,11 @@ sof-firmware
 speedtest-cli
 spotify-launcher
 strace
+stress-ng
 sunshine
 sushi
 swayidle
+sysbench
 systemd-boot-manager
 tailscale
 ttf-fira-code
@@ -140,6 +144,7 @@ turbostat
 udiskie
 ufw
 unrar
+vkmark
 vlc-plugins-all
 watchexec
 wayland-pipewire-idle-inhibit
@@ -147,7 +152,6 @@ wayland-protocols
 websocat
 wev
 wf-recorder
-wtype
 xl2tpd
 xorg-xinit
 xorg-xinput
