@@ -41,24 +41,34 @@ export default async function (pi: ExtensionAPI) {
     return;
   }
 
-  let modelIds: string[] = [];
+  let models: Array<{ id: string; contextWindow: number }> = [];
   try {
     const response = await fetch(`${BASE_URL}/models`, {
       headers: { Authorization: `Bearer ${key}` },
     });
     if (response.ok) {
       const payload = (await response.json()) as {
-        data?: Array<{ id: string }>;
+        data?: Array<{ id?: unknown; max_model_len?: unknown }>;
       };
-      modelIds = payload.data?.map((m) => m.id) ?? [];
+      models = (payload.data ?? []).flatMap((model) =>
+        typeof model.id === "string" &&
+        typeof model.max_model_len === "number" &&
+        Number.isSafeInteger(model.max_model_len) &&
+        model.max_model_len > 0
+          ? [{ id: model.id, contextWindow: model.max_model_len }]
+          : [],
+      );
     }
   } catch {
     // Server unreachable at startup. Skip registration so pi doesn't crash.
     return;
   }
 
-  if (modelIds.length === 0) return;
-  const mgaborModelIds = new Set(modelIds);
+  if (models.length === 0) return;
+  const contextWindowById = new Map(
+    models.map((model) => [model.id, model.contextWindow]),
+  );
+  const mgaborModelIds = new Set(contextWindowById.keys());
 
   pi.registerProvider("mgabor", {
     name: "mgabor inference",
@@ -69,14 +79,17 @@ export default async function (pi: ExtensionAPI) {
     apiKey: key,
     api: "openai-completions",
     // The aliases and literal model ID all route to the same Qwen3.8 backend.
-    models: modelIds.map((id) => ({
+    models: models.map(({ id, contextWindow }) => ({
       id,
       name: id,
       reasoning: true,
       input: ["text", "image"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 262144,
-      maxTokens: 131072,
+      // The proxy forwards vLLM's live max_model_len for aliases and literal
+      // IDs. maxTokens is descriptive metadata only; normal agent turns omit
+      // the wire limit and let vLLM use all context remaining after the prompt.
+      contextWindow,
+      maxTokens: contextWindow,
       compat: {
         thinkingFormat: "openai",
         supportsReasoningEffort: true,
@@ -91,14 +104,28 @@ export default async function (pi: ExtensionAPI) {
 
   // This event lacks a provider ID, so scope it to the model IDs registered
   // above. A same-named model from another provider could still collide.
-  pi.on("before_provider_request", (event) => {
+  pi.on("before_provider_request", async (event) => {
     const payload = event.payload as Record<string, unknown> | undefined;
     if (!payload || typeof payload.model !== "string") return undefined;
     if (!mgaborModelIds.has(payload.model)) return undefined;
 
     let nextPayload = applyQwenRequestPolicy(payload);
     nextPayload = rewriteSkillsInPayload(nextPayload);
+    nextPayload = await clampOutputToContext(
+      nextPayload,
+      key,
+      contextWindowById.get(payload.model)!,
+    );
     return nextPayload === payload ? undefined : nextPayload;
+  });
+
+  // Give every history branch of one Pi session a stable diagnostic identity.
+  // The proxy hashes this value for passive log correlation only; vLLM remains
+  // solely responsible for matching and managing cached token-block prefixes.
+  pi.on("before_provider_headers", (event, ctx) => {
+    if (ctx.model?.provider !== "mgabor") return;
+    const sessionId = ctx.sessionManager.getSessionId();
+    if (sessionId) event.headers["X-Session-Key"] = sessionId;
   });
 }
 
@@ -132,6 +159,63 @@ function applyQwenRequestPolicy(
   }
 
   return nextPayload;
+}
+
+async function clampOutputToContext(
+  payload: Record<string, unknown>,
+  apiKey: string,
+  contextWindow: number,
+): Promise<Record<string, unknown>> {
+  if (!Array.isArray(payload.messages)) return payload;
+
+  // vLLM interprets an omitted limit as all context remaining after the
+  // prompt. Preserve that behavior for normal agent turns. Explicit limits,
+  // such as Pi's smaller compaction-summary budget, are still made safe below.
+  const usesMaxTokens = typeof payload.max_tokens === "number";
+  const usesMaxCompletionTokens =
+    typeof payload.max_completion_tokens === "number";
+  if (!usesMaxTokens && !usesMaxCompletionTokens) return payload;
+  const requested = usesMaxCompletionTokens
+    ? (payload.max_completion_tokens as number)
+    : (payload.max_tokens as number);
+
+  const tokenizePayload: Record<string, unknown> = {
+    model: payload.model,
+    messages: payload.messages,
+    add_generation_prompt: true,
+  };
+  for (const key of ["tools", "chat_template", "chat_template_kwargs"] as const) {
+    if (key in payload) tokenizePayload[key] = payload[key];
+  }
+
+  try {
+    const response = await fetch(`${BASE_URL}/tokenize`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(tokenizePayload),
+    });
+    if (!response.ok) return payload;
+    const result = (await response.json()) as { count?: unknown };
+    if (typeof result.count !== "number") return payload;
+
+    const available = Math.max(1, contextWindow - result.count);
+    const clamped = Math.min(requested, available);
+
+    if (usesMaxTokens) {
+      return payload.max_tokens === clamped
+        ? payload
+        : { ...payload, max_tokens: clamped };
+    }
+    return payload.max_completion_tokens === clamped
+      ? payload
+      : { ...payload, max_completion_tokens: clamped };
+  } catch {
+    // If tokenization is unavailable, retain Pi's normal request unchanged.
+    return payload;
+  }
 }
 
 function rewriteSkillsInPayload(
