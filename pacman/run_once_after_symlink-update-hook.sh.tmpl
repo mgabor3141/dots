@@ -1,5 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-sudo ln -s \
+sudo ln -sfn \
     {{ .chezmoi.homeDir }}/{{ .chezmoi.sourceFile | dir }}/update-package-files.hook \
-    /etc/pacman.d/hooks/update-package-files.hook || true
+    /etc/pacman.d/hooks/update-package-files.hook

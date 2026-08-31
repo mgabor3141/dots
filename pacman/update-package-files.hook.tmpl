@@ -8,4 +8,4 @@ Target = *
 
 [Action]
 When = PostTransaction
-Exec = /bin/bash {{ .chezmoi.homeDir }}/{{ .chezmoi.sourceFile | dir }}/update-package-files.sh
+Exec = /bin/bash {{ .chezmoi.homeDir }}/{{ .chezmoi.sourceFile | dir }}/capture-system-packages.sh

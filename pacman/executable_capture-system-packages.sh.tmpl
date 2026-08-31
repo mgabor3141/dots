@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+PACMAN_SOURCE_DIR="{{ .chezmoi.sourceDir }}/{{ .chezmoi.sourceFile | dir }}"
+
+pacman -Qqetn > "$PACMAN_SOURCE_DIR/.pacman-pkglist.txt"
+pacman -Qqem > "$PACMAN_SOURCE_DIR/.pacman-foreignpkglist.txt"
+comm -13 <(pacman -Qqdt | sort) <(pacman -Qqdtt | sort) \
+    > "$PACMAN_SOURCE_DIR/.pacman-optdeplist.txt"
+
+echo "Captured installed packages in $PACMAN_SOURCE_DIR"
