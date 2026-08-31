@@ -522,7 +522,7 @@
         "monitors": [
         ],
         "normalUrgencyDuration": 8,
-        "overlayLayer": false,
+        "overlayLayer": true,
         "respectExpireTimeout": true,
         "saveToHistory": {
             "critical": true,
