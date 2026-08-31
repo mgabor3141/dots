@@ -1,4 +1,5 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 import { Type } from "typebox";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -22,6 +23,32 @@ const CRAWL_URL = loadEnvKey("CRAWL_URL") || "https://crawl.mgabor.hu/crawl";
 const TOKEN = loadEnvKey("SEARXNG_TOKEN");
 
 const MAX_CONTENT = 2_000_000; // direct non-HTML fetch safety limit
+
+function formatToolCall(
+  name: string,
+  primaryKey: string,
+  args: Record<string, unknown>,
+  theme: Theme,
+  hiddenKeys: string[] = [],
+): string {
+  const primary = args[primaryKey];
+  let text = theme.fg("toolTitle", theme.bold(name));
+  if (primary !== undefined) {
+    const rendered = typeof primary === "string" ? primary : JSON.stringify(primary);
+    text += ` ${theme.fg("accent", rendered)}`;
+  }
+
+  const extras = Object.entries(args)
+    .filter(
+      ([key, value]) =>
+        key !== primaryKey && !hiddenKeys.includes(key) && value !== undefined,
+    )
+    .map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
+  if (extras.length > 0) {
+    text += theme.fg("toolOutput", ` (${extras.join(", ")})`);
+  }
+  return text;
+}
 
 async function fetchWithRetry(
   url: string,
@@ -159,6 +186,13 @@ export default function (pi: ExtensionAPI) {
         Type.Number({ description: "Number of results (default 5, max 20)" })
       ),
     }),
+    renderCall(args, theme, context) {
+      const text = context.lastComponent ?? new Text("", 0, 0);
+      text.setText(
+        formatToolCall("web_search", "query", args, theme, ["numberResults"]),
+      );
+      return text;
+    },
     async execute(_toolCallId, params, signal) {
       const url = new URL("/search", BASE_URL);
       url.searchParams.set("q", params.query);
