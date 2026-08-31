@@ -389,7 +389,7 @@
         "clockStyle": "analog",
         "compactLockScreen": true,
         "dimmerOpacity": 0,
-        "enableBlurBehind": true,
+        "enableBlurBehind": false,
         "enableLockScreenCountdown": false,
         "enableLockScreenMediaControls": false,
         "enableShadows": false,
