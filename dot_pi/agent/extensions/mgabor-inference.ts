@@ -34,72 +34,81 @@ function loadDotEnvIfNeeded(name: string): string | undefined {
   return undefined;
 }
 
-export default async function (pi: ExtensionAPI) {
+type DiscoveredModel = { id: string; contextWindow: number };
+
+const FALLBACK_CONTEXT_WINDOW = 196_608;
+const FALLBACK_MODELS: DiscoveredModel[] = [
+  { id: "default", contextWindow: FALLBACK_CONTEXT_WINDOW },
+  { id: "batch", contextWindow: FALLBACK_CONTEXT_WINDOW },
+];
+
+async function discoverModels(key: string): Promise<DiscoveredModel[]> {
+  const response = await fetch(`${BASE_URL}/models`, {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  if (!response.ok) throw new Error(`model discovery failed: HTTP ${response.status}`);
+
+  const payload = (await response.json()) as {
+    data?: Array<{ id?: unknown; max_model_len?: unknown }>;
+  };
+  return (payload.data ?? []).flatMap((model) =>
+    typeof model.id === "string" &&
+    typeof model.max_model_len === "number" &&
+    Number.isSafeInteger(model.max_model_len) &&
+    model.max_model_len > 0
+      ? [{ id: model.id, contextWindow: model.max_model_len }]
+      : [],
+  );
+}
+
+function providerModel({ id, contextWindow }: DiscoveredModel) {
+  return {
+    id,
+    name: id,
+    reasoning: true,
+    input: ["text", "image"] as ("text" | "image")[],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    // maxTokens is descriptive metadata only; normal agent turns omit the
+    // wire limit and let vLLM use all context remaining after the prompt.
+    contextWindow,
+    maxTokens: contextWindow,
+    compat: {
+      thinkingFormat: "openai" as const,
+      supportsReasoningEffort: true,
+    },
+  };
+}
+
+export default function (pi: ExtensionAPI) {
   const key = loadDotEnvIfNeeded(API_KEY_ENV);
-  if (!key) {
-    // No key, nothing to register. Avoids a noisy 401 at startup.
-    return;
-  }
+  if (!key) return;
 
-  let models: Array<{ id: string; contextWindow: number }> = [];
-  try {
-    const response = await fetch(`${BASE_URL}/models`, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    if (response.ok) {
-      const payload = (await response.json()) as {
-        data?: Array<{ id?: unknown; max_model_len?: unknown }>;
-      };
-      models = (payload.data ?? []).flatMap((model) =>
-        typeof model.id === "string" &&
-        typeof model.max_model_len === "number" &&
-        Number.isSafeInteger(model.max_model_len) &&
-        model.max_model_len > 0
-          ? [{ id: model.id, contextWindow: model.max_model_len }]
-          : [],
-      );
-    }
-  } catch {
-    // Server unreachable at startup. Skip registration so pi doesn't crash.
-    return;
-  }
-
-  if (models.length === 0) return;
+  // Register synchronously so other extensions (notably pi-librarian) see the
+  // provider in Pi's initial available-model snapshot. Network discovery in
+  // the extension factory used to register mgabor only after that snapshot.
   const contextWindowById = new Map(
-    models.map((model) => [model.id, model.contextWindow]),
+    FALLBACK_MODELS.map((model) => [model.id, model.contextWindow]),
   );
   const mgaborModelIds = new Set(contextWindowById.keys());
 
   pi.registerProvider("mgabor", {
     name: "mgabor inference",
     baseUrl: BASE_URL,
-    // Pass the resolved secret directly. We already loaded it from
-    // process.env/~/.env above; passing the bare env-var *name* is treated
-    // as a legacy reference and triggers a deprecation warning.
     apiKey: key,
     api: "openai-completions",
-    // The aliases and literal model ID all route to the same Qwen3.8 backend.
-    models: models.map(({ id, contextWindow }) => ({
-      id,
-      name: id,
-      reasoning: true,
-      input: ["text", "image"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      // The proxy forwards vLLM's live max_model_len for aliases and literal
-      // IDs. maxTokens is descriptive metadata only; normal agent turns omit
-      // the wire limit and let vLLM use all context remaining after the prompt.
-      contextWindow,
-      maxTokens: contextWindow,
-      compat: {
-        thinkingFormat: "openai",
-        supportsReasoningEffort: true,
-        // No reasoningEffortMap on purpose. Pi speaks standard OpenAI effort
-        // names and the proxy translates them to whatever the current model
-        // accepts, so a model swap is a proxy config change rather than an
-        // edit here. Sending the raw level also keeps medium meaningful: it
-        // is the served model's adaptive mode today.
-      },
-    })),
+    models: FALLBACK_MODELS.map(providerModel),
+    refreshModels: async () => {
+      const discovered = await discoverModels(key);
+      if (discovered.length === 0) return FALLBACK_MODELS.map(providerModel);
+
+      contextWindowById.clear();
+      mgaborModelIds.clear();
+      for (const model of discovered) {
+        contextWindowById.set(model.id, model.contextWindow);
+        mgaborModelIds.add(model.id);
+      }
+      return discovered.map(providerModel);
+    },
   });
 
   // This event lacks a provider ID, so scope it to the model IDs registered
