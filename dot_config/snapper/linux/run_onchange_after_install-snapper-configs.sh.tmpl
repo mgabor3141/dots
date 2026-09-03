@@ -21,4 +21,19 @@ echo "  Installed /etc/snapper/configs/root"
 cp "$SOURCE_DIR/limine" /etc/default/limine
 echo "  Installed /etc/default/limine"
 
+# A fixed default_entry takes precedence over remember_last_entry. Keep the
+# generated entries intact while configuring Limine itself to remember the
+# previously booted menu entry (UEFI only).
+LIMINE_BOOT_CONFIG=/boot/limine.conf
+if [ -f "$LIMINE_BOOT_CONFIG" ]; then
+    sed -i \
+        -e '/^[[:space:]]*default_entry[[:space:]]*:/d' \
+        -e '/^[[:space:]]*remember_last_entry[[:space:]]*:/d' \
+        -e '1i remember_last_entry: yes' \
+        "$LIMINE_BOOT_CONFIG"
+    echo "  Enabled last-entry selection in $LIMINE_BOOT_CONFIG"
+else
+    echo "  Warning: $LIMINE_BOOT_CONFIG not found; skipped last-entry selection" >&2
+fi
+
 echo "Done."

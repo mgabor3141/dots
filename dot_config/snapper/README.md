@@ -15,6 +15,7 @@ Manages two system config files for btrfs snapshot cleanup and limine boot entri
 ### Limine (`limine`)
 
 - `MAX_SNAPSHOT_ENTRIES=4` — Limits snapshot boot entries on `/boot`. Each entry copies kernel+initramfs (~450MB for 2 kernels) onto the FAT32 ESP. With a 2GB `/boot`, only 2-3 entries fit alongside the current kernels.
+- `/boot/limine.conf` is updated with `remember_last_entry: yes`, and the fixed `default_entry` setting is removed because it takes precedence. Limine then preselects the previously booted menu entry on UEFI systems.
 
 ## Why These Values
 
