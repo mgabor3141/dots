@@ -1,6 +1,7 @@
 blackwidow-macro-git
 customizepkg-git
 handy-bin
+hermes-agent-desktop
 it87-dkms-git
 kanata-bin
 wl-screenrec-git
