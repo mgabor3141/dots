@@ -31,42 +31,37 @@ modmap:
       "2": "1"
       "4": "3"
 
-  # MECCHA CHAMELEON
-  # Whole hand shifted one column right: press ESDF for movement (WASD),
+  # Left half shifted one column right: press ESDF for movement (WASD),
   # and every key emits the key immediately to its left.
-  - name: MECCHA CHAMELEON
+  - name: Shifted over
     application:
-      only: [steam_app_4704690]
+      only:
+        # MECCHA CHAMELEON
+        - steam_app_4704690
     remap:
+      # Number row
+      "2": "1"
+      "3": "2"
+      "4": "3"
+      "5": "4"
+      "1": "5"
       # Top row
       W: Q
       E: W
       R: E
       T: R
-      Y: T
-      U: Y
-      I: U
-      O: I
-      P: O
+      Q: T
       # Home row
       S: A
       D: S
       F: D
       G: F
-      H: G
-      J: H
-      K: J
-      L: K
-      Semicolon: L
+      A: G
       # Bottom row
       X: Z
       C: X
       V: C
       B: V
-      N: B
-      M: N
-      Comma: M
-      Dot: Comma
-      Slash: Dot
+      Z: B
 
 keymap: []
