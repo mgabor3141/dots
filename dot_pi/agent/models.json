@@ -1,0 +1,29 @@
+{
+  "providers": {
+    "mgabor": {
+      "baseUrl": "https://inference.mgabor.hu/v1",
+      "api": "openai-completions",
+      "apiKey": "$MGABOR_INFERENCE_API_KEY",
+      "models": [
+        {
+          "id": "default",
+          "name": "default",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          },
+          "contextWindow": 262144,
+          "maxTokens": 262144,
+          "compat": {
+            "thinkingFormat": "openai",
+            "supportsReasoningEffort": true
+          }
+        }
+      ]
+    }
+  }
+}
