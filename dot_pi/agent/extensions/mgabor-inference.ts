@@ -1,46 +1,17 @@
 /**
  * Self-hosted inference server at inference.mgabor.hu.
  *
- * OpenAI-compatible endpoint with bearer-token auth. Models are discovered
- * dynamically from /v1/models at startup so whatever is loaded on the server
- * shows up in pi without having to edit this file.
- *
- * The API key is read from the MGABOR_INFERENCE_API_KEY env var (set in ~/.env).
+ * The static provider, authentication, and default model live in models.json.
+ * This extension discovers additional models dynamically and applies request
+ * policies that cannot be expressed declaratively.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const BASE_URL = "https://inference.mgabor.hu/v1";
-const API_KEY_ENV = "MGABOR_INFERENCE_API_KEY";
-
-function loadDotEnvIfNeeded(name: string): string | undefined {
-  if (process.env[name]) return process.env[name];
-
-  const envPath = join(process.env.HOME ?? "", ".env");
-  if (!existsSync(envPath)) return undefined;
-
-  const lines = readFileSync(envPath, "utf8").split(/\r?\n/);
-  for (const line of lines) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)\s*$/);
-    if (!match || match[1] !== name) continue;
-
-    const value = match[2].replace(/^['"]|['"]$/g, "");
-    process.env[name] = value;
-    return value;
-  }
-
-  return undefined;
-}
+const DEFAULT_CONTEXT_WINDOW = 262_144;
 
 type DiscoveredModel = { id: string; contextWindow: number };
-
-const FALLBACK_CONTEXT_WINDOW = 196_608;
-const FALLBACK_MODELS: DiscoveredModel[] = [
-  { id: "default", contextWindow: FALLBACK_CONTEXT_WINDOW },
-  { id: "batch", contextWindow: FALLBACK_CONTEXT_WINDOW },
-];
 
 async function discoverModels(key: string): Promise<DiscoveredModel[]> {
   const response = await fetch(`${BASE_URL}/models`, {
@@ -79,52 +50,44 @@ function providerModel({ id, contextWindow }: DiscoveredModel) {
   };
 }
 
-export default function (pi: ExtensionAPI) {
-  const key = loadDotEnvIfNeeded(API_KEY_ENV);
-  if (!key) return;
+export default async function (pi: ExtensionAPI) {
+  // models.json owns the static provider, authentication, and default model.
+  // Pi waits for async extension factories, so discover the live catalogue once
+  // at startup and replace only the model list when discovery succeeds.
+  let discovered: DiscoveredModel[] = [];
+  const discoveryKey = process.env.MGABOR_INFERENCE_API_KEY;
+  if (discoveryKey) {
+    try {
+      discovered = await discoverModels(discoveryKey);
+    } catch {
+      // Keep the declarative default when discovery is unavailable.
+    }
+  }
 
-  // Register synchronously so other extensions (notably pi-librarian) see the
-  // provider in Pi's initial available-model snapshot. Network discovery in
-  // the extension factory used to register mgabor only after that snapshot.
-  const contextWindowById = new Map(
-    FALLBACK_MODELS.map((model) => [model.id, model.contextWindow]),
-  );
-  const mgaborModelIds = new Set(contextWindowById.keys());
+  const contextWindowById = new Map<string, number>([
+    ["default", DEFAULT_CONTEXT_WINDOW],
+    ...discovered.map((model) => [model.id, model.contextWindow] as const),
+  ]);
 
   pi.registerProvider("mgabor", {
-    name: "mgabor inference",
-    baseUrl: BASE_URL,
-    apiKey: key,
-    api: "openai-completions",
-    models: FALLBACK_MODELS.map(providerModel),
-    refreshModels: async () => {
-      const discovered = await discoverModels(key);
-      if (discovered.length === 0) return FALLBACK_MODELS.map(providerModel);
-
-      contextWindowById.clear();
-      mgaborModelIds.clear();
-      for (const model of discovered) {
-        contextWindowById.set(model.id, model.contextWindow);
-        mgaborModelIds.add(model.id);
-      }
-      return discovered.map(providerModel);
-    },
+    ...(discovered.length > 0 ? { models: discovered.map(providerModel) } : {}),
   });
 
-  // This event lacks a provider ID, so scope it to the model IDs registered
-  // above. A same-named model from another provider could still collide.
-  pi.on("before_provider_request", async (event) => {
+  pi.on("before_provider_request", async (event, ctx) => {
     const payload = event.payload as Record<string, unknown> | undefined;
     if (!payload || typeof payload.model !== "string") return undefined;
-    if (!mgaborModelIds.has(payload.model)) return undefined;
+    if (ctx.model?.provider !== "mgabor" || ctx.model.id !== payload.model) return undefined;
 
     let nextPayload = applyQwenRequestPolicy(payload);
     nextPayload = rewriteSkillsInPayload(nextPayload);
-    nextPayload = await clampOutputToContext(
-      nextPayload,
-      key,
-      contextWindowById.get(payload.model)!,
-    );
+
+    const contextWindow = contextWindowById.get(payload.model);
+    if (contextWindow !== undefined) {
+      const key = await ctx.modelRegistry.getApiKeyForProvider("mgabor");
+      if (key) {
+        nextPayload = await clampOutputToContext(nextPayload, key, contextWindow);
+      }
+    }
     return nextPayload === payload ? undefined : nextPayload;
   });
 
