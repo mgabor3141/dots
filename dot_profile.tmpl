@@ -42,6 +42,16 @@ export npm_config_prefix="/mnt/user/appdata/node"
 # shims land in /mnt/user/appdata/node/bin and get picked up by dotfiles_setup.
 export BUN_INSTALL="/mnt/user/appdata/node"
 export PATH="$HOME/.local/bin:/mnt/user/appdata/chezmoi/bin:/mnt/user/appdata/node/bin:$PATH"
+# fish-skip-start
+# Agent/user scratch space on the cache SSD. Unraid's /tmp is a directory on
+# the 16G rootfs ramdisk; filling it wedges the OS. Guarded on the pool being
+# mounted (not just the dir existing) so a stray dir on rootfs can't hijack
+# it, and so shells still work when the array is down. Swept hourly by the
+# tmp_cleanup user script. Fish gets the same via .config/fish/conf.d/tmpdir.fish.
+if [ -d /mnt/cache/tmp ] && mountpoint -q /mnt/cache 2>/dev/null; then
+    export TMPDIR=/mnt/cache/tmp
+fi
+# fish-skip-end
 {{- end }}
 
 {{- if eq .chezmoi.os "darwin" }}
