@@ -1,0 +1,11 @@
+{{- $tmpdir := includeTemplate "tmpdir" . -}}
+# Scratch space for agents/tools, off the default /tmp (see the "tmpdir"
+# template for the rationale). environment.d covers the systemd --user session:
+# user services and anything spawned from the graphical session, e.g. GUI apps
+# and terminals started by the compositor. Login shells get it from ~/.profile
+# and ~/.config/fish/conf.d/tmpdir.fish instead, because ssh/tty sessions build
+# their environment from sshd/PAM rather than from environment.d.
+#
+# Created and aged out declaratively by ~/.config/user-tmpfiles.d/agent-tmp.conf.
+# Changes require re-login to take effect.
+{{ if $tmpdir }}TMPDIR={{ $tmpdir }}{{ else }}# (no override on this machine){{ end }}

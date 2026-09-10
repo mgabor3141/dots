@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Declarative, version-pinned CLI tools for the Unraid box.
+#
+# Why this exists: the container/desktop machines get these from devbox (nix),
+# but Unraid has neither nix nor devbox, and its rootfs is a ramdisk that is
+# rebuilt every boot. So binaries live in the persistent appdata bin dir, which
+# the dotfiles_setup user script symlinks into /usr/local/bin at array start.
+#
+# Both tools are load-bearing for the shell config:
+#   direnv    -> .config/fish/config.fish runs `direnv hook fish | source`
+#   fastfetch -> .config/fish/config.fish greeting
+#
+# To upgrade: bump VERSION and SHA256 together (get the digest from the release
+# API, e.g. `gh api repos/direnv/direnv/releases/latest --jq '.assets[].digest'`).
+# Editing this file re-runs it (run_onchange_).
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+BIN_DIR=/mnt/user/appdata/chezmoi/bin
+
+# name|version|url|sha256|tar member ("-" for a bare binary)
+TOOLS=(
+    "direnv|2.37.1|https://github.com/direnv/direnv/releases/download/v2.37.1/direnv.linux-amd64|1f1b93dd6f38523fde26dfac96151ef9d31a374e3005cd3345fb93555ae0c9b5|-"
+    "fastfetch|2.68.1|https://github.com/fastfetch-cli/fastfetch/releases/download/2.68.1/fastfetch-linux-amd64.tar.gz|0c51ef6fa3e976eb5038fe0afda38629d3ca07947740bb0e3354c7c4f1238c0c|fastfetch-linux-amd64/usr/bin/fastfetch"
+)
+
+if [ ! -d "$BIN_DIR" ]; then
+    echo "⚠️  $BIN_DIR missing, skipping tool installs"
+    exit 0
+fi
+
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/bin-tools.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+for spec in "${TOOLS[@]}"; do
+    IFS='|' read -r name version url sha member <<<"$spec"
+    dest="$BIN_DIR/$name"
+
+    # Idempotent: skip when the pinned version is already in place. Both tools
+    # print their version as the last whitespace-separated field of the first
+    # line ("2.37.1", "fastfetch 2.68.1 (x86_64)").
+    if [ -x "$dest" ] && "$dest" --version 2>/dev/null | head -1 | grep -qw "$version"; then
+        echo "✓ $name $version already installed"
+        continue
+    fi
+
+    echo ">>> installing $name $version"
+    curl -fsSL --retry 3 -o "$tmp/dl" "$url"
+    printf '%s  %s\n' "$sha" "$tmp/dl" | sha256sum -c - >/dev/null
+
+    if [ "$member" = "-" ]; then
+        install -m 0755 "$tmp/dl" "$dest"
+    else
+        tar -xzf "$tmp/dl" -C "$tmp" "$member"
+        install -m 0755 "$tmp/$member" "$dest"
+    fi
+    rm -rf "$tmp/dl" "${tmp:?}/${member%%/*}"
+
+    # dotfiles_setup does this at array start; do it now too so the tool is
+    # usable without waiting for a reboot.
+    ln -sf "$dest" /usr/local/bin/"$name" 2>/dev/null || true
+done
+
+echo "✅ Done installing pinned bin tools"

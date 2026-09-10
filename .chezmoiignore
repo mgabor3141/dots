@@ -179,6 +179,10 @@ AGENTS.md
 .config/user-dirs.dirs
 .config/user-dirs.locale
 
+# systemd user-session tmpfiles (Linux-only mechanism)
+.config/user-tmpfiles.d
+.config/user-tmpfiles.d/**
+
 .local/share/applications
 .local/share/icons
 

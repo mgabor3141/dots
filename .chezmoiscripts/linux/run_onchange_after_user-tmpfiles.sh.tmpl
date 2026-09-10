@@ -1,0 +1,26 @@
+#!/bin/bash
+# Materialise ~/.config/user-tmpfiles.d and make sure the user-session cleaner
+# is actually running. Re-runs whenever the conf changes.
+#
+# conf hash: {{ include "dot_config/user-tmpfiles.d/agent-tmp.conf.tmpl" | sha256sum }}
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+if ! command -v systemd-tmpfiles >/dev/null 2>&1; then
+    echo "⚠️  systemd-tmpfiles not found, skipping user tmpfiles setup"
+    exit 0
+fi
+
+# Create the directories declared in ~/.config/user-tmpfiles.d now, rather than
+# waiting for the next login.
+systemd-tmpfiles --user --create
+
+# The daily cleaner (OnStartupSec=5min, OnUnitActiveSec=1d). Enabled by default
+# on most distros, but assert it so a fresh machine can't silently skip
+# cleanup. --now also starts it for this session.
+if systemctl --user list-unit-files systemd-tmpfiles-clean.timer >/dev/null 2>&1; then
+    systemctl --user enable --now systemd-tmpfiles-clean.timer
+    echo "✅ user tmpfiles created; systemd-tmpfiles-clean.timer active"
+else
+    echo "⚠️  systemd-tmpfiles-clean.timer not available; directories created but not swept"
+fi

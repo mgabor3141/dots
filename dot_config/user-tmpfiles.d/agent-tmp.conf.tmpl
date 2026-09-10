@@ -1,0 +1,16 @@
+{{- $tmpdir := includeTemplate "tmpdir" . -}}
+# Agent/tool scratch space: create it at login and age it out automatically.
+#
+# systemd runs a user instance of systemd-tmpfiles (v236+):
+#   systemd-tmpfiles-setup.service  --user --create --remove --boot  (at login)
+#   systemd-tmpfiles-clean.timer    --user --clean                   (daily)
+# so this replaces any cron job or custom sweeper on this machine. The Unraid
+# box has no systemd and needs its own script (unraid-config repo,
+# plugins/user.scripts/scripts/tmp_cleanup).
+#
+# Type 'd': create if missing, then delete contents older than the age field
+# on --clean. The age only ever applies to the *contents*, never to the
+# directory itself. Add 'x <path>' lines here to exempt subpaths from cleanup.
+#
+# Columns: type path mode user group age
+{{ if $tmpdir }}d {{ $tmpdir }} 0700 - - 7d{{ else }}# (no TMPDIR override on this machine; see the "tmpdir" template){{ end }}

@@ -1,0 +1,30 @@
+{{- /*
+tmpdir: the absolute path this machine should use for TMPDIR, or empty if the
+OS default (/tmp) is fine.
+
+Rationale per machine:
+  - headless (Unraid): /tmp is a plain directory on the 16G rootfs ramdisk that
+    holds the whole OS, so agents cloning repos there can wedge the box. Point
+    at a btrfs subvolume on the cache SSD. Swept hourly by the tmp_cleanup user
+    script (unraid-config repo).
+  - linux desktop: /tmp is its own tmpfs mount (systemd tmp.mount, capped at
+    50% of RAM) and is already aged out by systemd-tmpfiles, so a runaway can
+    only ENOSPC /tmp rather than take the system down. We still redirect big
+    agent scratch to disk to stop wasting RAM. Created and swept declaratively
+    by ~/.config/user-tmpfiles.d/agent-tmp.conf.
+  - container: temp lives on the container's own writable layer (SSD); no
+    redirect needed.
+  - darwin: $TMPDIR is already a per-user dir on disk, cleaned by the OS.
+
+Consumers: dot_profile.tmpl, dot_config/fish/exact_conf.d/tmpdir.fish.tmpl,
+dot_config/environment.d/tmp.conf.tmpl,
+dot_config/user-tmpfiles.d/agent-tmp.conf.tmpl.
+The Unraid gmuxd launcher sets the same path independently (it runs before any
+shell): unraid-config/plugins/user.scripts/scripts/{dotfiles_setup,start_gmuxd}.
+*/ -}}
+{{- if .container -}}
+{{- else if .headless -}}
+/mnt/cache/tmp
+{{- else if eq .chezmoi.os "linux" -}}
+{{ .chezmoi.homeDir }}/.local/tmp
+{{- end -}}

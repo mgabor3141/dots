@@ -1,0 +1,23 @@
+{{- $tmpdir := includeTemplate "tmpdir" . -}}
+{{- if $tmpdir -}}
+# Scratch space for agents/tools, off the default /tmp. Path and per-machine
+# rationale come from the "tmpdir" template; this mirrors the block in
+# ~/.profile (fish can't source it, so the POSIX version is skipped there).
+{{- if .headless }}
+# Guard on the pool being *mounted*, not just the directory existing: a stray
+# {{ $tmpdir }} on the rootfs ramdisk must not hijack TMPDIR, and shells still
+# have to work when the array is down.
+if test -d {{ $tmpdir }}; and mountpoint -q /mnt/cache 2>/dev/null
+    set -gx TMPDIR {{ $tmpdir }}
+end
+{{- else }}
+# user-tmpfiles.d creates this at login; mkdir covers first boot and any
+# non-systemd login path.
+if test -d {{ $tmpdir }}; or mkdir -p {{ $tmpdir }} 2>/dev/null
+    set -gx TMPDIR {{ $tmpdir }}
+end
+{{- end }}
+{{- else }}
+# No TMPDIR override on this machine; the OS default (/tmp) is fine.
+# See the "tmpdir" template.
+{{- end }}

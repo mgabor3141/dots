@@ -42,15 +42,29 @@ export npm_config_prefix="/mnt/user/appdata/node"
 # shims land in /mnt/user/appdata/node/bin and get picked up by dotfiles_setup.
 export BUN_INSTALL="/mnt/user/appdata/node"
 export PATH="$HOME/.local/bin:/mnt/user/appdata/chezmoi/bin:/mnt/user/appdata/node/bin:$PATH"
+{{- end }}
+
+{{- $tmpdir := includeTemplate "tmpdir" . }}
+{{- if $tmpdir }}
+
 # fish-skip-start
-# Agent/user scratch space on the cache SSD. Unraid's /tmp is a directory on
-# the 16G rootfs ramdisk; filling it wedges the OS. Guarded on the pool being
-# mounted (not just the dir existing) so a stray dir on rootfs can't hijack
-# it, and so shells still work when the array is down. Swept hourly by the
-# tmp_cleanup user script. Fish gets the same via .config/fish/conf.d/tmpdir.fish.
-if [ -d /mnt/cache/tmp ] && mountpoint -q /mnt/cache 2>/dev/null; then
-    export TMPDIR=/mnt/cache/tmp
+# Scratch space for agents/tools, off the default /tmp. See the "tmpdir"
+# template for the per-machine rationale. Fish gets the same natively via
+# .config/fish/conf.d/tmpdir.fish.
+{{- if .headless }}
+# Guard on the pool being *mounted*, not just the directory existing: a stray
+# {{ $tmpdir }} on the rootfs ramdisk must not hijack TMPDIR, and shells still
+# have to work when the array is down.
+if [ -d {{ $tmpdir }} ] && mountpoint -q /mnt/cache 2>/dev/null; then
+    export TMPDIR={{ $tmpdir }}
 fi
+{{- else }}
+# user-tmpfiles.d creates this at login; mkdir covers first boot and any
+# non-systemd login path.
+if [ -d {{ $tmpdir }} ] || mkdir -p {{ $tmpdir }} 2>/dev/null; then
+    export TMPDIR={{ $tmpdir }}
+fi
+{{- end }}
 # fish-skip-end
 {{- end }}
 
