@@ -33,5 +33,6 @@
     "provider": {
       "maxRetryDelayMs": 0
     }
-  }
+  },
+  "theme": "dark"
 }
