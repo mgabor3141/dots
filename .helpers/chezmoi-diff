@@ -1,8 +1,21 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
 
 # Chezmoi diff dispatcher: difft for interactive terminals, rtk for pipes/CI.
+#
+# chezmoi invokes this with "<current> <target>" operands per changed entry.
+# For a managed directory it passes a real directory (with /dev/null on the
+# other side); the actual content lives in the file entries, which are diffed
+# in their own invocation, so directory entries themselves have nothing to
+# show. difftastic/rtk can only diff files and exit non-zero on a directory,
+# which chezmoi treats as fatal -- aborting the whole "chezmoi diff". Skip
+# directory operands (but not symlinks, which resolve to their target).
+for arg in "$@"; do
+    if [ -d "$arg" ] && [ ! -L "$arg" ]; then
+        exit 0
+    fi
+done
+
 if [ -t 1 ]; then
     exec difft --background light "$@"
 else
