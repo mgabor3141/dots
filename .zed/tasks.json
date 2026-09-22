@@ -48,7 +48,7 @@
   },
   {
     "label": "re-add $ZED_FILENAME",
-    "command": "chezmoi re-add --source-path $ZED_FILE",
+    "command": "chezmoi re-add $(chezmoi target-path $ZED_FILE)",
     "show_command": false,
   },
   {
