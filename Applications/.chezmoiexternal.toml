@@ -1,0 +1,9 @@
+{{- if ne .chezmoi.os "darwin" }}
+
+["Paseo-x86_64.AppImage"]
+    type = "file"
+    url = "https://github.com/getpaseo/paseo/releases/latest/download/Paseo-x86_64.AppImage"
+    executable = true
+    refreshPeriod = "168h"
+
+{{- end }}
