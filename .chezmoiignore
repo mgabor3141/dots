@@ -54,8 +54,6 @@ AGENTS.md
 !.local/bin/rtk
 !.local/bin/session-manager
 !.local/bin/shellcheck
-!.local/bin/yeet
-!.local/bin/yeet-model
 !.local/bin/zed
 
 # devbox global profile (declarative package list, managed here)
@@ -120,7 +118,6 @@ AGENTS.md
 !.local/bin/session-manager
 !.local/bin/rtk
 !.local/bin/shellcheck
-!.local/bin/yeet
 !.local/bin/zed
 !.local/bin/gmux
 !.local/bin/gmuxd
