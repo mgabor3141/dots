@@ -38,7 +38,6 @@ Pass nontrivial prompts on stdin using a **quoted heredoc**. The quoted delimite
 
 ```bash
 gmux agent prompt --new --no-wait \
-  --model openai-codex/gpt-5.6-sol:low \
   --name auth-review <<'PROMPT'
 Review the `auth` package.
 
