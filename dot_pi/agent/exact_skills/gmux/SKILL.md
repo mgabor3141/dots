@@ -71,10 +71,10 @@ A multi-session prints reports in argument order after every session settles. Al
 Timeouts bound observation, not execution:
 
 ```bash
-gmux wait "$id" --timeout 250
+gmux wait "$id" --timeout 1800
 ```
 
-This returns after at most 250 seconds if the session has not settled, while the session keeps running. Use it when you want the completion report but need control back to inspect or intervene if the work takes too long.
+This returns after at most 1800 seconds if the session has not settled, while the session keeps running. Use it when you want the completion report but need control back to inspect or intervene if the work takes too long.
 
 ## Interaction notes
 
