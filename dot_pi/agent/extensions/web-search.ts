@@ -1,26 +1,13 @@
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "typebox";
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { configValue } from "./shared/env.ts";
 
-function loadEnvKey(key: string): string | null {
-  if (process.env[key]) return process.env[key];
-  const envPath = join(homedir(), ".env");
-  if (!existsSync(envPath)) return null;
-  for (const line of readFileSync(envPath, "utf-8").split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("#") || !trimmed.includes("=")) continue;
-    const [k, v] = trimmed.split("=", 2);
-    if (k === key) return v.trim();
-  }
-  return null;
-}
-
-const BASE_URL = loadEnvKey("SEARXNG_URL") || "http://localhost:8080";
-const CRAWL_URL = loadEnvKey("CRAWL_URL") || "https://crawl.mgabor.hu/crawl";
-const TOKEN = loadEnvKey("SEARXNG_TOKEN");
+// Environment first, then ~/.env (see shared/env.ts): on Windows nothing exports these, and the
+// file is where chezmoi puts them.
+const BASE_URL = configValue("SEARXNG_URL", "http://localhost:8080");
+const CRAWL_URL = configValue("CRAWL_URL", "https://crawl.mgabor.hu/crawl");
+const TOKEN = configValue("SEARXNG_TOKEN");
 
 const MAX_CONTENT = 2_000_000; // direct non-HTML fetch safety limit
 
@@ -202,7 +189,7 @@ export default function (pi: ExtensionAPI) {
       url.searchParams.set("language", "en");
 
       const headers: Record<string, string> = {};
-      if (TOKEN !== null) headers["Authorization"] = `Bearer ${TOKEN}`;
+      if (TOKEN) headers["Authorization"] = `Bearer ${TOKEN}`;
 
       const response = await fetchWithRetry(url.toString(), { signal, headers }, 3);
       if (!response.ok) {
@@ -251,7 +238,7 @@ export default function (pi: ExtensionAPI) {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-      if (TOKEN !== null) headers["Authorization"] = `Bearer ${TOKEN}`;
+      if (TOKEN) headers["Authorization"] = `Bearer ${TOKEN}`;
 
       // Pre-flight: peel off URLs that are downloads or raw-text resources
       // the headless browser can't navigate (Playwright aborts with

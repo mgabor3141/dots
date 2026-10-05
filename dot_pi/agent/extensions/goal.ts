@@ -41,6 +41,7 @@ import type {
   ExtensionContext,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { configValue } from "./shared/env.ts";
 
 const WIDGET_KEY = "goal";
 const MAX_PASSES = 10;
@@ -197,11 +198,12 @@ function hasWork(ctx: AnyCtx): boolean {
 
 /**
  * Pick the proxy model: first available PI_LIBRARIAN_MODELS token
- * ("provider/model:thinking"), else the current model.
+ * ("provider/model:thinking"), else the current model. Read through shared/env.ts so the ladder
+ * survives a shell that exports nothing, which is the normal case on Windows.
  */
 function pickProxyModel(ctx: AnyCtx): ProxyModel | null {
   const available = ctx.modelRegistry.getAvailable();
-  const raw = process.env.PI_LIBRARIAN_MODELS;
+  const raw = configValue("PI_LIBRARIAN_MODELS");
   if (raw) {
     for (const token of raw.split(",")) {
       const t = token.trim();
