@@ -121,6 +121,9 @@ AGENTS.md
 !.local/bin/zed
 !.local/bin/gmux
 !.local/bin/gmuxd
+!.local/bin/t3-serve
+!.local/bin/ffmpeg
+!.local/bin/ffprobe
 
 # Fish shell config
 !.config/fish

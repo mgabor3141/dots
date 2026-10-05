@@ -4,9 +4,17 @@
  * The static provider, authentication, and default model live in models.json.
  * This extension discovers additional models dynamically and applies request
  * policies that cannot be expressed declaratively.
+ *
+ * It also registers video support in ./mgabor-video/media.ts: Pi has one media
+ * block (image) and the endpoint wants two (image_url, video_url). read returns
+ * video the way it returns images, and the payload part type is corrected below,
+ * which is the only place the wire shape is reachable. Video behaviour itself has
+ * no flags: the settings are constants in that module.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { promoteVideoParts, registerVideoRead } from "./mgabor-video/media.ts";
+import { applyVideoSamplingHints, registerVideoSample } from "./mgabor-video/sample.ts";
 
 const BASE_URL = "https://inference.mgabor.hu/v1";
 const DEFAULT_CONTEXT_WINDOW = 262_144;
@@ -51,6 +59,12 @@ function providerModel({ id, contextWindow }: DiscoveredModel) {
 }
 
 export default async function (pi: ExtensionAPI) {
+  // Overrides the built-in read tool so a video path returns a media block instead of text, and
+  // adds video_sample for cutting a window out of a clip (the endpoint samples a fixed 32 frames
+  // per video, so a window is the only way to get finer timing).
+  registerVideoRead(pi);
+  registerVideoSample(pi);
+
   // models.json owns the static provider, authentication, and default model.
   // Pi waits for async extension factories, so discover the live catalogue once
   // at startup and replace only the model list when discovery succeeds.
@@ -81,6 +95,17 @@ export default async function (pi: ExtensionAPI) {
     let nextPayload = applyQwenRequestPolicy(payload);
     nextPayload = rewriteSkillsInPayload(nextPayload);
 
+    // Retype video parts before anything measures or sends the payload. Left as image_url the
+    // bytes make the /tokenize call below answer "Failed to load image", and a failed
+    // measurement silently skips the clamp; as video_url they are measured like any other part.
+    const promoted = promoteVideoParts(nextPayload, ctx.model);
+    if (promoted) nextPayload = promoted;
+
+    // Same reason as above, and before the clamp: the frame count a video_sample call asked for
+    // changes how many tokens the video is worth, so the measurement has to see it.
+    const sampled = applyVideoSamplingHints(nextPayload, ctx.model);
+    if (sampled) nextPayload = sampled;
+
     const contextWindow = contextWindowById.get(payload.model);
     if (contextWindow !== undefined) {
       const key = await ctx.modelRegistry.getApiKeyForProvider("mgabor");
@@ -88,6 +113,7 @@ export default async function (pi: ExtensionAPI) {
         nextPayload = await clampOutputToContext(nextPayload, key, contextWindow);
       }
     }
+
     return nextPayload === payload ? undefined : nextPayload;
   });
 

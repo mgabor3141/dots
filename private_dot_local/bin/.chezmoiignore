@@ -1,5 +1,12 @@
 __pycache__
 
+{{- if not .headless }}
+# Static ffmpeg lives on the headless box at /mnt/user/appdata/bin; a symlink
+# to it would dangle everywhere else.
+ffmpeg
+ffprobe
+{{- end }}
+
 {{- if eq .chezmoi.os "darwin" }}
 # macOS: exclude Linux-specific tools
 bing-wallpaper.sh
