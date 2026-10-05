@@ -1,9 +1,14 @@
 /**
  * Self-hosted inference server at inference.mgabor.hu.
  *
- * The static provider, authentication, and default model live in models.json.
- * This extension discovers additional models dynamically and applies request
- * policies that cannot be expressed declaratively.
+ * The static provider and default model live in models.json; the credential lives in
+ * auth.json, which is where /login puts it. This extension discovers additional models
+ * dynamically and applies request policies that cannot be expressed declaratively.
+ *
+ * The API key is never configured here: Pi resolves it, preferring a stored credential in
+ * auth.json over whatever models.json declares. The one place that has to care is startup model
+ * discovery, which runs before Pi exposes a registry, so it mirrors that same order off the two
+ * files and defers to Pi as soon as a session exists. See startupKey and session_start below.
  *
  * It also registers video support in ./mgabor-video/media.ts: Pi has one media
  * block (image) and the endpoint wants two (image_url, video_url). read returns
@@ -12,6 +17,7 @@
  * no flags: the settings are constants in that module.
  */
 
+import { readFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { promoteVideoParts, registerVideoRead } from "./mgabor-video/media.ts";
 import { applyVideoSamplingHints, registerVideoSample } from "./mgabor-video/sample.ts";
@@ -20,6 +26,49 @@ const BASE_URL = "https://inference.mgabor.hu/v1";
 const DEFAULT_CONTEXT_WINDOW = 262_144;
 
 type DiscoveredModel = { id: string; contextWindow: number };
+
+/**
+ * Key for the startup model-discovery call, which has to happen while Pi is still awaiting the
+ * extension factory: there is no extension context yet, so no ModelRegistry, and Pi will not await
+ * anything scheduled after the factory returns. Pi's own order is mirrored rather than reinvented,
+ * and no environment variable is named here. A stored credential in auth.json wins; otherwise
+ * models.json decides where the key comes from, so only its env-interpolated form is resolved. A
+ * literal, a leading-!command, or anything unreadable yields undefined and gets asked of Pi at
+ * session_start, which is the pass that actually has authority.
+ */
+function startupKey(): string | undefined {
+  return storedCredential() ?? declaredEnvKey();
+}
+
+function readJson(url: URL): unknown {
+  try {
+    return JSON.parse(readFileSync(url, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+/** The `api_key` credential Pi stores for this provider, e.g. via /login. */
+function storedCredential(): string | undefined {
+  const auth = readJson(new URL("../auth.json", import.meta.url)) as
+    | Record<string, { type?: unknown; key?: unknown }>
+    | undefined;
+  const entry = auth?.["mgabor"];
+  return entry?.type === "api_key" && typeof entry.key === "string"
+    ? entry.key
+    : undefined;
+}
+
+/** models.json apiKey when it is written as "$VAR" or "${VAR}". */
+function declaredEnvKey(): string | undefined {
+  const models = readJson(new URL("../models.json", import.meta.url)) as
+    | { providers?: Record<string, { apiKey?: unknown }> }
+    | undefined;
+  const declared = models?.providers?.["mgabor"]?.apiKey;
+  if (typeof declared !== "string") return undefined;
+  const envName = /^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$/.exec(declared)?.[1];
+  return envName ? process.env[envName] || undefined : undefined;
+}
 
 async function discoverModels(key: string): Promise<DiscoveredModel[]> {
   const response = await fetch(`${BASE_URL}/models`, {
@@ -65,26 +114,36 @@ export default async function (pi: ExtensionAPI) {
   registerVideoRead(pi);
   registerVideoSample(pi);
 
-  // models.json owns the static provider, authentication, and default model.
-  // Pi waits for async extension factories, so discover the live catalogue once
-  // at startup and replace only the model list when discovery succeeds.
-  let discovered: DiscoveredModel[] = [];
-  const discoveryKey = process.env.MGABOR_INFERENCE_API_KEY;
-  if (discoveryKey) {
+  // Pi waits for async extension factories, so the live catalogue is discovered at startup to keep
+  // discovered model ids resolvable from the command line, then discovered again through Pi's own
+  // resolver as soon as a session exists. That second pass is the one with authority: it sees
+  // whatever Pi would authenticate with, including a credential stored after this process started.
+  // A failed discovery never replaces a catalogue that already loaded.
+  let contextWindowById = new Map<string, number>([
+    ["default", DEFAULT_CONTEXT_WINDOW],
+  ]);
+  let discoveredWith: string | undefined;
+
+  async function discover(key: string | undefined): Promise<void> {
+    if (!key || key === discoveredWith) return;
     try {
-      discovered = await discoverModels(discoveryKey);
+      const found = await discoverModels(key);
+      if (found.length === 0) return;
+      contextWindowById = new Map([
+        ["default", DEFAULT_CONTEXT_WINDOW],
+        ...found.map((model) => [model.id, model.contextWindow] as const),
+      ]);
+      pi.registerProvider("mgabor", { models: found.map(providerModel) });
+      discoveredWith = key;
     } catch {
       // Keep the declarative default when discovery is unavailable.
     }
   }
 
-  const contextWindowById = new Map<string, number>([
-    ["default", DEFAULT_CONTEXT_WINDOW],
-    ...discovered.map((model) => [model.id, model.contextWindow] as const),
-  ]);
+  await discover(startupKey());
 
-  pi.registerProvider("mgabor", {
-    ...(discovered.length > 0 ? { models: discovered.map(providerModel) } : {}),
+  pi.on("session_start", async (_event, ctx) => {
+    await discover(await ctx.modelRegistry.getApiKeyForProvider("mgabor"));
   });
 
   pi.on("before_provider_request", async (event, ctx) => {

@@ -1,4 +1,5 @@
-MGABOR_INFERENCE_API_KEY=your-key-here
+# The inference.mgabor.hu key is not here: it lives in ~/.pi/agent/auth.json, stored by
+# `pi /login mgabor` or by editing that file's "mgabor" entry directly.
 
 PI_LIBRARIAN_MODELS=mgabor/default:medium,openai-codex/gpt-5.6-luna:low,anthropic/claude-sonnet-4-6:high
 
