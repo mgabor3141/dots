@@ -23,6 +23,7 @@ import { promoteVideoParts, registerVideoRead } from "./mgabor-video/media.ts";
 import { applyVideoSamplingHints, registerVideoSample } from "./mgabor-video/sample.ts";
 
 const BASE_URL = "https://inference.mgabor.hu/v1";
+const API = "openai-completions" as const;
 const DEFAULT_CONTEXT_WINDOW = 262_144;
 
 type DiscoveredModel = { id: string; contextWindow: number };
@@ -93,6 +94,7 @@ function providerModel({ id, contextWindow }: DiscoveredModel) {
   return {
     id,
     name: id,
+    api: API,
     reasoning: true,
     input: ["text", "image"] as ("text" | "image")[],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -124,6 +126,21 @@ export default async function (pi: ExtensionAPI) {
   ]);
   let discoveredWith: string | undefined;
 
+  // Stated in full, not just the model list, because pi takes api and baseUrl from whichever layer
+  // describes the provider: models.json supplies them when it has a mgabor block, and a host without
+  // one gets them from here or the registration is rejected outright. No apiKey on purpose, so the
+  // credential stays pi's to resolve, from auth.json, with /login mgabor as the way to store one.
+  function register(models: DiscoveredModel[]): void {
+    pi.registerProvider("mgabor", {
+      api: API,
+      baseUrl: BASE_URL,
+      models: models.map(providerModel),
+    });
+  }
+
+  // The declarative floor, so the provider is usable before and without discovery.
+  register([{ id: "default", contextWindow: DEFAULT_CONTEXT_WINDOW }]);
+
   async function discover(key: string | undefined): Promise<void> {
     if (!key || key === discoveredWith) return;
     try {
@@ -133,7 +150,7 @@ export default async function (pi: ExtensionAPI) {
         ["default", DEFAULT_CONTEXT_WINDOW],
         ...found.map((model) => [model.id, model.contextWindow] as const),
       ]);
-      pi.registerProvider("mgabor", { models: found.map(providerModel) });
+      register(found);
       discoveredWith = key;
     } catch {
       // Keep the declarative default when discovery is unavailable.
