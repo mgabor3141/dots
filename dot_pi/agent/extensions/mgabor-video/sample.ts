@@ -27,7 +27,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { access, readFile, stat, unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { extname, resolve } from "node:path";
 import { Type } from "typebox";
 import { formatSize, type AgentToolResult, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -193,7 +193,9 @@ export function registerVideoSample(pi: ExtensionAPI): void {
 
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const { path: rawPath, num_frames, height } = params as SampleParams;
-      const path = resolve(ctx.cwd ?? process.cwd(), rawPath.startsWith("~/") ? resolve(process.env.HOME ?? "/", rawPath.slice(2)) : rawPath);
+      // homedir(), not process.env.HOME: Windows sets USERPROFILE and usually leaves HOME unset.
+      // media.ts already expands "~/" this way for the read override.
+      const path = resolve(ctx.cwd ?? process.cwd(), rawPath.startsWith("~/") ? resolve(homedir(), rawPath.slice(2)) : rawPath);
       const fail = (text: string): AgentToolResult<undefined> => ({ content: [{ type: "text", text }], details: undefined, isError: true });
       const run: Run = (command, args, timeout = 20_000) => pi.exec(command, args, { signal, timeout }).catch(() => undefined);
 
