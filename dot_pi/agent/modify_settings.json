@@ -28,8 +28,9 @@
   "steeringMode": "all",
   "retry": {
     "enabled": true,
-    "maxRetries": 16,
+    "maxRetries": 64,
     "baseDelayMs": 2000,
+    "maxAgentDelayMs": 300000,
     "provider": {
       "maxRetryDelayMs": 0
     }
