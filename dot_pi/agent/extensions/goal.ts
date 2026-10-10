@@ -60,7 +60,7 @@ type SwapTurn = { role: "user" | "assistant"; text: string };
 
 // Loose views of the message shapes we read out of the session branch.
 type Block = { type?: string; text?: string };
-type Msg = { role?: string; content?: unknown };
+type Msg = { role?: string; content?: unknown; stopReason?: string };
 
 // --- module state (in-memory, single session) ----------------------------------
 
@@ -69,6 +69,13 @@ let goal: string | null = null;
 let passes = 0;
 let startedAt = 0;
 let running = false; // a proxy call is in flight; guards against reentrancy
+// Activation identity, bumped on start and on teardown. Because /new and /resume
+// reuse the same cached module instance for a given cwd, the flags above are
+// shared across sessions; a proxy tick left in flight from a previous activation
+// could otherwise wake up against a re-armed `active` and touch the old session's
+// ctx, re-surfacing the "stale ctx" error. A tick captures the epoch it started
+// with and bails if it no longer matches, before touching any shared flag or ctx.
+let epoch = 0;
 
 // --- prompt ---------------------------------------------------------------------
 
@@ -197,6 +204,20 @@ function hasWork(ctx: AnyCtx): boolean {
 }
 
 /**
+ * True when the run's final assistant turn was aborted by the user (Esc).
+ * Read from the event payload, never from `ctx.signal`: the `signal` getter is
+ * staleness-guarded and throws once a session replacement/reload invalidates the
+ * runner, whereas the `agent_end` messages are plain data that stays readable.
+ */
+function wasAborted(messages: readonly Msg[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role === "assistant") return m.stopReason === "aborted";
+  }
+  return false;
+}
+
+/**
  * Pick the proxy model: first available PI_LIBRARIAN_MODELS token
  * ("provider/model:thinking"), else the current model. Read through shared/env.ts so the ladder
  * survives a shell that exports nothing, which is the normal case on Windows.
@@ -239,6 +260,9 @@ function parseReply(text: string): Reply {
 
 /** Run one proxy pass. Returns the reply, or null if the call could not run. */
 async function runProxy(ctx: AnyCtx): Promise<Reply | null> {
+  // Read the guarded `signal` getter synchronously, now, while ctx is known-live.
+  // Reading it after an await could hit a runner invalidated by a session change.
+  const signal = ctx.signal ?? undefined;
   const picked = pickProxyModel(ctx);
   if (!picked) {
     note(ctx, "No model available for the goal loop.", "error");
@@ -256,10 +280,15 @@ async function runProxy(ctx: AnyCtx): Promise<Reply | null> {
     {
       apiKey: auth.apiKey,
       headers: auth.headers,
-      signal: ctx.signal ?? undefined,
+      signal,
       ...(picked.thinking ? { reasoning: picked.thinking } : {}),
     },
   );
+  // An aborted or errored provider call RESOLVES (does not throw): pi-ai treats
+  // the terminal `error` stream event as the completion result, yielding an empty
+  // or partial message. Treat it as a stop so an Esc/teardown abort or a model
+  // error never injects a junk nudge or drives a nudge into a pending auto-retry.
+  if (res.stopReason === "aborted" || res.stopReason === "error") return null;
   const text = res.content
     .filter((c): c is { type: "text"; text: string } => c.type === "text")
     .map((c) => c.text)
@@ -274,6 +303,7 @@ async function runProxy(ctx: AnyCtx): Promise<Reply | null> {
 /** One iteration: ask the proxy, then either stop, halt, or inject its message. */
 async function tick(pi: ExtensionAPI, ctx: AnyCtx): Promise<void> {
   if (!active || running) return;
+  const myEpoch = epoch; // activation identity; a mismatch means this tick is stale
   if (passes >= MAX_PASSES) {
     active = false;
     note(ctx, `Goal loop stopped after ${MAX_PASSES} passes.`, "warning");
@@ -287,17 +317,22 @@ async function tick(pi: ExtensionAPI, ctx: AnyCtx): Promise<void> {
   try {
     reply = await runProxy(ctx);
   } catch (err) {
-    active = false;
+    // A throw here is a genuine proxy failure (an abort resolves, see runProxy).
+    // If this activation was superseded (session replaced/restarted) or the loop
+    // was cleared, return WITHOUT touching shared flags or a possibly-stale ctx.
+    if (!active || myEpoch !== epoch) return;
     running = false;
+    active = false;
     note(ctx, `Goal loop failed: ${err instanceof Error ? err.message : String(err)}`, "error");
     updateWidget(ctx);
     return;
   }
+  // Superseded or cleared during the proxy call: bail before touching ctx or the
+  // shared `running` flag (a new session may already own them).
+  if (!active || myEpoch !== epoch) return;
   running = false;
-
-  if (!active) return; // cleared or Esc while the proxy was running
   if (!reply) {
-    active = false; // error already surfaced
+    active = false; // aborted/errored or already-surfaced failure: stop quietly
     updateWidget(ctx);
     return;
   }
@@ -337,6 +372,7 @@ export default function (pi: ExtensionAPI) {
       active = true;
       passes = 0;
       startedAt = Date.now();
+      epoch++; // supersede any proxy tick still in flight from a prior activation
       note(ctx, goal ? `Goal set: ${goal}` : "Goal loop started (no specific goal). Run goal-clear to stop.");
       updateWidget(ctx);
       if (ctx.isIdle()) await tick(pi, ctx);
@@ -352,33 +388,42 @@ export default function (pi: ExtensionAPI) {
       }
       active = false;
       goal = null;
+      epoch++; // cancel any proxy tick still in flight so it cannot inject
       note(ctx, "Goal loop cleared. The current turn will finish without re-prompting.");
       updateWidget(ctx);
     },
   });
 
-  // Reload/new/fork/quit tears down this instance. Stop the loop so a lingering
-  // old closure cannot keep injecting after a fresh instance is bound.
+  // Reload/new/fork/quit tears down this instance. Note the extension factory is
+  // cached per cwd, so /new and /resume reuse this SAME module instance (and its
+  // module-global flags) for the next session. Reset the loop and bump the epoch
+  // so an in-flight proxy tick bound to the old ctx cannot wake up against the
+  // re-armed `active` and re-surface the "stale ctx" error or inject into the
+  // wrong session.
   pi.on("session_shutdown", async (_event, ctx) => {
     active = false;
     goal = null;
     running = false;
+    epoch++;
     updateWidget(ctx);
   });
 
-  // Make the loop interruptible: an aborted turn (Esc) stops it.
-  // (ctx.signal.aborted is only set in turn-related events, not agent_end.)
-  pi.on("turn_end", async (_event, ctx) => {
-    if (ctx.signal?.aborted && active) {
+  // The loop: each time the agent goes idle, run a proxy pass. A user abort
+  // (Esc) ends the run with an aborted assistant turn, so we stop instead of
+  // nudging further. We read the abort from the event's messages rather than
+  // `ctx.signal` on purpose: the `signal` getter is staleness-guarded and throws
+  // once a session replacement/reload invalidates the runner, while the event
+  // payload stays readable. Registering no `turn_end` handler is also what keeps
+  // us off the framework's turn_end boundary path (which emitted a spurious
+  // "could not resolve the persisted assistant entry ID" during that race).
+  pi.on("agent_end", async (event, ctx) => {
+    if (!active || running) return;
+    if (wasAborted(event.messages)) {
       active = false;
       note(ctx, "Goal loop stopped.", "warning");
       updateWidget(ctx);
+      return;
     }
-  });
-
-  // The loop: each time the agent goes idle, run a proxy pass.
-  pi.on("agent_end", async (_event, ctx) => {
-    if (!active || running) return;
     await tick(pi, ctx);
   });
 }
