@@ -15,9 +15,17 @@
  * video the way it returns images, and the payload part type is corrected below,
  * which is the only place the wire shape is reachable. Video behaviour itself has
  * no flags: the settings are constants in that module.
+ *
+ * Finally it stamps a scheduling `priority` on every request. The endpoint reads a
+ * lower number as more urgent, so parents should outrank the subagents they spawn.
+ * gmux already knows each session's root-relative lineage depth (its PR#542 wire
+ * field), so the base priority is raised by one per depth: a root asks for
+ * PRIORITY_BASE, its children PRIORITY_BASE+1, and so on. See resolveSubagentDepth.
  */
 
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { promisify } from "node:util";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { promoteVideoParts, registerVideoRead } from "./mgabor-video/media.ts";
 import { applyVideoSamplingHints, registerVideoSample } from "./mgabor-video/sample.ts";
@@ -25,6 +33,16 @@ import { applyVideoSamplingHints, registerVideoSample } from "./mgabor-video/sam
 const BASE_URL = "https://inference.mgabor.hu/v1";
 const API = "openai-completions" as const;
 const DEFAULT_CONTEXT_WINDOW = 262_144;
+
+// Scheduling priority sent in the request body. The endpoint treats a lower number
+// as more urgent, so a root gets the smallest value and each subagent generation
+// adds one, keeping parents ahead of the children they launched. gmux owns lineage
+// depth; when it cannot be read the safe default is a root at PRIORITY_BASE.
+const PRIORITY_BASE = 5;
+const execFileAsync = promisify(execFile);
+// `gmux ls --json` is a local daemon round-trip; a short bound so an unavailable
+// or wedged gmuxd degrades to the root default instead of delaying every turn.
+const GMUX_LS_TIMEOUT_MS = 3_000;
 
 type DiscoveredModel = { id: string; contextWindow: number };
 
@@ -126,6 +144,10 @@ export default async function (pi: ExtensionAPI) {
   ]);
   let discoveredWith: string | undefined;
 
+  // Requests ask for PRIORITY_BASE + lineage depth. Resolved once a session exists
+  // (see session_start); until then, and if gmux is absent, this stays a root.
+  let priority = PRIORITY_BASE;
+
   // Stated in full, not just the model list, because pi takes api and baseUrl from whichever layer
   // describes the provider: models.json supplies them when it has a mgabor block, and a host without
   // one gets them from here or the registration is rejected outright. No apiKey on purpose, so the
@@ -160,7 +182,15 @@ export default async function (pi: ExtensionAPI) {
   await discover(startupKey());
 
   pi.on("session_start", async (_event, ctx) => {
-    await discover(await ctx.modelRegistry.getApiKeyForProvider("mgabor"));
+    // Lineage depth is a daemon fact and cheap to read, so resolve it alongside the
+    // (network-bound) model discovery instead of serialising a second stall.
+    const [key] = await Promise.all([
+      ctx.modelRegistry.getApiKeyForProvider("mgabor"),
+      resolveSubagentDepth().then((depth) => {
+        priority = PRIORITY_BASE + depth;
+      }),
+    ]);
+    await discover(key);
   });
 
   pi.on("before_provider_request", async (event, ctx) => {
@@ -168,7 +198,11 @@ export default async function (pi: ExtensionAPI) {
     if (!payload || typeof payload.model !== "string") return undefined;
     if (ctx.model?.provider !== "mgabor" || ctx.model.id !== payload.model) return undefined;
 
-    let nextPayload = applyQwenRequestPolicy(payload);
+    // Stamp scheduling priority first: it must ride on every mgabor request, and
+    // adding it guarantees the payload is treated as changed even when the Qwen and
+    // skill rewrites below are no-ops.
+    let nextPayload = applySubagentPriority(payload, priority);
+    nextPayload = applyQwenRequestPolicy(nextPayload);
     nextPayload = rewriteSkillsInPayload(nextPayload);
 
     // Retype video parts before anything measures or sends the payload. Left as image_url the
@@ -201,6 +235,48 @@ export default async function (pi: ExtensionAPI) {
     const sessionId = ctx.sessionManager.getSessionId();
     if (sessionId) event.headers["X-Session-Key"] = sessionId;
   });
+}
+
+// This session's root-relative lineage depth (0 for a root) as gmux sees it.
+// gmux#542 exposes a per-session `depth` on the projection, which `gmux ls --json`
+// carries; it is computed by the daemon over the durable parent graph, so it is the
+// authoritative number the subagent budget enforces, not a cached copy that could
+// drift the way an env var frozen at exec would. We only need our own live row, so
+// the alive-only list is enough (our session is by definition alive) and far cheaper
+// than `--all`. Absent GMUX_SESSION_ID (not under gmux), a missing row, a peer row
+// that omits `depth`, or any gmux failure all fall back to 0 — the root default.
+async function resolveSubagentDepth(): Promise<number> {
+  const self = process.env.GMUX_SESSION_ID;
+  if (!self) return 0;
+  try {
+    const { stdout } = await execFileAsync("gmux", ["ls", "--json"], {
+      timeout: GMUX_LS_TIMEOUT_MS,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    const sessions: unknown = JSON.parse(stdout);
+    if (!Array.isArray(sessions)) return 0;
+    const me = sessions.find(
+      (s): s is { id?: unknown; depth?: unknown } =>
+        isRecord(s) && s.id === self,
+    );
+    const depth = me?.depth;
+    return typeof depth === "number" &&
+      Number.isSafeInteger(depth) &&
+      depth >= 0
+      ? depth
+      : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function applySubagentPriority(
+  payload: Record<string, unknown>,
+  priority: number,
+): Record<string, unknown> {
+  return payload.priority === priority
+    ? payload
+    : { ...payload, priority };
 }
 
 function applyQwenRequestPolicy(
