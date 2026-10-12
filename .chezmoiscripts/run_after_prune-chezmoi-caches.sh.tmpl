@@ -1,0 +1,76 @@
+#!/bin/bash
+# Bound chezmoi's download caches, which it never garbage-collects itself
+# (twpayne/chezmoi#3149, closed NOT_PLANNED: "you can safely delete the contents of
+# ~/.cache/chezmoi"). Measured behaviour of the two caches under it:
+#
+#   external/   sha256(url) -> downloaded bytes. Authoritative content cache: when an
+#               entry is missing the next apply re-downloads it, even within
+#               refreshPeriod. So only superseded AppImage nightlies go, identified as
+#               large entries whose byte size matches nothing installed in
+#               ~/Applications. Small entries are never touched (the largest other
+#               external here is 13 MB) so nothing else ever re-downloads. Cut off by
+#               size rather than by hash because chezmoi exposes no way to list which
+#               cache entries are live.
+#
+#   httpcache/  keyed on the *signed, expiring* release-asset redirect URL, so every
+#               download leaves a body behind even when the manifest URL never changes.
+#               Redundant for file content -- wiping it while external/ holds the bytes
+#               causes no re-download -- so large bodies go and small entries stay.
+#               Small ones include the gitHubReleases response that keeps repeated runs
+#               off the rate-limited GitHub API. Bodies live next to small metadata
+#               files with the same key, so delete the file, not its directory.
+#
+# Bump BLOB_MB if you add a large non-AppImage external: pruning it would cost a
+# re-download on every apply.
+# Set PRUNE_CACHES_DRY_RUN=1 to print what would go without deleting anything.
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+CACHE_DIR="{{ .chezmoi.cacheDir }}"
+EXTERNAL="$CACHE_DIR/external"
+HTTPCACHE="$CACHE_DIR/httpcache"
+APPS="$HOME/Applications"
+BLOB_MB=50
+DRY_RUN="${PRUNE_CACHES_DRY_RUN:-0}"
+pruned_mb=0
+
+report() {
+    if [ "$DRY_RUN" = "1" ]; then
+        printf 'would prune %s MB: %s\n' "$2" "$1"
+    else
+        rm -f -- "$1"
+    fi
+    pruned_mb=$((pruned_mb + $2))
+}
+
+# Sizes of installed AppImages, used to protect their cache entries.
+keep_sizes=$(find "$APPS" -maxdepth 1 -type f -printf '%s\n' 2>/dev/null || true)
+
+if [ -d "$EXTERNAL" ]; then
+    # Always keep the newest large entry, so an in-flight apply cannot lose its cache.
+    newest=$(
+        find "$EXTERNAL" -maxdepth 1 -type f -size +"${BLOB_MB}"M -printf '%T@ %p\n' 2>/dev/null |
+            sort -rn | head -1 | cut -d' ' -f2-
+    )
+    while IFS= read -r entry; do
+        [ -n "$entry" ] || continue
+        [ "$entry" = "$newest" ] && continue
+        size=$(stat -c %s "$entry")
+        printf '%s\n' "$keep_sizes" | grep -qx "$size" && continue
+        report "$entry" $((size / 1024 / 1024))
+    done < <(find "$EXTERNAL" -maxdepth 1 -type f -size +"${BLOB_MB}"M 2>/dev/null)
+fi
+
+if [ -d "$HTTPCACHE" ]; then
+    while IFS= read -r body; do
+        [ -n "$body" ] || continue
+        report "$body" $(( $(stat -c %s "$body") / 1024 / 1024 ))
+    done < <(find "$HTTPCACHE" -type f -size +"${BLOB_MB}"M 2>/dev/null)
+    if [ "$DRY_RUN" != "1" ]; then
+        find "$HTTPCACHE" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+    fi
+fi
+
+if [ "$pruned_mb" -gt 0 ] && [ "$DRY_RUN" != "1" ]; then
+    printf 'pruned %s MB of stale chezmoi download cache\n' "$pruned_mb"
+fi

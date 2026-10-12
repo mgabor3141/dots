@@ -1,0 +1,26 @@
+{{- if ne .chezmoi.os "darwin" }}
+{{- /* Newest pingdotgg/t3code nightly for linux x86_64. Nightly assets embed the
+     version in their name and every nightly is marked prerelease, so there is no
+     rolling URL: /releases/latest resolves to the stable release. The asset URL has
+     to be resolved at render time. gitHubReleases is served from chezmoi's HTTP cache
+     (41 ms warm, no API quota; ~850 ms + 1 request when cold). */ -}}
+{{- $url := "" -}}
+{{- range gitHubReleases "pingdotgg/t3code" -}}
+{{- if contains "-nightly." .TagName -}}
+{{- range .Assets -}}
+{{- if hasSuffix "-x86_64.AppImage" .Name -}}
+{{- $url = .BrowserDownloadURL -}}
+{{- break -}}
+{{- end -}}
+{{- end -}}
+{{- break -}}
+{{- end -}}
+{{- end -}}
+{{- if $url }}
+["T3-Code-x86_64.AppImage"]
+    type = "file"
+    url = "{{ $url }}"
+    executable = true
+    refreshPeriod = "24h"
+{{- end }}
+{{- end }}
