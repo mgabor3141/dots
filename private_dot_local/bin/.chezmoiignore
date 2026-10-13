@@ -13,6 +13,7 @@ bing-wallpaper.sh
 clean-disk.sh
 gpu-reset
 gpu-resume-check
+reboot-to-windows
 set-wallpaper.sh
 sunshine-audio-fix
 system-audio-setup

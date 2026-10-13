@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# reboot-to-windows — make Limine boot Windows on this and subsequent reboots.
+#
+# Limine boots the entry recorded in its remembered-entry EFI variable and
+# rewrites it after booting, so setting it to "Windows Boot Manager" sticks.
+# To go back to Linux, pick a Linux entry in the Limine menu.
+#
+# The write needs root; 'chezmoi apply' installs a scoped NOPASSWD rule so this
+# normally runs without a prompt, otherwise it prompts.
+trap 'echo "❌ Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+set -Eeuo pipefail
+
+LIMINE_GUID="513ee0d0-6e43-cb05-b272-f146a2fcb88a"  # Limine vendor GUID (menu.c)
+VAR_NAME="LimineLastBootedEntry"                    # remembered-entry variable
+ENTRY="Windows Boot Manager"                         # menu entry name-path; no leading '/'
+
+EFIVARS_DIR="/sys/firmware/efi/efivars"
+# Fixed path in the user's 0700 runtime dir, so the sudoers rule can match it.
+PAYLOAD_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+PAYLOAD="${PAYLOAD_DIR}/reboot-to-windows.efivar"
+
+do_reboot=1
+
+usage() {
+  cat <<EOF
+Usage: ${0##*/} [-n] [-h]
+
+Reboot into Windows by setting Limine's remembered boot entry to "${ENTRY}".
+
+Options:
+  -n, --no-reboot   Only set the entry; do not reboot.
+  -h, --help        Show this help.
+
+Requires: efivar, UEFI boot.
+
+Passwordless use: 'chezmoi apply' installs /etc/sudoers.d/reboot-to-windows
+allowing exactly this efivar write. Without it, the command prompts for sudo.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -n|--no-reboot) do_reboot=0 ;;
+    -h|--help) usage; exit 0 ;;
+    *) printf 'unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+EFIVAR="$(command -v efivar || true)"
+[ -n "$EFIVAR" ] || { printf 'error: efivar not found (sudo pacman -S efivar)\n' >&2; exit 1; }
+[ -d "$EFIVARS_DIR" ] || { printf 'error: %s missing — not booted in UEFI mode\n' "$EFIVARS_DIR" >&2; exit 1; }
+mkdir -p "$PAYLOAD_DIR"
+
+# efivar wants the value as a NUL-terminated narrow string.
+umask 077
+printf '%s\0' "$ENTRY" > "$PAYLOAD"
+
+ref="${LIMINE_GUID}-${VAR_NAME}"
+printf 'Limine: setting remembered entry -> "%s"\n' "$ENTRY"
+# sudo -n succeeds only with the sudoers rule installed; otherwise prompt.
+sudo -n "$EFIVAR" -n "$ref" -w -f "$PAYLOAD" 2>/dev/null \
+  || sudo "$EFIVAR" -n "$ref" -w -f "$PAYLOAD"
+
+# The efivarfs file is world-readable; its first 4 bytes are the attribute header.
+efivar_file="${EFIVARS_DIR}/${VAR_NAME}-${LIMINE_GUID}"
+if [ -r "$efivar_file" ]; then
+  now="$(tail -c +5 "$efivar_file" | tr -d '\0')"
+  printf '✅ confirmed: next boot -> "%s"\n' "$now"
+fi
+
+if [ "$do_reboot" = 1 ]; then
+  printf 'rebooting into Windows…\n'
+  exec systemctl reboot
+fi

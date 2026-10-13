@@ -305,6 +305,17 @@
                 },
                 {
                     "id": "PowerProfile"
+                },
+                {
+                    "enableOnStateLogic": false,
+                    "generalTooltipText": "Reboot into Windows",
+                    "icon": "brand-windows",
+                    "id": "CustomButton",
+                    "onClicked": "$HOME/.local/bin/reboot-to-windows",
+                    "onMiddleClicked": "",
+                    "onRightClicked": "",
+                    "showExecTooltip": true,
+                    "stateChecksJson": "[]"
                 }
             ],
             "right": [
