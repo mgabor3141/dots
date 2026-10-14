@@ -16,7 +16,7 @@ The **working copy** (represented by the @ symbol) is a concept unique to jj. Ch
 | Just set/change message | `jj describe -m "msg"` |
 | Split @ into two commits | `jj split [filesets]` |
 | Fold @ into parent | `jj squash` |
-| Fold @ into specific commit | `jj squash --into <rev>` |
+| Fold change into specific commit | `jj squash --from <rev> --into <rev>` (`--from` defaults to `@`) |
 | Insert commit in history | `jj new --insert-after <rev>` |
 | Move a commit | `jj rebase -r <rev> -A <dest>` |
 | Undo last operation | `jj undo` |
@@ -26,6 +26,14 @@ The **working copy** (represented by the @ symbol) is a concept unique to jj. Ch
 Unfortunately there is no way to work with individual hunks without the interactive TUI, so only file level filtering is available for operations. You can work around this by selecting a specific changeset with `jj edit` that needs to be modified.
 
 ## Common patterns
+
+**Split one change into N commits — decide the split before editing.** Path-scoped `jj commit` builds a stack in one pass:
+```bash
+# @ holds all files of the future stack:
+jj commit fileA fileB -m "feat: ..."   # first commit; the rest stays in @
+jj commit -m "docs: ..."               # second commit from the remainder
+```
+Dissecting a committed-everything change afterwards (`split --parallel`, rebases, restores) creates sibling commits and divergence; avoid `split --parallel` outside the TUI.
 
 **Realized @ has two concerns:**
 ```bash
@@ -62,6 +70,7 @@ jj rebase -r <rev> -A <new-parent>
   - `jj split path/to/file` — extract that path into one commit and leave the rest in the other.
   - `jj squash path/to/file --into <rev>` — move one file/path from `@` into another commit.
   - `jj restore path/to/file --from <rev> --into <other-rev>` — copy whole-file content between revisions.
+- **Restore/squash backwards, content follows forwards.** `--from` must name a commit that *has* the content, and the target is the *oldest* commit that should change; descendants update automatically.
 - For **individual hunks**, there is no great non-interactive path-based command.
 - If the changes belong to older commits in the stack, `jj absorb` can often auto-place them into the right ancestors.
 
@@ -91,6 +100,8 @@ jj abandon <bad-commit>
 jj git push --bookmark feat/x
 ```
 
+After `jj commit`, `@` is a **new empty commit**: point bookmarks at `@-`. `jj git push` rejects a bookmark on an undescribed empty commit.
+
 The hint `Deleted bookmarks can be pushed...` in any jj output means a bookmark just disappeared locally; `jj git push --dry-run` shows whether you're about to propagate that to the remote.
 
 GitHub will not reopen a PR whose branch was deleted-and-recreated, even at the same SHA.
@@ -101,3 +112,10 @@ GitHub will not reopen a PR whose branch was deleted-and-recreated, even at the 
 - **`git apply` silently no-ops in jj repos.** It reports `Skipped patch '...'` with exit 0 because the git index is stale relative to jj's working copy. Use `patch -p1 < file.patch` instead when replaying saved diffs.
 - Use `heads(::A & ::B)` for the merge base;.
 - **`jj describe` reads from stdin, not `-F`.** `jj describe --stdin < msg.txt`.
+
+## Templates crib sheet
+
+- `if(self:empty, "a", "b")`, not `self==empty`.
+- `parents.commit_id()`: list methods directly.
+- String patterns: `glob:`, `substring:`, `exact:`.
+- `jj log -r 'main::'` shows the trustable chain to `@`; `(divergent)` in output means multiple copies of a change. `jj abandon <change-id>` kills all copies.
