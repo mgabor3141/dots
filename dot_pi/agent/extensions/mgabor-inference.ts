@@ -21,6 +21,11 @@
  * gmux already knows each session's root-relative lineage depth (its PR#542 wire
  * field), so the base priority is raised by one per depth: a root asks for
  * PRIORITY_BASE, its children PRIORITY_BASE+1, and so on. See resolveSubagentDepth.
+ *
+ * It also removes the output ceiling from the request, so vLLM sizes the completion to
+ * whatever context is left after the prompt. A ceiling can only be computed from a prompt
+ * size, and on a multimodal prompt the client's number is a floor, not a measurement; the
+ * endpoint prices media itself. See dropOutputCeiling.
  */
 
 import { execFile } from "node:child_process";
@@ -116,8 +121,8 @@ function providerModel({ id, contextWindow }: DiscoveredModel) {
     reasoning: true,
     input: ["text", "image"] as ("text" | "image")[],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    // maxTokens is descriptive metadata only; normal agent turns omit the
-    // wire limit and let vLLM use all context remaining after the prompt.
+    // Not descriptive: Pi fills the wire limit from this on every turn. The request policy
+    // below strips that field again, so the endpoint owns the ceiling.
     contextWindow,
     maxTokens: contextWindow,
     compat: {
@@ -139,9 +144,6 @@ export default async function (pi: ExtensionAPI) {
   // resolver as soon as a session exists. That second pass is the one with authority: it sees
   // whatever Pi would authenticate with, including a credential stored after this process started.
   // A failed discovery never replaces a catalogue that already loaded.
-  let contextWindowById = new Map<string, number>([
-    ["default", DEFAULT_CONTEXT_WINDOW],
-  ]);
   let discoveredWith: string | undefined;
 
   // Requests ask for PRIORITY_BASE + lineage depth. Resolved once a session exists
@@ -168,10 +170,6 @@ export default async function (pi: ExtensionAPI) {
     try {
       const found = await discoverModels(key);
       if (found.length === 0) return;
-      contextWindowById = new Map([
-        ["default", DEFAULT_CONTEXT_WINDOW],
-        ...found.map((model) => [model.id, model.contextWindow] as const),
-      ]);
       register(found);
       discoveredWith = key;
     } catch {
@@ -205,24 +203,17 @@ export default async function (pi: ExtensionAPI) {
     nextPayload = applyQwenRequestPolicy(nextPayload);
     nextPayload = rewriteSkillsInPayload(nextPayload);
 
-    // Retype video parts before anything measures or sends the payload. Left as image_url the
-    // bytes make the /tokenize call below answer "Failed to load image", and a failed
-    // measurement silently skips the clamp; as video_url they are measured like any other part.
+    // Retype video parts before the payload is sent. Left as image_url the endpoint answers
+    // "Failed to load image", and those frames are the whole point of the request.
     const promoted = promoteVideoParts(nextPayload, ctx.model);
     if (promoted) nextPayload = promoted;
 
-    // Same reason as above, and before the clamp: the frame count a video_sample call asked for
-    // changes how many tokens the video is worth, so the measurement has to see it.
+    // Carries the frame count a video_sample call asked for onto the request-wide field the
+    // endpoint reads, so the density the tool promised is the density the request asks for.
     const sampled = applyVideoSamplingHints(nextPayload, ctx.model);
     if (sampled) nextPayload = sampled;
 
-    const contextWindow = contextWindowById.get(payload.model);
-    if (contextWindow !== undefined) {
-      const key = await ctx.modelRegistry.getApiKeyForProvider("mgabor");
-      if (key) {
-        nextPayload = await clampOutputToContext(nextPayload, key, contextWindow);
-      }
-    }
+    nextPayload = dropOutputCeiling(nextPayload);
 
     return nextPayload === payload ? undefined : nextPayload;
   });
@@ -311,61 +302,30 @@ function applyQwenRequestPolicy(
   return nextPayload;
 }
 
-async function clampOutputToContext(
-  payload: Record<string, unknown>,
-  apiKey: string,
-  contextWindow: number,
-): Promise<Record<string, unknown>> {
-  if (!Array.isArray(payload.messages)) return payload;
-
-  // vLLM interprets an omitted limit as all context remaining after the
-  // prompt. Preserve that behavior for normal agent turns. Explicit limits,
-  // such as Pi's smaller compaction-summary budget, are still made safe below.
-  const usesMaxTokens = typeof payload.max_tokens === "number";
-  const usesMaxCompletionTokens =
-    typeof payload.max_completion_tokens === "number";
-  if (!usesMaxTokens && !usesMaxCompletionTokens) return payload;
-  const requested = usesMaxCompletionTokens
-    ? (payload.max_completion_tokens as number)
-    : (payload.max_tokens as number);
-
-  const tokenizePayload: Record<string, unknown> = {
-    model: payload.model,
-    messages: payload.messages,
-    add_generation_prompt: true,
-  };
-  for (const key of ["tools", "chat_template", "chat_template_kwargs"] as const) {
-    if (key in payload) tokenizePayload[key] = payload[key];
-  }
-
-  try {
-    const response = await fetch(`${BASE_URL}/tokenize`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(tokenizePayload),
-    });
-    if (!response.ok) return payload;
-    const result = (await response.json()) as { count?: unknown };
-    if (typeof result.count !== "number") return payload;
-
-    const available = Math.max(1, contextWindow - result.count);
-    const clamped = Math.min(requested, available);
-
-    if (usesMaxTokens) {
-      return payload.max_tokens === clamped
-        ? payload
-        : { ...payload, max_tokens: clamped };
-    }
-    return payload.max_completion_tokens === clamped
-      ? payload
-      : { ...payload, max_completion_tokens: clamped };
-  } catch {
-    // If tokenization is unavailable, retain Pi's normal request unchanged.
-    return payload;
-  }
+/**
+ * Removes the output ceiling so the endpoint sizes the completion to the context that is left
+ * after the prompt, which is OpenAI-compatible behavior and needs no client-side number.
+ *
+ * Pi fills `max_tokens` on every turn from `estimateContextTokens()` over the transcript
+ * (pi-ai simple-options.js `buildBaseOptions`), and that estimate does not know what a clip
+ * costs: vLLM prices media on the server. The ceiling is then derived from a prompt size smaller
+ * than the one that reaches the wire, and the request is rejected for the overshoot. Reproduced
+ * from a session log: a 262144 window, a ceiling of 221724, and a prompt the server counted at
+ * "at least 40421", one token over the edge, with the endpoint answering nothing at all. The
+ * server's count for media is a lower bound by construction, so no ceiling computed client-side
+ * can be trusted to sit on the boundary, which is why the field is dropped rather than nudged.
+ *
+ * Compaction summaries lose their explicit budget this way. They end at the model's own stop
+ * token, and Pi treats a summary truncated by a cap as a failure, so the cap was only ever a way
+ * to lose the request.
+ */
+function dropOutputCeiling(payload: Record<string, unknown>): Record<string, unknown> {
+  const ceiling = (key: string) => typeof payload[key] === "number";
+  if (!ceiling("max_tokens") && !ceiling("max_completion_tokens")) return payload;
+  const next = { ...payload };
+  delete next.max_tokens;
+  delete next.max_completion_tokens;
+  return next;
 }
 
 function rewriteSkillsInPayload(
