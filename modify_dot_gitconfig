@@ -1,8 +1,20 @@
 {{- /* chezmoi:modify-template */ -}}
-{{- $existing := dict -}}
-{{- if .chezmoi.stdin }}
-{{-   $existing = .chezmoi.stdin | fromIni -}}
+{{- /* Preserve the existing [safe] section as raw lines: safe.directory is a
+     multi-valued key, and fromIni parses into a map, so duplicate `directory`
+     entries would silently collapse to one. */ -}}
+{{- $safeLines := list -}}
+{{- $inSafe := false -}}
+{{- range splitList "\n" .chezmoi.stdin -}}
+{{-   $line := trim . -}}
+{{-   if hasPrefix "[" $line -}}
+{{-     $inSafe = eq $line "[safe]" -}}
+{{-   else if and $inSafe (ne $line "") -}}
+{{-     if not (or (hasPrefix "#" $line) (hasPrefix ";" $line)) -}}
+{{-       $safeLines = append $safeLines $line -}}
+{{-     end -}}
+{{-   end -}}
 {{- end -}}
+{{- $safeLines = uniq $safeLines -}}
 [core]
 	autocrlf = "input"
 {{- if hasKey . "git_work" }}
@@ -45,9 +57,9 @@
 [includeIf "gitdir:{{ .git_work.repo_dir }}/"]
 	path = {{ .git_work.repo_dir }}/.gitconfig
 {{- end }}
-{{- if hasKey $existing "safe" }}
+{{- if gt (len $safeLines) 0 }}
 [safe]
-{{-   range $key, $value := index $existing "safe" }}
-	{{ $key }} = {{ $value }}
+{{-   range $safeLines }}
+	{{ . }}
 {{-   end }}
 {{- end }}
