@@ -1,7 +1,6 @@
 # Fish shell runtime files
 fish_variables
 
-# Platform-specific: fnm (Fast Node Manager) configuration
-{{- if not .managed }}
-conf.d/fnm.fish
-{{- end }}
+# conf.d/fnm.fish is intentionally not ignored: an ignore cannot sit inside the
+# allowlisted .config/fish tree anyway (re-includes win), and the file guards
+# itself with `type -q fnm` for hosts that use devbox/nix instead of fnm.

@@ -1,3 +1,9 @@
+# Patterns match target paths. A leading "!" re-includes, and re-includes always
+# win over plain ignores regardless of order, so a plain ignore cannot carve a
+# file out of a tree that any "!" pattern matches (see the .headless and
+# .container allowlists). Fine-grained excludes only work outside allowlisted
+# trees.
+
 **/README.md
 AGENTS.md
 
@@ -69,7 +75,11 @@ AGENTS.md
 {{- end }}
 
 {{- if .headless }}
-# Headless: ignore everything, then whitelist essentials
+# Headless (Unraid): ignore everything, then whitelist essentials. Desktop-only
+# trees stay ignored by the catch-all: Applications/ (the AppImage external is
+# then never resolved, downloaded or applied), .local/share (applications,
+# icons), and the GTK/KDE/Niri/Wayland configs, mimeapps.list, autostart,
+# systemd user units, pipewire, sddm, etc.
 *
 **/*
 
@@ -114,20 +124,18 @@ AGENTS.md
 !.local/bin
 !.local/bin/cols
 !.local/bin/cz
-!.local/bin/persist
-!.local/bin/session-manager
-!.local/bin/rtk
-!.local/bin/shellcheck
-!.local/bin/zed
+!.local/bin/difft     # [diff] command helper in config.toml
+!.local/bin/fish      # shell that .config/fish and .fish_profile configure
 !.local/bin/gmux
 !.local/bin/gmuxd
+!.local/bin/grove     # the grove skill is deployed, so keep its binary current
+!.local/bin/persist
+!.local/bin/rtk
+!.local/bin/session-manager
+!.local/bin/shellcheck
 !.local/bin/t3-serve
 !.local/bin/ffmpeg
 !.local/bin/ffprobe
-
-# Fish shell config
-!.config/fish
-!.config/fish/**
 
 # Build scripts
 !.chezmoiscripts
@@ -210,8 +218,6 @@ nix-darwin
 
 {{- if .managed }}
 nix-darwin
-{{- else }}
-.config/fish/conf.d/fnm.fish
 {{- end }}
 
 # Container build context (Dockerfile, entrypoint, README) — repo tooling,
