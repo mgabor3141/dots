@@ -4,13 +4,19 @@ pick: parse JSONC stdin, run jq, drop null-valued keys, and emit inner JSON with
 Args (dict):
   - stdin: JSONC text (e.g. .chezmoi.stdin)
   - jq: jq/gojq expression that yields an object (or something that becomes one)
+
+The JSON text is re-parsed inside gojq (`fromjson`). chezmoi's `fromJsonc` yields
+int64 numbers, which gojq cannot compare or introspect, so `select(.value !=
+null)` would silently drop every numeric setting. Parsing the serialized text
+inside jq keeps numbers native and lets the null filter work as intended.
 */ -}}
 
 {{- $stdin := or .stdin "{}" -}}
 {{- $userQuery := .jq -}}
-{{- $query := printf "(%s) | with_entries(select(.value != null))" $userQuery -}}
+{{- $json := $stdin | fromJsonc | toJson -}}
+{{- $query := printf "(.pickJson | fromjson) | (%s) | with_entries(select(.value != null))" $userQuery -}}
 
-{{- $results := ($stdin | fromJsonc | jq $query) -}}
+{{- $results := (dict "pickJson" $json) | jq $query -}}
 {{- if gt (len $results) 0 -}}
   {{- ($results | first | toPrettyJson)
       | trimPrefix "{"

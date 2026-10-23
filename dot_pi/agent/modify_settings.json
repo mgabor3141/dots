@@ -1,28 +1,34 @@
 // chezmoi:template:left-delimiter="/*#" right-delimiter="*/"
 // chezmoi:modify-template
+/*#- $yapp := includeTemplate "yapp-packages" (dict "names" (list "pi-bash-bg") "chezmoi" .chezmoi) -*/
+/*#- $required := printf "[%s]" (trimSuffix "," (trim $yapp)) | fromJson -*/
+/*#- if stat (joinPath .chezmoi.homeDir "dev/yapp/packages/jj/package.json") -*/
+/*#-   $required = append $required (joinPath .chezmoi.homeDir "dev/yapp/packages/jj") -*/
+/*#- end -*/
+/*#- $required = concat $required (list "npm:pi-librarian" "npm:pi-github") -*/
 {
   /*#- includeTemplate "pick" (dict
     "stdin" .chezmoi.stdin
-    "jq" `{ lastChangelogVersion, enabledModels, defaultProvider, defaultModel, hideThinkingBlock, defaultThinkingLevel, compaction, warnings }`
+    "jq" (printf `{
+      lastChangelogVersion, enabledModels, defaultProvider, defaultModel,
+      defaultThinkingLevel, hideThinkingBlock, compaction, warnings,
+      deviceId, trackingId, modelThinkingLevels,
+      transport, sessionShareDestination, followUpMode,
+      cacheWarming, tuiMode, httpIdleTimeoutMs,
+      shellPath, npmCommand, externalEditor, sessionDir, httpProxy,
+      "$schema": .["$schema"],
+      enableAnalytics, enableInstallTelemetry, enableSkillCommands,
+      showCacheMissNotices, collapseChangelog, showHardwareCursor,
+      autocompleteMaxVisible, doubleEscapeAction, editorPaddingX, outputPad,
+      images, markdown, thinkingBudgets, defaultTools, codemode, branchSummary,
+      extensions, skills, prompts, themes,
+      terminal: ((.terminal // {}) + {clearOnShrink: true}),
+      theme: (.theme // "dark"),
+      packages: ((%s + (.packages // [])) | reduce .[] as $p ([]; if any(.[]; . == $p) then . else . + [$p] end))
+    }` ($required | toJson))
   ) */
-  "packages": [
-    /*# includeTemplate "indent" (dict "n" 4 "text"
-      (includeTemplate "yapp-packages" (dict "names"
-        (list
-          "pi-bash-bg"
-        ) "chezmoi" .chezmoi)))
-    -*/
-    /*#- if stat (joinPath .chezmoi.homeDir "dev/yapp/packages/jj/package.json") */
-    /*# joinPath .chezmoi.homeDir "dev/yapp/packages/jj" | printf `"%s",` */
-    /*# end -*/
-    "npm:pi-librarian",
-    "npm:pi-github"
-  ],
   "defaultProjectTrust": "always",
   "treeFilterMode": "no-tools",
-  "terminal": {
-    "clearOnShrink": true
-  },
   "shellCommandPrefix": "export PI_ROOT=\"$(dirname \"$(readlink -f \"$(command -v pi)\")\")/..\"",
   "quietStartup": true,
   "steeringMode": "all",
@@ -34,6 +40,5 @@
     "provider": {
       "maxRetryDelayMs": 0
     }
-  },
-  "theme": "dark"
+  }
 }
