@@ -31,6 +31,8 @@
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { promisify } from "node:util";
+import { getApiProvider } from "@earendil-works/pi-ai";
+import type { SimpleStreamOptions } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { promoteVideoParts, registerVideoRead } from "./mgabor-video/media.ts";
 import { applyVideoSamplingHints, registerVideoSample } from "./mgabor-video/sample.ts";
@@ -159,6 +161,7 @@ export default async function (pi: ExtensionAPI) {
       api: API,
       baseUrl: BASE_URL,
       models: models.map(providerModel),
+      streamSimple: streamWithoutCeiling,
     });
   }
 
@@ -317,7 +320,8 @@ function applyQwenRequestPolicy(
  *
  * Compaction summaries lose their explicit budget this way. They end at the model's own stop
  * token, and Pi treats a summary truncated by a cap as a failure, so the cap was only ever a way
- * to lose the request.
+ * to lose the request. Summaries never reach `before_provider_request`, so this runs from
+ * `streamWithoutCeiling` too; see there.
  */
 function dropOutputCeiling(payload: Record<string, unknown>): Record<string, unknown> {
   const ceiling = (key: string) => typeof payload[key] === "number";
@@ -326,6 +330,28 @@ function dropOutputCeiling(payload: Record<string, unknown>): Record<string, unk
   delete next.max_tokens;
   delete next.max_completion_tokens;
   return next;
+}
+
+/**
+ * The provider's stream: the built-in openai-completions implementation, with the output ceiling
+ * stripped from every request body. This is the one place every mgabor request passes through.
+ * The `before_provider_request` hook does not: Pi only wires it (as `onPayload`) into agent turns,
+ * while compaction and branch summaries call the stream function directly without it, so a
+ * summary still carried Pi's estimated ceiling and was rejected ("prompt (93306 tokens) + max
+ * tokens (176837) exceeds the context (262144)"). Any caller-supplied `onPayload` (the extension
+ * hook on agent turns) still runs first.
+ */
+function streamWithoutCeiling(
+  ...[model, context, options]: Parameters<NonNullable<ReturnType<typeof getApiProvider>>["streamSimple"]>
+) {
+  const base = getApiProvider(API);
+  if (!base) throw new Error(`No API provider registered for api: ${API}`);
+  const upstream = options?.onPayload;
+  const onPayload: SimpleStreamOptions["onPayload"] = async (payload, payloadModel) => {
+    const next = upstream ? ((await upstream(payload, payloadModel)) ?? payload) : payload;
+    return isRecord(next) ? dropOutputCeiling(next) : next;
+  };
+  return base.streamSimple(model, context, { ...options, onPayload });
 }
 
 function rewriteSkillsInPayload(
