@@ -39,7 +39,7 @@ import { applyVideoSamplingHints, registerVideoSample } from "./mgabor-video/sam
 
 const BASE_URL = "https://inference.mgabor.hu/v1";
 const API = "openai-completions" as const;
-const DEFAULT_CONTEXT_WINDOW = 524_288;
+const DEFAULT_CONTEXT_WINDOW = 1_048_576;
 
 // Scheduling priority sent in the request body. The endpoint treats a lower number
 // as more urgent, so a root gets the smallest value and each subagent generation
